@@ -3,8 +3,8 @@
 The single source of truth for what is **built**, what is **not**, and what comes next.
 Update it whenever status changes. Only mark something done after it has been tested.
 
-_Last verified: 2026-11-08. Phase 1 on a fresh clone of `szeelabs/Cyberlab`; Phase 2 part 1
-on a real Docker Engine 29.9 (Linux), Python 3.13._
+_Last verified: 2026-11-08. Phase 1 on a fresh clone of `szeelabs/Cyberlab`; Phase 2 parts 1-2
+on a real Docker Engine 29.9 (Linux), Python 3.13, and in headless Chromium._
 
 ## Verification results
 | Check | Result |
@@ -13,11 +13,12 @@ on a real Docker Engine 29.9 (Linux), Python 3.13._
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phase 1 + 2) | ✅ 83 passed, 0 failed, including 3 against real Docker |
+| Test suite (Phase 1 + 2) | ✅ 97 passed, 0 failed, including 4 against real Docker |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
+| Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
 | Live server smoke test (`/healthz`, `/readyz`, create workspace, validate manifest) | ✅ |
 | GitHub Actions CI (PR #1, Phase 1) | ✅ passed on Python 3.11 and 3.13 |
-| GitHub Actions real-Docker job | ⏳ added with Phase 2, not run on GitHub yet |
+| GitHub Actions real-Docker job | ✅ passed on PR #1 (merged); terminal test added since |
 
 ## Implemented (Phase 1 — Universe Foundation)
 | Area | What works | Where |
@@ -39,10 +40,18 @@ on a real Docker Engine 29.9 (Linux), Python 3.13._
 | Approvals | View plan and required approvals; approve exactly the required items per revision; audited | `GET /plan`, `POST /approvals` |
 | Lifecycle | Provision all environments of a revision; start, stop, destroy (keep or delete workspace data); refresh state from Docker; failures recorded, not hidden; last destroy removes networks | `api/environments.py` |
 
+## Implemented (Phase 2, part 2 — browser terminal)
+| Area | What works | Where |
+|---|---|---|
+| Terminal tickets | `POST .../environments/{env}/terminal` issues a single-use ticket (60 s default) for a **running** environment you own; only its SHA-256 hash is stored | `api/terminal.py`, `terminal_tickets` table |
+| WebSocket bridge | `/v1/terminal`: ticket sent as the first message (not in the URL); cross-site origins rejected; output as binary frames; input, resize, ping as JSON; idle timeout, max session length, per-user session limit, 16 KiB input frames | `api/terminal.py` |
+| Shell sessions | `docker exec -it` on a real pseudo-terminal (pty); resize propagated; bash if present, else sh; starts in `/workspace` as uid 1000 | `execution/shell.py`, `execution/docker.py` |
+| Audit | `terminal.ticket`, `terminal.open`, `terminal.close` (reason, duration, byte counts); **terminal content is never logged** | |
+| Test page | `/terminal`: xterm.js 5.5 (vendored, MIT) with a strict Content-Security-Policy; API token kept in memory only | `static/` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
-| Browser terminal (WebSocket gateway) | 2 |
 | Tool pack image builds: environments run the **base image only**; packs are recorded but not installed (`toolPacksInstalled: false`) | 2 |
 | Remote desktop | 6 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
@@ -64,16 +73,18 @@ on a real Docker Engine 29.9 (Linux), Python 3.13._
    has automated tests; the JWKS (asymmetric key) path is untested.
 3. The test client prints a Starlette deprecation warning about `httpx`. Harmless for now.
 4. Tables are created at startup (`create_all`); no migrations yet.
-5. The work is on a branch; `main` still holds only the initial commit until PR #1 is merged.
+5. Work reaches `main` only through reviewed pull requests (PR #1 merged Phase 1 and Phase 2 part 1).
 6. Docker Hub rate-limits shared cloud IPs. Use `CYBERLAB_IMAGE_MIRROR=mirror.gcr.io`.
 7. **Fixed during Phase 2:** new Docker volumes are owned by root, so the unprivileged user
    couldn't write to `/workspace`. Fixed with a minimal-privilege ownership step and a
    `nocopy` mount (Docker otherwise resets ownership from the image).
+8. Cosmetic: the terminal prompt shows `I have no name!` because uid 1000 has no entry in the
+   base image's `/etc/passwd`. Harmless; fix when tool pack images are built (create a user).
+9. The `/terminal` page is a functional test page, not the final UI (Phase 6).
 
 ## Next milestone
-1. Confirm CI (including the real-Docker job) passes on PR #1, which now carries Phase 1
-   and Phase 2 part 1.
-2. **User:** review and merge PR #1 into `main`.
-3. **Phase 2 part 2: browser terminal**, a WebSocket gateway to `docker exec` with
-   short-lived, per-environment tokens.
-4. Then tool pack images (build, scan, publish) and the egress proxy.
+1. Open PR #2 (browser terminal); confirm CI, including the real-Docker job, passes.
+2. **User:** review and merge PR #2.
+3. **Phase 2 part 3: tool pack images.** Build each pack into an image in CI (scanned,
+   SBOM, published to ghcr.io), install them into environments, and create a proper user.
+4. Then the egress proxy for `restricted-egress`.

@@ -28,6 +28,7 @@ from cyberlab.execution.base import (
     ProvisionRequest,
     ProvisionResult,
 )
+from cyberlab.execution.shell import PtyShellSession, ShellSession
 from cyberlab.manifest.models import NetworkMode
 
 _SAFE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -93,7 +94,9 @@ class DockerAdapter:
         run_as: str = "1000:1000",
         image_mirror: str | None = None,
         timeout: float = 300,
+        docker_host: str | None = None,
     ) -> None:
+        self._docker_host = docker_host
         self._run = runner
         self._bin = binary
         self._user = run_as
@@ -315,3 +318,26 @@ class DockerAdapter:
         for kind in ("lab", "internet"):
             name = f"cyberlab-{_check('workspace key', workspace_key, _SAFE)}-{kind}"
             self._docker("network", "rm", name, timeout=30, ok=True)
+
+    def shell_argv(self, provider_ref: str) -> list[str]:
+        _check("container id", provider_ref, _REF)
+        return [
+            self._bin,
+            "exec",
+            "--interactive",
+            "--tty",
+            "--workdir",
+            "/workspace",
+            "--env",
+            "TERM=xterm-256color",
+            provider_ref,
+            "sh",
+            "-c",
+            "if command -v bash >/dev/null 2>&1; then exec bash -l; else exec sh -l; fi",
+        ]
+
+    async def open_shell(self, provider_ref: str) -> ShellSession:
+        env = dict(os.environ)
+        if self._docker_host:
+            env["DOCKER_HOST"] = self._docker_host
+        return PtyShellSession(self.shell_argv(provider_ref), env=env)

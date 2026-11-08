@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
+from cyberlab.execution.shell import ShellSession
 from cyberlab.manifest.models import Environment
 
 
@@ -71,3 +72,7 @@ class ProviderAdapter(Protocol):
     def destroy(self, provider_ref: str, *, remove_workspace_volume: bool) -> EnvState: ...
 
     def inspect(self, provider_ref: str) -> EnvState: ...
+
+    async def open_shell(self, provider_ref: str) -> ShellSession:
+        """Open an interactive shell in a running environment (browser terminal)."""
+        ...

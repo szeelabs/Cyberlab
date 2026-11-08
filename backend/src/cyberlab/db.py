@@ -95,6 +95,21 @@ class EnvironmentRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
 
+class TerminalTicket(Base):
+    """A single-use, short-lived permission to open one terminal. Only a hash is stored."""
+
+    __tablename__ = "terminal_tickets"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    environment_id: Mapped[str] = mapped_column(
+        ForeignKey("environments.id", ondelete="CASCADE"), index=True
+    )
+    user_subject: Mapped[str] = mapped_column(String(255))
+    expires_at: Mapped[datetime] = mapped_column()
+    used_at: Mapped[datetime | None] = mapped_column(default=None)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -118,6 +133,10 @@ class Database:
                 kwargs["poolclass"] = StaticPool
         self.engine: Engine = create_engine(url, **kwargs)
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
+
+    def new_session(self) -> Session:
+        """A session for code outside the request/response cycle (e.g. WebSockets)."""
+        return self._sessions()
 
     def create_all(self) -> None:
         Base.metadata.create_all(self.engine)

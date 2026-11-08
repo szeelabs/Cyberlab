@@ -7,6 +7,7 @@ from cyberlab.execution.base import (
     ProvisionRequest,
     ProvisionResult,
 )
+from cyberlab.execution.shell import ShellSession
 
 __all__ = [
     "CostClass",
@@ -16,6 +17,7 @@ __all__ = [
     "ProviderStatus",
     "ProvisionRequest",
     "ProvisionResult",
+    "ShellSession",
     "build_provider",
 ]
 
@@ -29,5 +31,6 @@ def build_provider(settings) -> ProviderAdapter | None:
             subprocess_runner(settings.docker_host),
             binary=settings.docker_binary,
             image_mirror=settings.image_mirror,
+            docker_host=settings.docker_host,
         )
     return None

@@ -6,10 +6,10 @@ isolated lab networks, persistent workspaces and portable configurations. Your p
 machine becomes just a window.
 
 > **Status: Phase 2 in progress.** The control plane, Universe Manifest, registry and
-> policy engine work (Phase 1). CyberLab can now **start real, hardened Linux containers**
-> on a Docker host from an approved manifest (Phase 2, part 1). Tool packs are not installed
-> yet, and there is no browser terminal, storage, AI or web UI yet. See
-> [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
+> policy engine work (Phase 1). CyberLab can **start real, hardened Linux containers** on a
+> Docker host from an approved manifest, and you can **use them from a browser terminal**
+> (Phase 2, parts 1-2). Tool packs are not installed yet, and there is no storage, AI or
+> full web UI yet. See [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
 ## What works today
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of
@@ -69,6 +69,9 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[
 | GET/POST | `/v1/workspaces/{id}/environments[?refresh=true]` | ✔ |
 | POST | `/v1/workspaces/{id}/environments/{env}/start`, `/stop` | ✔ |
 | DELETE | `/v1/workspaces/{id}/environments/{env}[?keep_workspace=false]` | ✔ |
+| POST | `/v1/workspaces/{id}/environments/{env}/terminal` (single-use terminal ticket) | ✔ |
+| WS | `/v1/terminal` (first message: `{"type":"auth","ticket":"..."}`) | ticket |
+| GET | `/terminal` (browser terminal test page) | – |
 
 To provision, set `CYBERLAB_EXECUTION_PROVIDER=docker` (local Docker, or a remote host via
 `CYBERLAB_DOCKER_HOST=ssh://user@host`). Without it, the API reports **NOT CONNECTED** and

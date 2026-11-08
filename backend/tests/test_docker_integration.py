@@ -126,3 +126,48 @@ def test_lab_network_connects_peers_but_not_internet(client):
         destroy_all(client, ws, envs)
     # destroying the last environment removes the lab network
     assert docker("network", "inspect", envs[0]["resources"]["network"]).returncode != 0
+
+
+def _read_until(ws, needle: bytes, limit: int = 200) -> bytes:
+    buf = b""
+    for _ in range(limit):
+        buf += ws.receive_bytes()
+        if needle in buf:
+            return buf
+    raise AssertionError(f"{needle!r} not seen in {buf[-500:]!r}")
+
+
+def test_browser_terminal_on_real_container(client):
+    import json
+
+    ws_id, (env,) = provision(client, MINIMAL, "it-terminal")
+    try:
+        r = client.post(f"/v1/workspaces/{ws_id}/environments/{env['id']}/terminal", headers=auth())
+        assert r.status_code == 201, r.text
+        with client.websocket_connect("/v1/terminal") as ws:
+            ws.send_text(json.dumps({"type": "auth", "ticket": r.json()["ticket"]}))
+            assert json.loads(ws.receive_text())["type"] == "ready"
+            ws.send_text(json.dumps({"type": "resize", "rows": 33, "cols": 111}))
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "input",
+                        "data": "echo uid=$(id -u) size=$(stty size | tr ' ' x) pwd=$PWD; "
+                        "echo persisted > /workspace/from-terminal.txt; echo DONE-$((40+2))\n",
+                    }
+                )
+            )
+            out = _read_until(ws, b"DONE-42")
+            assert b"uid=1000" in out and b"size=33x111" in out and b"pwd=/workspace" in out
+            ws.send_text(json.dumps({"type": "input", "data": "exit\n"}))
+            for _ in range(200):  # skip remaining shell output (prompt etc.)
+                msg = ws.receive()
+                if msg.get("text"):
+                    assert json.loads(msg["text"]) == {"type": "exit", "reason": "exit"}
+                    break
+            else:
+                raise AssertionError("no exit message")
+        name = env["resources"]["container"]
+        assert sh(name, "cat /workspace/from-terminal.txt")[1] == "persisted"
+    finally:
+        destroy_all(client, ws_id, [env])
