@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CyberLab Terminal</title>
+  <link rel="stylesheet" href="/static/vendor/xterm/xterm.css">
+  <link rel="stylesheet" href="/static/terminal.css">
+</head>
+<body>
+  <header>
+    <strong>CyberLab Terminal</strong>
+    <span id="status" class="status" data-state="idle">Not connected</span>
+  </header>
+  <form id="connect" autocomplete="off">
+    <label>API token <small>(leave empty in dev mode)</small>
+      <input id="token" type="password" spellcheck="false">
+    </label>
+    <label>Workspace ID
+      <input id="workspace" required spellcheck="false">
+    </label>
+    <label>Environment
+      <select id="environment" required><option value="">Load environments first</option></select>
+    </label>
+    <div class="buttons">
+      <button type="button" id="load">Load environments</button>
+      <button type="submit" id="open">Open terminal</button>
+      <button type="button" id="close" disabled>Disconnect</button>
+    </div>
+  </form>
+  <p id="message" role="status"></p>
+  <div id="terminal"></div>
+  <script src="/static/vendor/xterm/xterm.js"></script>
+  <script src="/static/vendor/xterm/addon-fit.js"></script>
+  <script src="/static/terminal.js"></script>
+</body>
+</html>

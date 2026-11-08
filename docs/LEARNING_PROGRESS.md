@@ -78,3 +78,6 @@ Real problems from the codebase, which make good lessons later.
 | 2026-11-08 | Linux file ownership and permissions | A new Docker volume was owned by `root` (uid 0), so the environment's user (uid 1000) got "Permission denied" writing to `/workspace`. Fixed with `chown` run with only the `CHOWN` capability. |
 | 2026-11-08 | Linux capabilities | Root's powers are split into ~40 capabilities. CyberLab drops all of them (`CapEff: 0000000000000000`) and grants only one when needed. |
 | 2026-11-08 | Container networks | An `--internal` Docker network lets lab machines see each other but not the internet. |
+| 2026-11-08 | Pseudo-terminals (pty) | A browser terminal works because the server gives the shell a *pseudo-terminal*, a fake keyboard-and-screen device. Programs then behave as if a person were typing (colours, line editing, window size via `stty size`). SSH uses the same mechanism. |
+| 2026-11-08 | `/etc/passwd` and user IDs | Linux tracks users by number (uid). `/etc/passwd` maps numbers to names. Our container runs as uid 1000, which has no name in that file, so bash shows `I have no name!`. |
+| 2026-11-08 | WebSocket security | A WebSocket is a two-way connection between browser and server. Any website could try to open one to your server, so CyberLab checks the `Origin` and requires a single-use ticket. |

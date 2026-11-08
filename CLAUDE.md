@@ -51,8 +51,8 @@ CyberLab principal engineer**. Two goals run together:
 ## Repository
 * **GitHub:** https://github.com/szeelabs/Cyberlab (canonical). The older URL
   `shayanbhai925925-prog/Cyberlab` redirects to the same repository.
-* **Active branch:** `claude/dazzling-brahmagupta-ds29wi` (Phase 1). `main` holds only the
-  initial commit until a pull request is merged.
+* **Workflow:** work on a `claude/...` branch, open a PR into `main`, CI must pass, the user
+  merges. Never merge or push to `main` directly.
 
 ### Layout
 ```
@@ -88,9 +88,8 @@ Architect, resource intelligence, security (see `docs/02-architecture.md`). The 
 plus the policy engine is the shared contract every plane uses.
 
 ## Current phase
-**Phase 1 (Universe Foundation): complete.** Phase 1 and Phase 2 part 1 are in PR #1
-(https://github.com/szeelabs/Cyberlab/pull/1), waiting for the user to merge.
-**Phase 2 (Execution Engine): part 1 done** (provider interface, hardened Docker adapter,
-approvals, environment lifecycle; tested on real Docker). Next: browser terminal, tool pack
-images, egress proxy.
+**Phase 1 (Universe Foundation): complete** (merged in PR #1).
+**Phase 2 (Execution Engine):** part 1 merged (provider interface, hardened Docker adapter,
+approvals, environment lifecycle). Part 2, the **browser terminal**, is built and tested
+(PR #2). Next: tool pack images, then the egress proxy.
 Details: `docs/DEVELOPMENT_STATUS.md`.

@@ -16,6 +16,7 @@ dependencies = [
   "sqlalchemy>=2.0",
   "pyjwt[crypto]>=2.8",
   "uvicorn>=0.30",
+  "websockets>=12",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,9 @@ cyberlab = "cyberlab.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+cyberlab = ["static/*", "static/vendor/xterm/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

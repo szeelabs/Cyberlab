@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     docker_binary: str = "docker"
     image_mirror: str | None = None  # e.g. mirror.gcr.io, replaces the docker.io/ prefix
 
+    # --- Browser terminal ----------------------------------------------------
+    terminal_ticket_ttl_seconds: int = Field(default=60, ge=5, le=600)
+    terminal_idle_timeout_seconds: int = Field(default=900, ge=30)
+    terminal_max_session_seconds: int = Field(default=7200, ge=60)
+    terminal_max_sessions_per_user: int = Field(default=3, ge=1, le=20)
+
     @model_validator(mode="after")
     def _check_security(self) -> Settings:
         if self.auth_mode == "dev" and self.environment == "production":
