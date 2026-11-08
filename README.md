@@ -78,6 +78,7 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[
 | POST | `/v1/workspaces/{id}/environments/{env}/snapshots` (save `/workspace`) | ✔ |
 | GET / DELETE | `/v1/workspaces/{id}/snapshots[/{snapshot}]` | ✔ |
 | POST | `/v1/workspaces/{id}/environments/{env}/restore` (stopped environment) | ✔ |
+| GET | `/v1/system/storage` (snapshot store, encryption, CONNECTED / NOT CONNECTED) | ✔ |
 
 To provision, set `CYBERLAB_EXECUTION_PROVIDER=docker` (local Docker, or a remote host via
 `CYBERLAB_DOCKER_HOST=ssh://user@host`). Without it, the API reports **NOT CONNECTED** and

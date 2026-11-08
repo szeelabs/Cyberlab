@@ -27,6 +27,14 @@ Python proxy (`backend/src/cyberlab/egress/proxy.py`) does exactly this, runs on
 official `python` image without a build, and is unit-tested in-process. Revisit if
 performance or protocol coverage (e.g. HTTP/2 to the proxy) becomes a need.
 
+## Snapshot encryption: chunked AES-256-GCM (STREAM) with `cryptography`
+Snapshots can be gigabytes, so they're encrypted in 1 MiB chunks with per-chunk nonces and a
+"last chunk" flag (the STREAM construction), which detects truncation and reordering while
+streaming. `cryptography` is already a dependency (via PyJWT). Considered: `age` (external
+binary, no Python API in the standard tooling), server-side S3 encryption (the provider holds
+the key, which defeats the point). S3 storage is tested against moto's S3 server because
+MinIO's community images were not reachable from the build environment.
+
 ## Rejected / deferred
 * **Kubernetes now:** too heavy for the free-first target and impossible locally on this
   machine. A Kubernetes adapter can come later behind `ProviderAdapter`.

@@ -21,7 +21,7 @@ from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
 from cyberlab.execution import build_provider
 from cyberlab.registry import load_registry
-from cyberlab.storage import LocalSnapshotStore
+from cyberlab.storage import build_store
 
 log = logging.getLogger("cyberlab")
 
@@ -51,7 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db.create_all()
     app.state.provider = build_provider(settings)
     app.state.terminal_sessions = {}
-    app.state.snapshot_store = LocalSnapshotStore(settings.snapshot_dir)
+    app.state.snapshot_store = build_store(settings)
 
     if settings.auth_mode == "dev":
         log.warning("AUTH MODE IS 'dev': every request is the local developer identity")
