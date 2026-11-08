@@ -48,6 +48,8 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[
 | [05 Free-first infrastructure](docs/05-infrastructure-strategy.md) | Running on free tiers / your own hosts |
 | [06 Roadmap](docs/06-roadmap.md) | Phases and next steps |
 | [07 Universe Manifest spec](docs/07-universe-manifest.md) | The portable format |
+| [Development status](docs/DEVELOPMENT_STATUS.md) | What is built, what isn't, known issues |
+| [Learning progress](docs/LEARNING_PROGRESS.md) | Maintainer's learning log |
 
 ## API overview (Phase 1)
 | Method | Path | Auth |
