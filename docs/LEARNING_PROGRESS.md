@@ -70,3 +70,11 @@ _None recorded yet._ Add entries as: date · topic · what was done · what was 
 ## Next learning step
 **Linux, Stage 1: the filesystem and permissions**, practised in a GitHub Codespace
 on the CyberLab repository (no local install needed).
+
+## Concepts met while building CyberLab
+Real problems from the codebase, which make good lessons later.
+| Date | Concept | What happened |
+|---|---|---|
+| 2026-11-08 | Linux file ownership and permissions | A new Docker volume was owned by `root` (uid 0), so the environment's user (uid 1000) got "Permission denied" writing to `/workspace`. Fixed with `chown` run with only the `CHOWN` capability. |
+| 2026-11-08 | Linux capabilities | Root's powers are split into ~40 capabilities. CyberLab drops all of them (`CapEff: 0000000000000000`) and grants only one when needed. |
+| 2026-11-08 | Container networks | An `--internal` Docker network lets lab machines see each other but not the internet. |

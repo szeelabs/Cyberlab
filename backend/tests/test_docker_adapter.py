@@ -1,0 +1,173 @@
+import pytest
+
+from cyberlab.execution import EnvState, ProviderError, ProvisionRequest
+from cyberlab.execution.docker import DockerAdapter, RunResult
+from cyberlab.manifest.models import Environment
+
+
+class FakeRunner:
+    """Records docker invocations and returns scripted results."""
+
+    def __init__(self, responses=None):
+        self.calls: list[list[str]] = []
+        self.responses = responses or {}
+
+    def __call__(self, args, timeout):
+        self.calls.append(args)
+        key = " ".join(args[1:3])
+        return self.responses.get(key, RunResult(0, "abc123def456", ""))
+
+    def find(self, sub):
+        return [c for c in self.calls if c[1] == sub]
+
+
+def env(mode="lab", **extra):
+    return Environment.model_validate(
+        {
+            "name": "shell",
+            "baseImage": "debian-12",
+            "resources": {"cpu": 0.5, "memoryMiB": 512, "storageGiB": 2},
+            "network": {"mode": mode, **extra},
+        }
+    )
+
+
+def req(mode="lab", internet_approved=False):
+    return ProvisionRequest(
+        workspace_key="ab12cd34ef56",
+        environment=env(mode),
+        image="docker.io/library/debian:12-slim",
+        internet_approved=internet_approved,
+    )
+
+
+def run_args(runner):
+    (call,) = [c for c in runner.find("run") if "--detach" in c]
+    return call
+
+
+def test_container_is_hardened():
+    runner = FakeRunner({"inspect --format": RunResult(0, "running", "")})
+    result = DockerAdapter(runner).provision(req())
+    args = run_args(runner)
+    joined = " ".join(args)
+    for flag in [
+        "--cap-drop ALL",
+        "--security-opt no-new-privileges",
+        "--read-only",
+        "--user 1000:1000",
+        "--pids-limit 256",
+        "--cpus 0.5",
+        "--memory 512m",
+        "--memory-swap 512m",
+        "--restart no",
+        "--volume cyberlab-ab12cd34ef56-shell-workspace:/workspace",
+    ]:
+        assert flag in joined, flag
+    assert "--privileged" not in args and "--publish" not in args and "-p" not in args
+    assert args[-3:] == ["docker.io/library/debian:12-slim", "sleep", "infinity"]
+    assert result.state == EnvState.running
+
+
+@pytest.mark.parametrize(
+    "mode,network,internal",
+    [
+        ("isolated", "none", None),
+        ("lab", "cyberlab-ab12cd34ef56-lab", True),
+        ("restricted-egress", "cyberlab-ab12cd34ef56-lab", True),  # fails closed: no proxy yet
+    ],
+)
+def test_network_modes(mode, network, internal):
+    runner = FakeRunner({"network inspect": RunResult(1, "", "not found")})
+    extra = {"allowedEgress": ["example.com"]} if mode == "restricted-egress" else {}
+    request = ProvisionRequest(
+        workspace_key="ab12cd34ef56",
+        environment=env(mode, **extra),
+        image="docker.io/library/debian:12-slim",
+    )
+    DockerAdapter(runner).provision(request)
+    args = run_args(runner)
+    assert args[args.index("--network") + 1] == network
+    creates = [c for c in runner.find("network") if c[2] == "create"]
+    if internal is None:
+        assert not creates
+    else:
+        assert "--internal" in creates[0]
+
+
+def test_internet_requires_approval():
+    with pytest.raises(ProviderError, match="not approved"):
+        DockerAdapter(FakeRunner()).provision(req("internet"))
+    runner = FakeRunner({"network inspect": RunResult(1, "", "")})
+    DockerAdapter(runner).provision(req("internet", internet_approved=True))
+    create = [c for c in runner.find("network") if c[2] == "create"][0]
+    assert "--internal" not in create
+
+
+def test_image_mirror_rewrites_docker_hub_only():
+    a = DockerAdapter(FakeRunner(), image_mirror="mirror.gcr.io")
+    assert (
+        a.resolve_image("docker.io/library/debian:12-slim")
+        == "mirror.gcr.io/library/debian:12-slim"
+    )
+    assert a.resolve_image("ghcr.io/x/y:1") == "ghcr.io/x/y:1"
+
+
+@pytest.mark.parametrize("bad", ["-rf", "x; rm -rf /", "UPPER", "a b", "../x"])
+def test_unsafe_names_rejected(bad):
+    with pytest.raises(ProviderError):
+        DockerAdapter.names(bad, "shell")
+    with pytest.raises(ProviderError):
+        DockerAdapter(FakeRunner()).inspect(bad if bad[0] == "-" else "--" + bad)
+
+
+def test_pull_only_when_image_missing():
+    runner = FakeRunner({"image inspect": RunResult(1, "", "No such image")})
+    DockerAdapter(runner).provision(req())
+    assert runner.find("pull")
+    runner = FakeRunner()
+    DockerAdapter(runner).provision(req())
+    assert not runner.find("pull")
+
+
+def test_errors_surface_as_provider_error():
+    runner = FakeRunner({"run --detach": RunResult(125, "", "Error: no space left on device")})
+    with pytest.raises(ProviderError, match="no space left"):
+        DockerAdapter(runner).provision(req())
+
+
+def test_status_not_connected():
+    runner = FakeRunner({"version --format": RunResult(1, "", "Cannot connect to the daemon")})
+    st = DockerAdapter(runner).status()
+    assert not st.connected and "not connected" in st.detail
+
+
+def test_inspect_and_lifecycle_states():
+    runner = FakeRunner({"inspect --format": RunResult(0, "exited", "")})
+    a = DockerAdapter(runner)
+    assert a.stop("abc123") == EnvState.stopped
+    assert a.inspect("abc123") == EnvState.stopped
+    missing = DockerAdapter(FakeRunner({"inspect --format": RunResult(1, "", "No such")}))
+    assert missing.inspect("abc123") == EnvState.missing
+
+
+def test_destroy_keeps_or_removes_volume():
+    runner = FakeRunner({"inspect --format": RunResult(0, "vol-1", "")})
+    DockerAdapter(runner).destroy("abc123", remove_workspace_volume=False)
+    assert not runner.find("volume")
+    runner = FakeRunner({"inspect --format": RunResult(0, "vol-1", "")})
+    DockerAdapter(runner).destroy("abc123", remove_workspace_volume=True)
+    assert runner.find("volume")[0][-1] == "vol-1"
+
+
+def test_new_volume_ownership_fixed_with_minimal_privilege():
+    runner = FakeRunner({"volume inspect": RunResult(1, "", "no such volume")})
+    DockerAdapter(runner).provision(req())
+    (helper,) = [c for c in runner.find("run") if "--rm" in c]
+    joined = " ".join(helper)
+    assert "--cap-drop ALL --cap-add CHOWN" in joined and "--network none" in joined
+    assert helper[-3:] == ["chown", "1000:1000", "/workspace"]
+    # existing volume: no helper container
+    runner = FakeRunner()
+    DockerAdapter(runner).provision(req())
+    assert not [c for c in runner.find("run") if "--rm" in c]

@@ -60,6 +60,41 @@ class ManifestRevision(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class PlanApproval(Base):
+    """A user's explicit approval of the risky items in one manifest revision."""
+
+    __tablename__ = "plan_approvals"
+    __table_args__ = (UniqueConstraint("workspace_id", "revision"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    approved_codes: Mapped[list] = mapped_column(JSON)
+    approved_by: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class EnvironmentRecord(Base):
+    """One provisioned environment and its last known state."""
+
+    __tablename__ = "environments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(63))
+    provider: Mapped[str] = mapped_column(String(32))
+    provider_ref: Mapped[str | None] = mapped_column(String(128))
+    state: Mapped[str] = mapped_column(String(16))
+    spec: Mapped[dict] = mapped_column(JSON)
+    resources: Mapped[dict] = mapped_column(JSON, default=dict)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

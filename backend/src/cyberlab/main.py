@@ -10,9 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from cyberlab import __version__
+from cyberlab.api.environments import router as env_router
 from cyberlab.api.routes import router
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
+from cyberlab.execution import build_provider
 from cyberlab.registry import load_registry
 
 log = logging.getLogger("cyberlab")
@@ -41,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.registry = load_registry(settings.registry_dir)
     app.state.db = Database(settings.database_url)
     app.state.db.create_all()
+    app.state.provider = build_provider(settings)
 
     if settings.auth_mode == "dev":
         log.warning("AUTH MODE IS 'dev': every request is the local developer identity")
@@ -76,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    app.include_router(env_router)
     return app
 
 

@@ -23,8 +23,8 @@ attacker (tool images).
 | **Repudiation** | "I didn't start that lab" | Append-only audit log with request IDs | ✅ (export/retention: Phase 4) |
 | **Information disclosure** | Reading another user's workspace | Owner-scoped queries, uniform 404; security headers; docs disabled in prod | ✅ tested |
 | **DoS / cost abuse** | Huge manifests, many environments, never-stopping labs | Request/manifest size caps; quotas; idle/TTL fields; warnings when no idle shutdown | ✅ validation; enforcement Phase 4 |
-| **Elevation of privilege** | Container escape | Non-root, cap-drop ALL, seccomp, no-new-privileges, read-only rootfs; microVMs before hostile code | ⏳ Phase 2 |
-| **Abuse of third parties** | Scanning or attacking external hosts from our IPs | Default network `lab` (no internet); `internet` needs approval; egress allow-list must be exact hostnames (no wildcards/IPs); high-risk packs need approval; audit | ✅ policy; egress proxy Phase 2 |
+| **Elevation of privilege** | Container escape | Non-root, cap-drop ALL, Docker's default seccomp profile, no-new-privileges, read-only rootfs, pids/CPU/memory limits; microVMs before hostile code | ✅ containers (tested on real Docker); microVM ⏳ |
+| **Abuse of third parties** | Scanning or attacking external hosts from our IPs | Default network `lab` = Docker `--internal` network (no internet, tested); `internet` needs a recorded approval; `restricted-egress` fails closed until the egress proxy exists; high-risk packs need approval; audit | ✅ enforced; egress proxy ⏳ |
 | **Supply chain** | Poisoned tool image | Pinned digests, SBOM, cosign signatures, Trivy scans in CI | ⏳ Phase 2 |
 | **Secret leakage** | API keys committed or logged | No secrets in code; `.env` gitignored; `SecretStr`; audit details exclude manifests; GitHub secret scanning | ✅ |
 | **AI-driven misuse** | Prompt asks the AI to build an attack environment against a real target | AI only drafts manifests; same policy engine; mandatory human approval; no target fields in the manifest | ⏳ Phase 5 |
@@ -41,6 +41,6 @@ attacker (tool images).
 
 ## Known gaps (honest list)
 * No rate limiting yet (add at the reverse proxy or with middleware before public exposure).
-* No approval endpoint yet; Phase 1 only *computes* what needs approval.
-* No runtime isolation exists yet, because nothing executes in Phase 1.
+* Storage size (`storageGiB`) is not enforced on Docker's default storage driver yet.
+* No live quota accounting across running environments yet (Phase 4).
 * JWKS path implemented but only the HS256 path is covered by automated tests.

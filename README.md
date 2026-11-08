@@ -5,10 +5,11 @@ CyberLab aims to give every user a personal, browser-accessible virtual computer
 isolated lab networks, persistent workspaces and portable configurations. Your physical
 machine becomes just a window.
 
-> **Status: Phase 1 (foundation).** The control-plane API, the Universe Manifest spec, the
-> tool registry and the policy engine work and are tested. **Nothing is provisioned yet.**
-> Environments, terminals, storage, AI and the web UI come in later phases. See
-> [docs/06-roadmap.md](docs/06-roadmap.md).
+> **Status: Phase 2 in progress.** The control plane, Universe Manifest, registry and
+> policy engine work (Phase 1). CyberLab can now **start real, hardened Linux containers**
+> on a Docker host from an approved manifest (Phase 2, part 1). Tool packs are not installed
+> yet, and there is no browser terminal, storage, AI or web UI yet. See
+> [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
 ## What works today
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of
@@ -62,6 +63,16 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[
 | GET/DELETE | `/v1/workspaces/{id}` | ✔ |
 | PUT/GET | `/v1/workspaces/{id}/manifest[?format=json&revision=N]` | ✔ |
 | GET | `/v1/audit` | ✔ |
+| GET | `/v1/system/execution` (provider CONNECTED / NOT CONNECTED) | ✔ |
+| GET | `/v1/workspaces/{id}/plan[?revision=N]` | ✔ |
+| POST | `/v1/workspaces/{id}/approvals` | ✔ |
+| GET/POST | `/v1/workspaces/{id}/environments[?refresh=true]` | ✔ |
+| POST | `/v1/workspaces/{id}/environments/{env}/start`, `/stop` | ✔ |
+| DELETE | `/v1/workspaces/{id}/environments/{env}[?keep_workspace=false]` | ✔ |
+
+To provision, set `CYBERLAB_EXECUTION_PROVIDER=docker` (local Docker, or a remote host via
+`CYBERLAB_DOCKER_HOST=ssh://user@host`). Without it, the API reports **NOT CONNECTED** and
+provisions nothing.
 
 ## Acceptable use
 CyberLab is for learning, defense and **authorized** testing only. Use it only against

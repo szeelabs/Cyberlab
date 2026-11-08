@@ -15,11 +15,11 @@ been tested.
       security headers, request IDs, owner isolation
 - [x] CLI: `cyberlab manifest validate|schema`, `cyberlab registry`
 
-## Phase 2 — Execution Engine
-1. `ProviderAdapter` protocol + `DockerAdapter` (remote Docker over SSH/TLS) with hardening
-   flags; integration tests run in CI (GitHub runners have Docker).
-2. Approval API: `POST /v1/workspaces/{id}/plans/{rev}/approve`, recording each approval code.
-3. Environment lifecycle API: provision / start / stop / destroy / status.
+## Phase 2 — Execution Engine (in progress)
+- [x] 1. `ProviderAdapter` protocol + `DockerAdapter` (local or remote via `DOCKER_HOST`) with
+      hardening flags; real-Docker integration tests in CI.
+- [x] 2. Approval API: `POST /v1/workspaces/{id}/approvals`, per revision, audited.
+- [x] 3. Environment lifecycle API: provision / start / stop / destroy / status refresh.
 4. Tool pack build pipeline: render Dockerfiles from `registry/toolpacks`, build in CI,
    publish to ghcr.io with SBOM + cosign; packs move `metadata-only → published`.
 5. Terminal gateway: WebSocket ↔ `docker exec` with short-lived per-environment tokens.

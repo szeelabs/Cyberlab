@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session
 from cyberlab import __version__
 from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.config import Settings, get_settings
-from cyberlab.db import AuditEvent, ManifestRevision, User, Workspace, record_audit
+from cyberlab.db import (
+    AuditEvent,
+    EnvironmentRecord,
+    ManifestRevision,
+    PlanApproval,
+    User,
+    Workspace,
+    record_audit,
+)
 from cyberlab.manifest.models import SLUG
 from cyberlab.manifest.policy import plan_from_text
 from cyberlab.registry import Registry
@@ -201,7 +209,16 @@ def delete_workspace(
     db: Session = Depends(get_db),
 ) -> Response:
     ws = _owned(db, user, ws_id)
-    db.query(ManifestRevision).filter(ManifestRevision.workspace_id == ws.id).delete()
+    live = db.scalar(
+        select(EnvironmentRecord).where(
+            EnvironmentRecord.workspace_id == ws.id,
+            EnvironmentRecord.state != "destroyed",
+        )
+    )
+    if live is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "destroy the workspace's environments first")
+    for model in (EnvironmentRecord, PlanApproval, ManifestRevision):
+        db.query(model).filter(model.workspace_id == ws.id).delete()
     db.delete(ws)
     record_audit(
         db,

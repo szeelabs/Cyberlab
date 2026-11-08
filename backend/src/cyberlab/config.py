@@ -58,6 +58,14 @@ class Settings(BaseSettings):
 
     quotas: QuotaSettings = Field(default_factory=QuotaSettings)
 
+    # --- Execution plane ----------------------------------------------------
+    # "none": nothing can be provisioned; the API reports NOT CONNECTED.
+    # "docker": a Docker Engine reached via the docker CLI (local, or remote via DOCKER_HOST).
+    execution_provider: Literal["none", "docker"] = "none"
+    docker_host: str | None = None  # e.g. ssh://cyberlab@my-server
+    docker_binary: str = "docker"
+    image_mirror: str | None = None  # e.g. mirror.gcr.io, replaces the docker.io/ prefix
+
     @model_validator(mode="after")
     def _check_security(self) -> Settings:
         if self.auth_mode == "dev" and self.environment == "production":

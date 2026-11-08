@@ -75,6 +75,9 @@ pytest
 uvicorn --factory cyberlab.main:app_factory --reload --port 8000    # dev server
 ```
 Local dev auth: `CYBERLAB_ENVIRONMENT=development CYBERLAB_AUTH_MODE=dev`.
+Real provisioning: add `CYBERLAB_EXECUTION_PROVIDER=docker` (needs a Docker daemon).
+Real-Docker tests: `CYBERLAB_DOCKER_TESTS=1 CYBERLAB_TEST_IMAGE_MIRROR=mirror.gcr.io pytest`
+(this cloud container may need `dockerd` started first; Docker Hub can rate-limit, so use the mirror).
 
 ## CyberLab in one paragraph
 An open-source "virtual cybersecurity universe": each user gets browser-accessible remote
@@ -85,6 +88,9 @@ Architect, resource intelligence, security (see `docs/02-architecture.md`). The 
 plus the policy engine is the shared contract every plane uses.
 
 ## Current phase
-**Phase 1 (Universe Foundation) — complete and verified.** Nothing is provisioned or
-executed yet. **Phase 2 (Execution Engine) has not started** and needs user approval.
+**Phase 1 (Universe Foundation): complete.** Phase 1 and Phase 2 part 1 are in PR #1
+(https://github.com/szeelabs/Cyberlab/pull/1), waiting for the user to merge.
+**Phase 2 (Execution Engine): part 1 done** (provider interface, hardened Docker adapter,
+approvals, environment lifecycle; tested on real Docker). Next: browser terminal, tool pack
+images, egress proxy.
 Details: `docs/DEVELOPMENT_STATUS.md`.
