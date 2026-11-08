@@ -14,7 +14,8 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phase 1 + 2) | ✅ 117 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
+| Test suite (Phase 1 + 2) | ✅ 149 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
+| Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
 | Live server smoke test (`/healthz`, `/readyz`, create workspace, validate manifest) | ✅ |
@@ -37,7 +38,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 |---|---|---|
 | Provider interface | `ProviderAdapter` protocol, `NOT CONNECTED` status when no provider is configured or reachable | `execution/base.py`, `GET /v1/system/execution` |
 | Docker adapter | Hardened containers: user 1000, all capabilities dropped, no-new-privileges, read-only root, private `/tmp`, CPU/memory/pids limits, persistent `/workspace` volume; works with local or remote (`DOCKER_HOST`) engines; optional image mirror | `execution/docker.py` |
-| Networking | `isolated` → no network; `lab` → private internal network per workspace; `restricted-egress` → same as lab (fails closed, no proxy yet); `internet` → only with a recorded approval | `execution/docker.py` |
+| Networking | `isolated` → no network; `lab` → private internal network per workspace; `restricted-egress` → lab network plus the egress proxy (Phase 2 part 4); `internet` → only with a recorded approval | `execution/docker.py` |
 | Approvals | View plan and required approvals; approve exactly the required items per revision; audited | `GET /plan`, `POST /approvals` |
 | Lifecycle | Provision all environments of a revision; start, stop, destroy (keep or delete workspace data); refresh state from Docker; failures recorded, not hidden; last destroy removes networks | `api/environments.py` |
 
@@ -59,6 +60,14 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | CLI | `cyberlab image dockerfile`, `image commands`, `image matrix` | `cli.py` |
 | CI | `image-plan` builds the matrix from the registry; `toolpack-images` builds every buildable pack on each compatible base (Ubuntu 24.04, Debian 12) and checks every tool command as `cyberlab` in a hardened, network-less container; the real-Docker job also installs a pack end to end | `.github/workflows/ci.yml` |
 
+## Implemented (Phase 2, part 4 — egress proxy)
+| Area | What works | Where |
+|---|---|---|
+| Proxy | Standard-library-only HTTP/HTTPS (`CONNECT`) proxy. Per-environment credentials (only SHA-256 stored), exact-hostname allow-lists, ports 80/443 only, IP literals refused, names resolving to non-public addresses refused (blocks internal network and cloud-metadata access), connects to the checked address, strips proxy credentials, `Connection: close` for plain HTTP, connection/header limits | `egress/proxy.py` |
+| Placement | One proxy per workspace, hardened (uid 65534, no capabilities, read-only, 64 MiB). It sits on the private lab network (alias `egress-proxy`) and an outbound network; environments have no route out except through it. CyberLab waits until it is listening; startup failures are reported | `execution/docker.py` |
+| Environments | `restricted-egress` environments get `HTTP(S)_PROXY` with their own credentials; other environments get none. If the provider can't run a proxy, those environments fail with a clear error | `api/environments.py` |
+| Visibility | Every decision is logged as JSON; `GET /v1/workspaces/{id}/egress-log` shows recent allow/deny decisions with reasons | |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -67,7 +76,6 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
 | Remote desktop | 6 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
-| Egress proxy for `restricted-egress` | 2 |
 | Persistent workspace storage, snapshots, export bundles | 3 |
 | Database migrations (Alembic); Postgres tested in CI | 3 |
 | Scheduler, idle/TTL shutdown, live quota accounting | 4 |
@@ -98,9 +106,10 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 11. Image builds need internet access to package mirrors on the Docker host.
 12. Found by CI: Suricata is not packaged in Debian 12 (bookworm) main, so the
    detection-engineering pack is offered on Ubuntu 24.04 only.
+13. Egress limits: TLS SNI is not checked against the CONNECT host (domain fronting), and
+   the proxy needs Docker Hub's `python` image (use `CYBERLAB_IMAGE_MIRROR`).
 
 ## Next milestone
-1. PR #3 (tool pack images): CI green, then merge.
-2. **Phase 2 part 4: egress proxy** so `restricted-egress` environments can reach only their
-   allow-listed hosts (today they fail closed with no internet).
-3. Then: vendor-installed tools with pinned checksums (Trivy, Grype, ...), image scanning.
+1. PR #4 (egress proxy): CI green, then merge. **This completes Phase 2's core.**
+2. **Phase 3 — Persistent Universe:** workspace file access, snapshots to S3-compatible
+   storage, export/restore bundles, Alembic migrations and Postgres in CI.

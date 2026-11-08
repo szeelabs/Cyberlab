@@ -24,7 +24,7 @@ been tested.
       host and in CI with smoke tests. Still to do: SBOM, scanning, cosign, ghcr.io publishing.
 - [x] 5. Terminal gateway: WebSocket ↔ `docker exec` with single-use, short-lived tickets;
       browser test page at `/terminal`.
-6. Egress proxy for `restricted-egress`.
+- [x] 6. Egress proxy for `restricted-egress` (per-environment allow-lists, audit log).
 
 ## Phase 3 — Persistent Universe
 Workspace volumes, file API, snapshots to S3-compatible storage (client-side encryption),

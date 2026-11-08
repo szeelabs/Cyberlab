@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -287,6 +290,7 @@ def provision_environments(
     adapter = _require_provider(provider)
 
     manifest = UniverseManifest.model_validate(rev.content)
+    proxy_urls, egress_error = _configure_egress(adapter, ws, manifest, settings)
     created = []
     for env in manifest.spec.environments:
         rec = EnvironmentRecord(
@@ -300,6 +304,8 @@ def provision_environments(
         db.add(rec)
         db.commit()  # record intent before touching the provider
         try:
+            if env.network.mode == NetworkMode.restricted_egress and egress_error:
+                raise ProviderError(egress_error)
             result = adapter.provision(
                 ProvisionRequest(
                     workspace_key=_workspace_key(ws),
@@ -308,6 +314,7 @@ def provision_environments(
                     tool_packs=tuple(reg.tool_packs[p] for p in env.tool_packs),
                     internet_approved=env.network.mode == NetworkMode.internet
                     and "security.internet-egress" in needed,
+                    egress_proxy_url=proxy_urls.get(env.name),
                 )
             )
             rec.provider_ref = result.provider_ref
@@ -328,6 +335,55 @@ def provision_environments(
         db.commit()
         created.append(rec)
     return {"revision": rev.revision, "environments": [_env_out(r) for r in created]}
+
+
+def _configure_egress(
+    adapter: ProviderAdapter, ws: Workspace, manifest: UniverseManifest, settings: Settings
+) -> tuple[dict[str, str], str | None]:
+    """Start the workspace egress proxy for restricted-egress environments.
+
+    Each such environment gets a fresh random token; the proxy only learns its SHA-256.
+    Returns ({env name: proxy URL with credentials}, error message or None).
+    """
+    restricted = [
+        e for e in manifest.spec.environments if e.network.mode == NetworkMode.restricted_egress
+    ]
+    if not restricted:
+        return {}, None
+    configure = getattr(adapter, "configure_egress", None)
+    if configure is None:
+        return {}, f"provider {adapter.name!r} does not support restricted egress"
+    tokens = {e.name: secrets.token_urlsafe(24) for e in restricted}
+    clients = {
+        hashlib.sha256(tokens[e.name].encode()).hexdigest(): {
+            "name": e.name,
+            "hosts": list(e.network.allowed_egress),
+        }
+        for e in restricted
+    }
+    try:
+        address = configure(
+            _workspace_key(ws), clients, allow_private=settings.egress_allow_private
+        )
+    except ProviderError as exc:
+        return {}, f"egress proxy could not start: {exc}"
+    return {name: f"http://{name}:{tok}@{address}" for name, tok in tokens.items()}, None
+
+
+@router.get("/v1/workspaces/{ws_id}/egress-log")
+def egress_log(
+    ws_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+    provider: ProviderAdapter | None = Depends(get_provider),
+) -> list[dict]:
+    """Recent egress decisions (allowed / denied destinations) for this workspace."""
+    ws = _owned(db, user, ws_id)
+    adapter = _require_provider(provider)
+    reader = getattr(adapter, "egress_log", None)
+    if reader is None:
+        return []
+    return reader(_workspace_key(ws))
 
 
 def _lifecycle(action: str):

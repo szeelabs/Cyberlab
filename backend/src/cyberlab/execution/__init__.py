@@ -32,5 +32,6 @@ def build_provider(settings) -> ProviderAdapter | None:
             binary=settings.docker_binary,
             image_mirror=settings.image_mirror,
             docker_host=settings.docker_host,
+            egress_image=settings.egress_proxy_image,
         )
     return None
