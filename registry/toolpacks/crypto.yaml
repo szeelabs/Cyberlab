@@ -1,0 +1,12 @@
+id: crypto
+name: Cryptography Toolkit
+version: 0.1.0
+category: cryptography
+description: Encryption, signing, certificate and encoding utilities.
+risk: low
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+minResources: {cpu: 0.25, memoryMiB: 256, storageGiB: 1}
+tools:
+  - {name: OpenSSL, purpose: "TLS, certificates and primitives", homepage: "https://www.openssl.org"}
+  - {name: GnuPG, purpose: OpenPGP encryption and signing, homepage: "https://gnupg.org"}
+  - {name: age, purpose: Simple modern file encryption, homepage: "https://age-encryption.org"}

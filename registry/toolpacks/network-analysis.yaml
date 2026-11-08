@@ -1,0 +1,12 @@
+id: network-analysis
+name: Network Analysis
+version: 0.1.0
+category: network-security
+description: Capture and inspect traffic and map hosts inside your own lab network.
+risk: medium
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+minResources: {cpu: 0.5, memoryMiB: 512, storageGiB: 1}
+tools:
+  - {name: tshark, purpose: Command-line packet capture and protocol dissection, homepage: "https://www.wireshark.org"}
+  - {name: tcpdump, purpose: Lightweight packet capture, homepage: "https://www.tcpdump.org"}
+  - {name: nmap, purpose: Host and service discovery on authorized networks, homepage: "https://nmap.org"}

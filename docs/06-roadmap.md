@@ -1,0 +1,55 @@
+# Implementation Roadmap
+
+Each phase ends with working code, tests and docs. Nothing is marked done until it has
+been tested.
+
+## Phase 1 — Universe Foundation ✅ (this change)
+- [x] Repository structure, CI, devcontainer, contribution and security policies
+- [x] Universe Manifest v1alpha1: Pydantic models, generated JSON Schema, examples
+- [x] Registry: 10 categories, 3 base images, 7 metadata-only tool packs, cross-validation
+- [x] Policy engine: registry resolution, compatibility, minimum resources, quotas,
+      isolation/egress rules, approval findings, resource estimate
+- [x] API: health/readiness, public registry, manifest validation, workspaces,
+      manifest import/export with revisions, audit log, `/v1/me`
+- [x] Security foundations: JWT verification, settings guards, hardened YAML, size limits,
+      security headers, request IDs, owner isolation
+- [x] CLI: `cyberlab manifest validate|schema`, `cyberlab registry`
+
+## Phase 2 — Execution Engine
+1. `ProviderAdapter` protocol + `DockerAdapter` (remote Docker over SSH/TLS) with hardening
+   flags; integration tests run in CI (GitHub runners have Docker).
+2. Approval API: `POST /v1/workspaces/{id}/plans/{rev}/approve`, recording each approval code.
+3. Environment lifecycle API: provision / start / stop / destroy / status.
+4. Tool pack build pipeline: render Dockerfiles from `registry/toolpacks`, build in CI,
+   publish to ghcr.io with SBOM + cosign; packs move `metadata-only → published`.
+5. Terminal gateway: WebSocket ↔ `docker exec` with short-lived per-environment tokens.
+6. Egress proxy for `restricted-egress`.
+
+## Phase 3 — Persistent Universe
+Workspace volumes, file API, snapshots to S3-compatible storage (client-side encryption),
+export bundle = manifest + snapshot, restore. Alembic migrations, Postgres in CI.
+
+## Phase 4 — Resource Intelligence
+Scheduler, idle reaper and TTL reaper, live quota accounting, provider cost classes, a
+user-owned-host adapter, rate limiting, audit export/retention.
+
+## Phase 5 — AI Lab Architect
+`LLMAdapter` (Anthropic / OpenAI-compatible / Ollama), prompt → structured manifest
+draft restricted to registry IDs, policy engine review, approval UI, a troubleshooting
+assistant that reads environment status and logs. Evaluated with a fixture prompt set.
+
+## Phase 6 — Visual Universe
+Next.js app: sign-in, workspace "desktop", environment dashboard, xterm.js terminal,
+tool-universe explorer, manifest editor with live validation, optional Guacamole/noVNC.
+
+## Phase 7 — Open Source Ecosystem
+Install guides (Codespaces, single VM, BYO host), a Claude Code Skill for authoring
+manifests, developer docs, a tool pack contribution guide, release automation (tags →
+images + changelog).
+
+## Exact next steps
+1. Merge Phase 1 and enable branch protection on `main` with CI required.
+2. Create a Supabase project (free tier) and run `/v1/me` against a real token to verify
+   the JWKS path. Record the result in `03-technology-decisions.md`.
+3. Start Phase 2 item 1: `backend/src/cyberlab/execution/` with `ProviderAdapter` and a
+   Docker adapter that provisions the `minimal` example on a CI runner.
