@@ -17,6 +17,7 @@ from cyberlab.db import (
     EnvironmentRecord,
     ManifestRevision,
     PlanApproval,
+    Snapshot,
     User,
     Workspace,
     record_audit,
@@ -217,7 +218,10 @@ def delete_workspace(
     )
     if live is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "destroy the workspace's environments first")
-    for model in (EnvironmentRecord, PlanApproval, ManifestRevision):
+    store = request.app.state.snapshot_store
+    for snap in db.scalars(select(Snapshot).where(Snapshot.workspace_id == ws.id)):
+        store.delete(snap.storage_key)  # snapshot data goes with the workspace
+    for model in (EnvironmentRecord, PlanApproval, ManifestRevision, Snapshot):
         db.query(model).filter(model.workspace_id == ws.id).delete()
     db.delete(ws)
     record_audit(

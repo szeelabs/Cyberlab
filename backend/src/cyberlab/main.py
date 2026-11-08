@@ -15,11 +15,13 @@ from cyberlab import __version__
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
 from cyberlab.api.routes import router
+from cyberlab.api.snapshots import router as snapshots_router
 from cyberlab.api.terminal import router as terminal_router
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
 from cyberlab.execution import build_provider
 from cyberlab.registry import load_registry
+from cyberlab.storage import LocalSnapshotStore
 
 log = logging.getLogger("cyberlab")
 
@@ -49,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.db.create_all()
     app.state.provider = build_provider(settings)
     app.state.terminal_sessions = {}
+    app.state.snapshot_store = LocalSnapshotStore(settings.snapshot_dir)
 
     if settings.auth_mode == "dev":
         log.warning("AUTH MODE IS 'dev': every request is the local developer identity")
@@ -91,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(env_router)
     app.include_router(files_router)
+    app.include_router(snapshots_router)
     app.include_router(terminal_router)
     static_dir = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")

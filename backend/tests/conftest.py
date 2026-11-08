@@ -25,8 +25,9 @@ def quotas():
 
 
 @pytest.fixture
-def settings():
+def settings(tmp_path):
     return Settings(
+        snapshot_dir=tmp_path / "snapshots",
         environment="test",
         database_url="sqlite://",
         registry_dir=REPO / "registry",

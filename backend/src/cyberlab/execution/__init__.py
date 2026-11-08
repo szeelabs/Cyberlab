@@ -25,7 +25,11 @@ __all__ = [
 def build_provider(settings) -> ProviderAdapter | None:
     """Return the configured provider, or ``None`` when execution is not configured."""
     if settings.execution_provider == "docker":
-        from cyberlab.execution.docker import DockerAdapter, subprocess_runner
+        from cyberlab.execution.docker import (
+            DockerAdapter,
+            subprocess_runner,
+            subprocess_streamer,
+        )
 
         return DockerAdapter(
             subprocess_runner(settings.docker_host),
@@ -33,5 +37,6 @@ def build_provider(settings) -> ProviderAdapter | None:
             image_mirror=settings.image_mirror,
             docker_host=settings.docker_host,
             egress_image=settings.egress_proxy_image,
+            streamer=subprocess_streamer(settings.docker_host),
         )
     return None
