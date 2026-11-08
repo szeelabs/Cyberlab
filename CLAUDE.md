@@ -49,8 +49,8 @@ CyberLab principal engineer**. Two goals run together:
 * Never promise unlimited free compute; design around real provider limits.
 
 ## Repository
-* **GitHub:** https://github.com/szeelabs/Cyberlab (canonical).
-  A copy of the branch also exists at `shayanbhai925925-prog/Cyberlab`.
+* **GitHub:** https://github.com/szeelabs/Cyberlab (canonical). The older URL
+  `shayanbhai925925-prog/Cyberlab` redirects to the same repository.
 * **Active branch:** `claude/dazzling-brahmagupta-ds29wi` (Phase 1). `main` holds only the
   initial commit until a pull request is merged.
 
