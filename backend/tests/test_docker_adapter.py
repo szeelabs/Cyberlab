@@ -10,10 +10,13 @@ class FakeRunner:
 
     def __init__(self, responses=None):
         self.calls: list[list[str]] = []
+        self.inputs: list[str] = []
         self.responses = responses or {}
 
-    def __call__(self, args, timeout):
+    def __call__(self, args, timeout, input=None):
         self.calls.append(args)
+        if input is not None:
+            self.inputs.append(input)
         key = " ".join(args[1:3])
         return self.responses.get(key, RunResult(0, "abc123def456", ""))
 
@@ -65,7 +68,7 @@ def test_container_is_hardened():
     ]:
         assert flag in joined, flag
     assert "--privileged" not in args and "--publish" not in args and "-p" not in args
-    assert args[-3:] == ["docker.io/library/debian:12-slim", "sleep", "infinity"]
+    assert args[-3].startswith("cyberlab-env:") and args[-2:] == ["sleep", "infinity"]
     assert result.state == EnvState.running
 
 
@@ -121,13 +124,46 @@ def test_unsafe_names_rejected(bad):
         DockerAdapter(FakeRunner()).inspect(bad if bad[0] == "-" else "--" + bad)
 
 
-def test_pull_only_when_image_missing():
+def test_image_built_only_when_missing(registry):
+    packs = (registry.tool_packs["crypto"],)
+    request = ProvisionRequest(
+        workspace_key="ab12cd34ef56",
+        environment=env("lab"),
+        image="docker.io/library/debian:12-slim",
+        tool_packs=packs,
+    )
     runner = FakeRunner({"image inspect": RunResult(1, "", "No such image")})
-    DockerAdapter(runner).provision(req())
-    assert runner.find("pull")
+    DockerAdapter(runner, image_mirror="mirror.gcr.io").provision(request)
+    (build,) = runner.find("build")
+    assert build[3].startswith("cyberlab-env:") and build[-1] == "-"  # Dockerfile on stdin
+    (dockerfile,) = runner.inputs
+    assert dockerfile.splitlines()[2] == "FROM mirror.gcr.io/library/debian:12-slim"
+    for pkg in ["age", "gnupg", "openssl"]:
+        assert f"      {pkg} \\" in dockerfile
+    run = run_args(runner)
+    assert run[-3] == build[3]  # the container runs the image that was built
+    # already built: no rebuild
     runner = FakeRunner()
-    DockerAdapter(runner).provision(req())
-    assert not runner.find("pull")
+    DockerAdapter(runner).provision(request)
+    assert not runner.find("build")
+
+
+def test_build_failure_is_reported(registry):
+    runner = FakeRunner(
+        {
+            "image inspect": RunResult(1, "", ""),
+            "build --tag": RunResult(1, "", "E: Unable to locate package x"),
+        }
+    )
+    request = ProvisionRequest(
+        workspace_key="ab12cd34ef56",
+        environment=env("lab"),
+        image="docker.io/library/debian:12-slim",
+        tool_packs=(registry.tool_packs["crypto"],),
+    )
+    with pytest.raises(ProviderError, match="Unable to locate package"):
+        DockerAdapter(runner).provision(request)
+    assert not [c for c in runner.find("run") if "--detach" in c]  # nothing started
 
 
 def test_errors_surface_as_provider_error():

@@ -4,7 +4,8 @@ The single source of truth for what is **built**, what is **not**, and what come
 Update it whenever status changes. Only mark something done after it has been tested.
 
 _Last verified: 2026-11-08. Phase 1 on a fresh clone of `szeelabs/Cyberlab`; Phase 2 parts 1-2
-on a real Docker Engine 29.9 (Linux), Python 3.13, and in headless Chromium._
+on a real Docker Engine 29.9 (Linux), Python 3.13, and in headless Chromium. Part 3 package
+installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is built in CI._
 
 ## Verification results
 | Check | Result |
@@ -13,7 +14,7 @@ on a real Docker Engine 29.9 (Linux), Python 3.13, and in headless Chromium._
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phase 1 + 2) | ✅ 97 passed, 0 failed, including 4 against real Docker |
+| Test suite (Phase 1 + 2) | ✅ 117 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
 | Live server smoke test (`/healthz`, `/readyz`, create workspace, validate manifest) | ✅ |
@@ -49,10 +50,21 @@ on a real Docker Engine 29.9 (Linux), Python 3.13, and in headless Chromium._
 | Audit | `terminal.ticket`, `terminal.open`, `terminal.close` (reason, duration, byte counts); **terminal content is never logged** | |
 | Test page | `/terminal`: xterm.js 5.5 (vendored, MIT) with a strict Content-Security-Policy; API token kept in memory only | `static/` |
 
+## Implemented (Phase 2, part 3 — tool pack images)
+| Area | What works | Where |
+|---|---|---|
+| Installable tools | Each tool lists its Debian/Ubuntu `package` and a smoke-test `command`; packs with packages are `buildable`. Tools without a distro package (OWASP ZAP, Volatility 3, Trivy, Grype, osquery) are listed but **not installed yet** | `registry/toolpacks/*.yaml`, `registry/models.py` |
+| Image recipes | "base image + tool packs" → a generated Dockerfile: installs packages, creates the `cyberlab` user (uid/gid 1000, home `/workspace`), `USER 1000`. Tag = hash of the Dockerfile, so images are reused and rebuilt only when the recipe changes | `execution/images.py` |
+| Provisioning | Every environment now runs its built image (built once on the Docker host, Dockerfile via stdin, no build context). Build failures are reported and nothing is started. `toolPacksInstalled` and `image` are reported per environment | `execution/docker.py`, `api/environments.py` |
+| CLI | `cyberlab image dockerfile`, `image commands`, `image matrix` | `cli.py` |
+| CI | `image-plan` builds the matrix from the registry; `toolpack-images` builds every buildable pack on Ubuntu 24.04 and Debian 12 and checks every tool command as `cyberlab` in a hardened, network-less container; the real-Docker job also installs a pack end to end | `.github/workflows/ci.yml` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
-| Tool pack image builds: environments run the **base image only**; packs are recorded but not installed (`toolPacksInstalled: false`) | 2 |
+| Tools without a distro package (ZAP, Volatility 3, Trivy, Grype, osquery): need vendor installs with pinned checksums | 2 |
+| Kali base images are not built in CI (large image, Docker Hub limits) | 2 |
+| Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
 | Remote desktop | 6 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Egress proxy for `restricted-egress` | 2 |
@@ -78,13 +90,15 @@ on a real Docker Engine 29.9 (Linux), Python 3.13, and in headless Chromium._
 7. **Fixed during Phase 2:** new Docker volumes are owned by root, so the unprivileged user
    couldn't write to `/workspace`. Fixed with a minimal-privilege ownership step and a
    `nocopy` mount (Docker otherwise resets ownership from the image).
-8. Cosmetic: the terminal prompt shows `I have no name!` because uid 1000 has no entry in the
-   base image's `/etc/passwd`. Harmless; fix when tool pack images are built (create a user).
+8. **Fixed in part 3:** the terminal prompt showed `I have no name!`; images now create a real
+   `cyberlab` user.
 9. The `/terminal` page is a functional test page, not the final UI (Phase 6).
+10. The first provision of a new base/pack combination builds an image, which can take minutes;
+   the request waits for it. Background provisioning is a later improvement.
+11. Image builds need internet access to package mirrors on the Docker host.
 
 ## Next milestone
-1. Open PR #2 (browser terminal); confirm CI, including the real-Docker job, passes.
-2. **User:** review and merge PR #2.
-3. **Phase 2 part 3: tool pack images.** Build each pack into an image in CI (scanned,
-   SBOM, published to ghcr.io), install them into environments, and create a proper user.
-4. Then the egress proxy for `restricted-egress`.
+1. PR #3 (tool pack images): CI green, then merge.
+2. **Phase 2 part 4: egress proxy** so `restricted-egress` environments can reach only their
+   allow-listed hosts (today they fail closed with no internet).
+3. Then: vendor-installed tools with pinned checksums (Trivy, Grype, ...), image scanning.

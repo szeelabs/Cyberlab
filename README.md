@@ -7,9 +7,8 @@ machine becomes just a window.
 
 > **Status: Phase 2 in progress.** The control plane, Universe Manifest, registry and
 > policy engine work (Phase 1). CyberLab can **start real, hardened Linux containers** on a
-> Docker host from an approved manifest, and you can **use them from a browser terminal**
-> (Phase 2, parts 1-2). Tool packs are not installed yet, and there is no storage, AI or
-> full web UI yet. See [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
+> Docker host from an approved manifest, with **tool packs installed**, and you can **use them
+> from a browser terminal** (Phase 2, parts 1-3). There is no storage, AI or full web UI yet. See [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
 ## What works today
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of

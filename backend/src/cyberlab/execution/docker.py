@@ -28,6 +28,7 @@ from cyberlab.execution.base import (
     ProvisionRequest,
     ProvisionResult,
 )
+from cyberlab.execution.images import ImageRecipe, ImageRecipeError, render
 from cyberlab.execution.shell import PtyShellSession, ShellSession
 from cyberlab.manifest.models import NetworkMode
 
@@ -37,6 +38,7 @@ _IMAGE = re.compile(r"^[a-z0-9][a-z0-9._/:@-]{0,254}$")
 
 MANAGED_LABEL = "dev.cyberlab.managed"
 DEFAULT_PIDS_LIMIT = 256
+BUILD_TIMEOUT = 1800  # seconds; first build of a large pack can be slow
 STATE_MAP = {
     "created": EnvState.stopped,
     "running": EnvState.running,
@@ -55,7 +57,7 @@ class RunResult:
     stderr: str
 
 
-Runner = Callable[[list[str], float], RunResult]
+Runner = Callable[..., RunResult]  # (args, timeout, input=None) -> RunResult
 
 
 def subprocess_runner(docker_host: str | None = None) -> Runner:
@@ -63,10 +65,16 @@ def subprocess_runner(docker_host: str | None = None) -> Runner:
     if docker_host:
         env["DOCKER_HOST"] = docker_host
 
-    def run(args: list[str], timeout: float) -> RunResult:
+    def run(args: list[str], timeout: float, input: str | None = None) -> RunResult:
         try:
             proc = subprocess.run(  # noqa: S603 - fixed binary, argument list, no shell
-                args, capture_output=True, text=True, timeout=timeout, env=env, check=False
+                args,
+                input=input,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+                check=False,
             )
         except FileNotFoundError as exc:
             raise ProviderError("docker CLI not found on the control-plane host") from exc
@@ -104,8 +112,13 @@ class DockerAdapter:
         self._timeout = timeout
 
     # ------------------------------------------------------------------ helpers
-    def _docker(self, *args: str, timeout: float | None = None, ok: bool = False) -> RunResult:
-        res = self._run([self._bin, *args], timeout or self._timeout)
+    def _docker(
+        self, *args: str, timeout: float | None = None, ok: bool = False, input: str | None = None
+    ) -> RunResult:
+        if input is None:
+            res = self._run([self._bin, *args], timeout or self._timeout)
+        else:
+            res = self._run([self._bin, *args], timeout or self._timeout, input=input)
         if res.returncode != 0 and not ok:
             msg = (res.stderr or res.stdout or "unknown error").splitlines()[-1][:300]
             raise ProviderError(f"docker {args[0]} failed: {msg}")
@@ -183,7 +196,22 @@ class DockerAdapter:
             timeout=120,
         )
 
-    def build_run_args(self, request: ProvisionRequest, network: str) -> list[str]:
+    def ensure_image(self, recipe: ImageRecipe) -> str:
+        """Build the environment image once; later environments reuse it by tag."""
+        if self._docker("image", "inspect", recipe.tag, ok=True).returncode == 0:
+            return recipe.tag
+        # Dockerfile on stdin, no build context: nothing from the host can be copied in.
+        self._docker(
+            "build",
+            "--tag",
+            recipe.tag,
+            "-",
+            input=recipe.dockerfile,
+            timeout=BUILD_TIMEOUT,
+        )
+        return recipe.tag
+
+    def build_run_args(self, request: ProvisionRequest, network: str, image: str) -> list[str]:
         env = request.environment
         n = self.names(request.workspace_key, env.name)
         mem = f"{env.resources.memory_mib}m"
@@ -232,7 +260,7 @@ class DockerAdapter:
         ]
         for k, v in labels.items():
             args += ["--label", f"{k}={v}"]
-        args += [self.resolve_image(request.image), "sleep", "infinity"]
+        args += [_check("image", image, _IMAGE), "sleep", "infinity"]
         return args
 
     # ------------------------------------------------------------------ interface
@@ -266,15 +294,19 @@ class DockerAdapter:
         else:  # pragma: no cover - enum is exhaustive
             raise ProviderError(f"unsupported network mode {mode}")
 
-        image = self.resolve_image(request.image)
-        if self._docker("image", "inspect", image, ok=True).returncode != 0:
-            self._docker("pull", "--quiet", image)
+        try:
+            recipe = render(self.resolve_image(request.image), request.tool_packs)
+        except ImageRecipeError as exc:
+            raise ProviderError(str(exc)) from exc
+        image = self.ensure_image(recipe)
         self._prepare_volume(n["volume"], image, request.workspace_key)
-        res = self._docker(*self.build_run_args(request, network))
+        res = self._docker(*self.build_run_args(request, network, image))
         ref = res.stdout.splitlines()[-1] if res.stdout else ""
         _check("container id", ref, _REF)
         return ProvisionResult(
-            provider_ref=ref, state=self.inspect(ref), resource_names={**n, "network": network}
+            provider_ref=ref,
+            state=self.inspect(ref),
+            resource_names={**n, "network": network, "image": image},
         )
 
     def inspect(self, provider_ref: str) -> EnvState:

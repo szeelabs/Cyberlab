@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SLUG = r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
 
@@ -48,12 +48,28 @@ class BaseImage(BaseModel):
     supports_desktop: bool = Field(default=False, alias="supportsDesktop")
 
 
+APT_PACKAGE = r"^[a-z0-9][a-z0-9+.-]{0,63}$"
+COMMAND = r"^[a-zA-Z0-9][a-zA-Z0-9_.+-]{0,63}$"
+
+
 class ToolInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
     purpose: str
     homepage: str | None = None
+    package: str | None = Field(
+        default=None, pattern=APT_PACKAGE, description="Debian/Ubuntu package that installs it"
+    )
+    command: str | None = Field(
+        default=None, pattern=COMMAND, description="Executable used to smoke-test the install"
+    )
+
+    @model_validator(mode="after")
+    def _command_with_package(self) -> ToolInfo:
+        if self.package and not self.command:
+            raise ValueError(f"tool {self.name!r}: a packaged tool needs a smoke-test command")
+        return self
 
 
 class ToolPack(BaseModel):
@@ -74,3 +90,16 @@ class ToolPack(BaseModel):
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     tools: list[ToolInfo] = Field(min_length=1)
     status: str = Field(default="metadata-only", pattern=r"^(metadata-only|buildable|published)$")
+
+    @property
+    def packages(self) -> list[str]:
+        """Distribution packages to install, in a stable order without duplicates."""
+        return sorted({t.package for t in self.tools if t.package})
+
+    @model_validator(mode="after")
+    def _status_matches_packages(self) -> ToolPack:
+        if self.status == "metadata-only" and self.packages:
+            raise ValueError(f"{self.id}: has packages, so status must be 'buildable'")
+        if self.status != "metadata-only" and not self.packages:
+            raise ValueError(f"{self.id}: status {self.status!r} needs at least one package")
+        return self

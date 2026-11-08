@@ -3,10 +3,11 @@ name: Web Application Security
 version: 0.1.0
 category: web-application-security
 description: Intercepting proxy and HTTP tooling for testing web apps you are authorized to test.
+status: buildable
 risk: medium
 compatibleBases: [ubuntu-24-04, kali-rolling]
 minResources: {cpu: 1, memoryMiB: 2048, storageGiB: 2}
 tools:
   - {name: OWASP ZAP, purpose: Intercepting proxy and web app scanner, homepage: "https://www.zaproxy.org"}
-  - {name: mitmproxy, purpose: Interactive HTTPS proxy for inspecting traffic, homepage: "https://mitmproxy.org"}
-  - {name: httpie, purpose: Human-friendly HTTP client, homepage: "https://httpie.io"}
+  - {name: mitmproxy, purpose: Interactive HTTPS proxy for inspecting traffic, homepage: "https://mitmproxy.org", package: mitmproxy, command: mitmdump}
+  - {name: httpie, purpose: Human-friendly HTTP client, homepage: "https://httpie.io", package: httpie, command: http}

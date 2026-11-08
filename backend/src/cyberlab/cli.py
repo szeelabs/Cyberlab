@@ -60,6 +60,63 @@ def _cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def _image_inputs(args: argparse.Namespace):
+    reg = load_registry(Path(args.registry) if args.registry else get_settings().registry_dir)
+    base = reg.base_images.get(args.base)
+    if base is None:
+        raise RegistryError(f"unknown base image {args.base!r}")
+    ids = [p for p in (args.packs or "").split(",") if p]
+    missing = [p for p in ids if p not in reg.tool_packs]
+    if missing:
+        raise RegistryError(f"unknown tool pack(s): {', '.join(missing)}")
+    packs = [reg.tool_packs[p] for p in ids]
+    incompatible = [p.id for p in packs if base.id not in p.compatible_bases]
+    if incompatible:
+        raise RegistryError(f"not compatible with {base.id}: {', '.join(incompatible)}")
+    return base, packs
+
+
+def _cmd_image_dockerfile(args: argparse.Namespace) -> int:
+    from cyberlab.execution.images import render
+
+    base, packs = _image_inputs(args)
+    image = (
+        f"{args.mirror.rstrip('/')}/{base.image.removeprefix('docker.io/')}"
+        if (args.mirror and base.image.startswith("docker.io/"))
+        else base.image
+    )
+    recipe = render(image, packs)
+    sys.stdout.write(recipe.dockerfile)
+    print(f"# tag: {recipe.tag}", file=sys.stderr)
+    return 0
+
+
+def _cmd_image_commands(args: argparse.Namespace) -> int:
+    from cyberlab.execution.images import smoke_test_commands
+
+    _, packs = _image_inputs(args)
+    print(" ".join(smoke_test_commands(packs)))
+    return 0
+
+
+def _cmd_image_matrix(args: argparse.Namespace) -> int:
+    """JSON build matrix: every buildable pack on every requested compatible base."""
+    reg = load_registry(Path(args.registry) if args.registry else get_settings().registry_dir)
+    bases = [b for b in args.bases.split(",") if b]
+    unknown = [b for b in bases if b not in reg.base_images]
+    if unknown:
+        raise RegistryError(f"unknown base image(s): {', '.join(unknown)}")
+    include = [
+        {"base": b, "pack": p.id}
+        for p in sorted(reg.tool_packs.values(), key=lambda p: p.id)
+        if p.status != "metadata-only"
+        for b in bases
+        if b in p.compatible_bases
+    ]
+    print(json.dumps({"include": include}))
+    return 0
+
+
 def _cmd_registry(args: argparse.Namespace) -> int:
     reg = load_registry(Path(args.registry) if args.registry else get_settings().registry_dir)
     for cat in reg.categories.values():
@@ -84,6 +141,23 @@ def main(argv: list[str] | None = None) -> int:
     s = msub.add_parser("schema", help="print the JSON Schema")
     s.add_argument("-o", "--output")
     s.set_defaults(func=_cmd_schema)
+
+    im = sub.add_parser("image", help="environment image recipes")
+    isub = im.add_subparsers(dest="image_command", required=True)
+    for name, func, text in [
+        ("dockerfile", _cmd_image_dockerfile, "print the Dockerfile for a base + tool packs"),
+        ("commands", _cmd_image_commands, "print the smoke-test commands for tool packs"),
+    ]:
+        c = isub.add_parser(name, help=text)
+        c.add_argument("--base", required=True, help="base image id, e.g. debian-12")
+        c.add_argument("--packs", default="", help="comma-separated tool pack ids")
+        if name == "dockerfile":
+            c.add_argument("--mirror", help="registry mirror for docker.io images")
+        c.set_defaults(func=func)
+
+    mx = isub.add_parser("matrix", help="JSON CI build matrix of buildable packs")
+    mx.add_argument("--bases", required=True, help="comma-separated base image ids")
+    mx.set_defaults(func=_cmd_image_matrix)
 
     r = sub.add_parser("registry", help="list registry contents")
     r.set_defaults(func=_cmd_registry)
