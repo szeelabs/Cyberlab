@@ -208,3 +208,85 @@ def test_other_users_cannot_touch_environments(client):
 
 def test_endpoints_require_auth(client):
     assert client.get("/v1/system/execution").status_code == 401
+
+
+RESTRICTED = """
+apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: egress}
+spec:
+  environments:
+    - name: scanner
+      baseImage: debian-12
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: restricted-egress, allowedEgress: [ghcr.io, mirror.gcr.io]}
+    - name: analyst
+      baseImage: debian-12
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+"""
+
+
+class EgressProvider(FakeProvider):
+    def __init__(self):
+        super().__init__()
+        self.egress = None
+
+    def configure_egress(self, key, clients, *, allow_private=False):
+        self.egress = (key, clients, allow_private)
+        return "egress-proxy:3128"
+
+    def egress_log(self, key):
+        return [{"decision": "deny", "host": "evil.example", "client": "scanner"}]
+
+
+def test_restricted_egress_gets_its_own_proxy_credentials(settings):
+    import hashlib
+
+    app = create_app(settings)
+    app.state.provider = provider = EgressProvider()
+    with TestClient(app) as c:
+        ws = workspace(c, RESTRICTED)
+        r = c.post(f"/v1/workspaces/{ws}/environments", json={}, headers=auth())
+        assert r.status_code == 201 and all(
+            e["state"] == "running" for e in r.json()["environments"]
+        )
+        by_name = {req.environment.name: req for req in provider.requests}
+        url = by_name["scanner"].egress_proxy_url
+        assert url.startswith("http://scanner:") and url.endswith("@egress-proxy:3128")
+        assert by_name["analyst"].egress_proxy_url is None  # lab env: no proxy
+        token = url.split(":")[2].split("@")[0]
+        _, clients, allow_private = provider.egress
+        assert clients == {
+            hashlib.sha256(token.encode()).hexdigest(): {
+                "name": "scanner",
+                "hosts": ["ghcr.io", "mirror.gcr.io"],
+            }
+        }
+        assert token not in str(clients) and allow_private is False
+        log = c.get(f"/v1/workspaces/{ws}/egress-log", headers=auth()).json()
+        assert log[0]["host"] == "evil.example"
+        assert c.get(f"/v1/workspaces/{ws}/egress-log", headers=auth("mallory")).status_code == 404
+
+
+def test_restricted_egress_fails_clearly_without_proxy_support(client):
+    ws = workspace(client, RESTRICTED)
+    envs = {
+        e["name"]: e
+        for e in client.post(f"/v1/workspaces/{ws}/environments", json={}, headers=auth()).json()[
+            "environments"
+        ]
+    }
+    assert envs["scanner"]["state"] == "failed"
+    assert "does not support restricted egress" in envs["scanner"]["lastError"]
+    assert envs["analyst"]["state"] == "running"
+
+
+def test_egress_allow_private_refused_in_production():
+    from pydantic import SecretStr, ValidationError
+
+    from cyberlab.config import Settings
+
+    with pytest.raises(ValidationError, match="local testing only"):
+        Settings(
+            environment="production", auth_jwt_secret=SecretStr("x"), egress_allow_private=True
+        )

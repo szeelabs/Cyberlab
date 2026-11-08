@@ -49,6 +49,8 @@ class ProvisionRequest:
     environment: Environment
     image: str  # base OCI image reference resolved from the registry
     tool_packs: tuple[ToolPack, ...] = ()
+    # restricted-egress only: proxy URL with this environment's credentials
+    egress_proxy_url: str | None = None
     internet_approved: bool = False
     labels: dict[str, str] = field(default_factory=dict)
 

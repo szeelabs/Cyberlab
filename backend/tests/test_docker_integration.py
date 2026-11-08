@@ -6,6 +6,7 @@ Optional: CYBERLAB_TEST_IMAGE_MIRROR=mirror.gcr.io (avoids Docker Hub rate limit
 
 import os
 import subprocess
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,9 +35,9 @@ spec:
 """
 
 
-def sh(container, cmd):
+def sh(container, cmd, interpreter="sh"):
     p = subprocess.run(
-        ["docker", "exec", container, "sh", "-c", cmd],
+        ["docker", "exec", container, interpreter, "-c", cmd],
         capture_output=True,
         text=True,
         timeout=60,
@@ -199,3 +200,113 @@ def test_tool_pack_is_installed(client):
         assert (code, out) == (0, "1")
     finally:
         destroy_all(client, ws, [env])
+
+
+EGRESS = """
+apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: egress}
+spec:
+  environments:
+    - name: scanner
+      baseImage: debian-12
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: restricted-egress, allowedEgress: [allowed.example]}
+"""
+
+
+# bash-only HTTP request through the proxy (the base image has no curl).
+def bash(container, cmd):
+    return sh(container, cmd, interpreter="bash")
+
+
+def proxy_get(host: str, with_auth: bool = True) -> str:
+    auth_line = "Proxy-Authorization: Basic %s\\r\\n" if with_auth else "%.0s"
+    return _PROXY_GET.replace("HOST", host).replace("AUTH", auth_line)
+
+
+_PROXY_GET = (
+    "exec 3<>/dev/tcp/egress-proxy/3128 || exit 9; "
+    'cred=$(printf %s "$(printf %s "${HTTP_PROXY#http://}" | cut -d@ -f1)" | base64 -w0); '
+    "printf 'GET http://HOST/ HTTP/1.0\\r\\nHost: HOST\\r\\nAUTH\\r\\n' \"$cred\" >&3; "
+    "head -1 <&3"
+)
+
+
+def test_restricted_egress_through_proxy(settings):
+    s = settings.model_copy(
+        update={
+            "execution_provider": "docker",
+            "image_mirror": os.environ.get("CYBERLAB_TEST_IMAGE_MIRROR") or None,
+            "egress_allow_private": True,  # the fake "internet" below uses private addresses
+        }
+    )
+    mirror = os.environ.get("CYBERLAB_TEST_IMAGE_MIRROR")
+    py = f"{mirror}/library/python:3.13-slim" if mirror else "python:3.13-slim"
+    with TestClient(create_app(s)) as c:
+        ws, (env,) = provision(c, EGRESS, "it-egress")
+        name = env["resources"]["container"]
+        key = name.removeprefix("cyberlab-").removesuffix("-scanner")
+        sites = []
+        try:
+            for host in ("allowed.example", "blocked.example"):
+                site = f"cyberlab-test-site-{host.split('.')[0]}-{key}"
+                r = docker(
+                    "run",
+                    "-d",
+                    "--name",
+                    site,
+                    "--network",
+                    f"cyberlab-{key}-egress",
+                    "--network-alias",
+                    host,
+                    py,
+                    "python",
+                    "-m",
+                    "http.server",
+                    "80",
+                )
+                assert r.returncode == 0, r.stderr
+                sites.append(site)
+            for _ in range(30):  # wait for the fake sites to listen
+                if (
+                    "200"
+                    in bash(
+                        name,
+                        proxy_get("allowed.example"),
+                    )[1]
+                ):
+                    break
+                time.sleep(0.5)
+
+            ok = bash(
+                name,
+                proxy_get("allowed.example"),
+            )[1]
+            assert ok.startswith("HTTP/1.0 200"), ok
+            denied = bash(
+                name,
+                proxy_get("blocked.example"),
+            )[1]
+            assert denied.startswith("HTTP/1.1 403"), denied
+            no_auth = bash(name, proxy_get("allowed.example", with_auth=False))[1]
+            assert no_auth.startswith("HTTP/1.1 407"), no_auth
+            # no way around the proxy: direct connections fail
+            direct = sh(
+                name,
+                "timeout 5 bash -c 'exec 3<>/dev/tcp/allowed.example/80' "
+                "&& echo CONNECTED || echo BLOCKED",
+            )[1]
+            assert "BLOCKED" in direct and "CONNECTED" not in direct, direct
+
+            log = c.get(f"/v1/workspaces/{ws}/egress-log", headers=auth()).json()
+            decisions = {(e["decision"], e.get("host"), e.get("reason")) for e in log}
+            assert ("allow", "allowed.example", None) in decisions
+            assert ("deny", "blocked.example", "not-allowed") in decisions
+            assert ("deny", None, "auth") in decisions
+        finally:
+            for site in sites:
+                docker("rm", "-f", site)
+            destroy_all(c, ws, [env])
+    assert docker("inspect", f"cyberlab-{key}-egress-proxy").returncode != 0
+    assert docker("network", "inspect", f"cyberlab-{key}-egress").returncode != 0

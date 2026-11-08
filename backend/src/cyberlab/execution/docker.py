@@ -14,11 +14,14 @@ Containers share the host kernel, so this is not a boundary for hostile code.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib import resources
 
 from cyberlab.execution.base import (
     CostClass,
@@ -38,6 +41,9 @@ _IMAGE = re.compile(r"^[a-z0-9][a-z0-9._/:@-]{0,254}$")
 
 MANAGED_LABEL = "dev.cyberlab.managed"
 DEFAULT_PIDS_LIMIT = 256
+EGRESS_ALIAS = "egress-proxy"
+EGRESS_PORT = 3128
+DEFAULT_EGRESS_IMAGE = "docker.io/library/python:3.13-slim"
 BUILD_TIMEOUT = 1800  # seconds; first build of a large pack can be slow
 STATE_MAP = {
     "created": EnvState.stopped,
@@ -103,7 +109,11 @@ class DockerAdapter:
         image_mirror: str | None = None,
         timeout: float = 300,
         docker_host: str | None = None,
+        egress_image: str = DEFAULT_EGRESS_IMAGE,
+        egress_ready_timeout: float = 30,
     ) -> None:
+        self._egress_ready_timeout = egress_ready_timeout
+        self._egress_image = egress_image
         self._docker_host = docker_host
         self._run = runner
         self._bin = binary
@@ -140,6 +150,8 @@ class DockerAdapter:
             "volume": f"{base}-{env_name}-workspace",
             "lab_network": f"{base}-lab",
             "internet_network": f"{base}-internet",
+            "egress_network": f"{base}-egress",
+            "egress_proxy": f"{base}-egress-proxy",
         }
 
     def _ensure_network(self, name: str, *, internal: bool, workspace_key: str) -> None:
@@ -255,6 +267,7 @@ class DockerAdapter:
             "/workspace",
             "--env",
             "HOME=/workspace",
+            *self._proxy_env(request.egress_proxy_url),
             "--restart",
             "no",
         ]
@@ -346,8 +359,117 @@ class DockerAdapter:
             self._docker("volume", "rm", _check("volume", volume, _REF), timeout=60, ok=True)
         return EnvState.destroyed
 
+    @staticmethod
+    def _proxy_env(url: str | None) -> list[str]:
+        if not url:
+            return []
+        out: list[str] = []
+        for key in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy"):
+            out += ["--env", f"{key}={url}"]
+        return out + [
+            "--env",
+            "NO_PROXY=localhost,127.0.0.1",
+            "--env",
+            "no_proxy=localhost,127.0.0.1",
+        ]
+
+    def configure_egress(
+        self, workspace_key: str, clients: dict[str, dict], *, allow_private: bool = False
+    ) -> str:
+        """(Re)start the workspace egress proxy and return its address on the lab network.
+
+        ``clients`` maps the SHA-256 of each environment's proxy token to
+        ``{"name": ..., "hosts": [...]}``. The proxy is on the private lab network (alias
+        ``egress-proxy``) and on an outbound network; environments only on the lab network.
+        """
+        n = self.names(workspace_key, "egress")
+        lab, out, name = n["lab_network"], n["egress_network"], n["egress_proxy"]
+        self._ensure_network(lab, internal=True, workspace_key=workspace_key)
+        self._ensure_network(out, internal=False, workspace_key=workspace_key)
+        self._docker("rm", "--force", name, timeout=60, ok=True)
+        config = json.dumps(
+            {
+                "listen": f"0.0.0.0:{EGRESS_PORT}",  # noqa: S104 - inside the proxy container
+                "ports": [80, 443],
+                "allowPrivate": allow_private,
+                "clients": clients,
+            }
+        )
+        source = resources.files("cyberlab.egress").joinpath("proxy.py").read_text("utf-8")
+        self._docker(
+            "run",
+            "--detach",
+            "--name",
+            name,
+            "--user",
+            "65534:65534",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--read-only",
+            "--pids-limit",
+            "64",
+            "--memory",
+            "64m",
+            "--cpus",
+            "0.25",
+            "--restart",
+            "no",
+            "--network",
+            out,
+            "--label",
+            f"{MANAGED_LABEL}=true",
+            "--label",
+            f"dev.cyberlab.workspace={workspace_key}",
+            "--label",
+            "dev.cyberlab.role=egress-proxy",
+            "--env",
+            f"CYBERLAB_EGRESS_CONFIG={config}",
+            self.resolve_image(self._egress_image),
+            "python",
+            "-I",
+            "-c",
+            source,
+        )
+        self._docker("network", "connect", "--alias", EGRESS_ALIAS, lab, name)
+        self._wait_for_proxy(name)
+        return f"{EGRESS_ALIAS}:{EGRESS_PORT}"
+
+    def _wait_for_proxy(self, name: str) -> None:
+        """Return once the proxy reports it is listening, so environments never race it."""
+        deadline = time.monotonic() + self._egress_ready_timeout
+        while True:
+            logs = self._docker("logs", "--tail", "20", name, timeout=15, ok=True)
+            if '"event": "listening"' in logs.stdout:
+                return
+            state = self._docker(
+                "inspect", "--format", "{{.State.Status}}", name, timeout=15, ok=True
+            ).stdout
+            if state in ("exited", "dead"):
+                detail = (logs.stderr or logs.stdout or "no output").splitlines()[-1][:200]
+                raise ProviderError(f"egress proxy exited during startup: {detail}")
+            if time.monotonic() >= deadline:
+                raise ProviderError("egress proxy did not become ready in time")
+            time.sleep(0.25)
+
+    def egress_log(self, workspace_key: str, tail: int = 200) -> list[dict]:
+        name = self.names(workspace_key, "egress")["egress_proxy"]
+        res = self._docker("logs", "--tail", str(int(tail)), name, timeout=30, ok=True)
+        entries = []
+        for line in res.stdout.splitlines():
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict) and "decision" in entry:
+                entries.append(entry)
+        return entries
+
     def remove_workspace_networks(self, workspace_key: str) -> None:
-        for kind in ("lab", "internet"):
+        proxy = self.names(workspace_key, "egress")["egress_proxy"]
+        self._docker("rm", "--force", proxy, timeout=60, ok=True)
+        for kind in ("lab", "internet", "egress"):
             name = f"cyberlab-{_check('workspace key', workspace_key, _SAFE)}-{kind}"
             self._docker("network", "rm", name, timeout=30, ok=True)
 

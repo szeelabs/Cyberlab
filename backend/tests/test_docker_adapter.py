@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from cyberlab.execution import EnvState, ProviderError, ProvisionRequest
@@ -207,3 +209,99 @@ def test_new_volume_ownership_fixed_with_minimal_privilege():
     runner = FakeRunner()
     DockerAdapter(runner).provision(req())
     assert not [c for c in runner.find("run") if "--rm" in c]
+
+
+def test_egress_proxy_is_hardened_and_bridges_two_networks():
+    runner = FakeRunner(
+        {
+            "network inspect": RunResult(1, "", "not found"),
+            "logs --tail": RunResult(0, '{"event": "listening"}', ""),
+        }
+    )
+    clients = {"ab" * 32: {"name": "scanner", "hosts": ["ghcr.io"]}}
+    addr = DockerAdapter(runner, image_mirror="mirror.gcr.io").configure_egress(
+        "ab12cd34ef56", clients
+    )
+    assert addr == "egress-proxy:3128"
+    creates = {c[-1]: c for c in runner.find("network") if c[2] == "create"}
+    assert "--internal" in creates["cyberlab-ab12cd34ef56-lab"]
+    assert "--internal" not in creates["cyberlab-ab12cd34ef56-egress"]
+    (run,) = [c for c in runner.find("run") if "--detach" in c]
+    joined = " ".join(run)
+    for flag in [
+        "--user 65534:65534",
+        "--cap-drop ALL",
+        "--security-opt no-new-privileges",
+        "--read-only",
+        "--memory 64m",
+        "--network cyberlab-ab12cd34ef56-egress",
+    ]:
+        assert flag in joined, flag
+    assert "mirror.gcr.io/library/python:3.13-slim" in run
+    config = json.loads(
+        next(a for a in run if a.startswith("CYBERLAB_EGRESS_CONFIG=")).split("=", 1)[1]
+    )
+    assert config["clients"] == clients and config["allowPrivate"] is False
+    assert run[-4:-1] == ["python", "-I", "-c"] and "class EgressProxy" in run[-1]
+    connect = [c for c in runner.find("network") if c[2] == "connect"][0]
+    assert connect[-3:] == [
+        "egress-proxy",
+        "cyberlab-ab12cd34ef56-lab",
+        "cyberlab-ab12cd34ef56-egress-proxy",
+    ]
+
+
+def test_environment_gets_proxy_settings_only_when_restricted():
+    url = "http://scanner:tok@egress-proxy:3128"
+    request = ProvisionRequest(
+        workspace_key="ab12cd34ef56",
+        environment=env("restricted-egress", allowedEgress=["ghcr.io"]),
+        image="docker.io/library/debian:12-slim",
+        egress_proxy_url=url,
+    )
+    runner = FakeRunner()
+    DockerAdapter(runner).provision(request)
+    joined = " ".join(run_args(runner))
+    assert f"HTTPS_PROXY={url}" in joined and f"http_proxy={url}" in joined
+    assert "--network cyberlab-ab12cd34ef56-lab" in joined  # no direct route out
+    runner = FakeRunner()
+    DockerAdapter(runner).provision(req("lab"))
+    assert "PROXY" not in " ".join(run_args(runner))
+
+
+def test_egress_log_parses_decisions_only():
+    lines = "\n".join(
+        [
+            json.dumps({"event": "listening"}),
+            json.dumps({"decision": "deny", "host": "evil.example"}),
+            "not json",
+        ]
+    )
+    runner = FakeRunner({"logs --tail": RunResult(0, lines, "")})
+    assert DockerAdapter(runner).egress_log("ab12cd34ef56") == [
+        {"decision": "deny", "host": "evil.example"}
+    ]
+
+
+def test_workspace_cleanup_removes_proxy_and_networks():
+    runner = FakeRunner()
+    DockerAdapter(runner).remove_workspace_networks("ab12cd34ef56")
+    assert ["docker", "rm", "--force", "cyberlab-ab12cd34ef56-egress-proxy"] in runner.calls
+    removed = [c[-1] for c in runner.find("network") if c[2] == "rm"]
+    assert removed == [f"cyberlab-ab12cd34ef56-{k}" for k in ("lab", "internet", "egress")]
+
+
+def test_egress_proxy_startup_failures_are_reported():
+    crashed = FakeRunner(
+        {
+            "logs --tail": RunResult(0, "", "SyntaxError: bad config"),
+            "inspect --format": RunResult(0, "exited", ""),
+        }
+    )
+    with pytest.raises(ProviderError, match="exited during startup: SyntaxError"):
+        DockerAdapter(crashed).configure_egress("ab12cd34ef56", {})
+    slow = FakeRunner(
+        {"logs --tail": RunResult(0, "", ""), "inspect --format": RunResult(0, "running", "")}
+    )
+    with pytest.raises(ProviderError, match="did not become ready"):
+        DockerAdapter(slow, egress_ready_timeout=0.3).configure_egress("ab12cd34ef56", {})

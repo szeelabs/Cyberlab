@@ -24,7 +24,7 @@ attacker (tool images).
 | **Information disclosure** | Reading another user's workspace | Owner-scoped queries, uniform 404; security headers; docs disabled in prod | ✅ tested |
 | **DoS / cost abuse** | Huge manifests, many environments, never-stopping labs | Request/manifest size caps; quotas; idle/TTL fields; warnings when no idle shutdown | ✅ validation; enforcement Phase 4 |
 | **Elevation of privilege** | Container escape | Non-root, cap-drop ALL, Docker's default seccomp profile, no-new-privileges, read-only rootfs, pids/CPU/memory limits; microVMs before hostile code | ✅ containers (tested on real Docker); microVM ⏳ |
-| **Abuse of third parties** | Scanning or attacking external hosts from our IPs | Default network `lab` = Docker `--internal` network (no internet, tested); `internet` needs a recorded approval; `restricted-egress` fails closed until the egress proxy exists; high-risk packs need approval; audit | ✅ enforced; egress proxy ⏳ |
+| **Abuse of third parties** | Scanning or attacking external hosts from our IPs | Default network `lab` = Docker `--internal` network (no internet, tested); `internet` needs a recorded approval; `restricted-egress` goes only through the egress proxy (per-environment credentials, exact hostnames, ports 80/443, non-public addresses refused, all decisions logged); high-risk packs need approval; audit | ✅ enforced and tested on real Docker |
 | **Terminal hijacking** | A malicious website opens a WebSocket to the user's terminal (cross-site WebSocket hijacking); a leaked or replayed terminal link | Single-use tickets (hash stored, 60 s), sent inside the socket not the URL; cross-site `Origin` rejected; ticket bound to one user and one running environment; session/idle/size limits; content never logged | ✅ tested |
 | **Supply chain** | Poisoned tool image or package | Tools come only from the base distribution's signed package repositories; recipes are generated from validated registry data (package names checked against a strict pattern), built with no build context; CI builds and smoke-tests every pack. Still to do: pinned base digests, SBOM, scanning, signing | 🟨 partial |
 | **Secret leakage** | API keys committed or logged | No secrets in code; `.env` gitignored; `SecretStr`; audit details exclude manifests; GitHub secret scanning | ✅ |
@@ -45,3 +45,5 @@ attacker (tool images).
 * Storage size (`storageGiB`) is not enforced on Docker's default storage driver yet.
 * No live quota accounting across running environments yet (Phase 4).
 * JWKS path implemented but only the HS256 path is covered by automated tests.
+* Egress proxy: TLS SNI is not compared with the CONNECT hostname, so a client could use
+  domain fronting through an allowed CDN host. Mitigation would need TLS inspection.

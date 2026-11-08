@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     docker_binary: str = "docker"
     image_mirror: str | None = None  # e.g. mirror.gcr.io, replaces the docker.io/ prefix
 
+    # --- Egress proxy (restricted-egress) -------------------------------------
+    egress_proxy_image: str = "docker.io/library/python:3.13-slim"
+    # Lets allow-listed names resolve to private addresses. Tests only; refused in production.
+    egress_allow_private: bool = False
+
     # --- Browser terminal ----------------------------------------------------
     terminal_ticket_ttl_seconds: int = Field(default=60, ge=5, le=600)
     terminal_idle_timeout_seconds: int = Field(default=900, ge=30)
@@ -84,6 +89,8 @@ class Settings(BaseSettings):
                 raise ValueError("Asymmetric JWT algorithms require CYBERLAB_AUTH_JWKS_URL")
             if self.environment == "production" and not asymmetric and self.auth_jwt_secret is None:
                 raise ValueError("CYBERLAB_AUTH_JWT_SECRET is required in production")
+        if self.environment == "production" and self.egress_allow_private:
+            raise ValueError("CYBERLAB_EGRESS_ALLOW_PRIVATE is for local testing only")
         if self.environment == "production" and "*" in self.cors_origins:
             raise ValueError("Wildcard CORS origin is not allowed in production")
         return self
