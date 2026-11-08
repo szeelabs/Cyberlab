@@ -75,6 +75,9 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[
 | GET | `/v1/workspaces/{id}/egress-log` (allowed/denied outbound requests) | ✔ |
 | GET/DELETE | `/v1/workspaces/{id}/environments/{env}/files?path=` (list / delete) | ✔ |
 | GET/PUT | `/v1/workspaces/{id}/environments/{env}/files/content?path=` (download / upload) | ✔ |
+| POST | `/v1/workspaces/{id}/environments/{env}/snapshots` (save `/workspace`) | ✔ |
+| GET / DELETE | `/v1/workspaces/{id}/snapshots[/{snapshot}]` | ✔ |
+| POST | `/v1/workspaces/{id}/environments/{env}/restore` (stopped environment) | ✔ |
 
 To provision, set `CYBERLAB_EXECUTION_PROVIDER=docker` (local Docker, or a remote host via
 `CYBERLAB_DOCKER_HOST=ssh://user@host`). Without it, the API reports **NOT CONNECTED** and

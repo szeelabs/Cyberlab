@@ -222,3 +222,4 @@ __marimo__/
 # CyberLab
 *.db
 *.db-journal
+cyberlab-data/

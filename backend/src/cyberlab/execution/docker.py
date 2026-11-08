@@ -18,6 +18,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -98,6 +99,68 @@ def subprocess_runner(docker_host: str | None = None) -> Runner:
     return run
 
 
+Streamer = Callable[..., RunResult]  # (args, timeout, stdout_path=, stdin_path=, max_bytes=)
+
+
+def subprocess_streamer(docker_host: str | None = None) -> Streamer:
+    """Run docker with stdout streamed into a file, or stdin streamed from one."""
+    env = dict(os.environ)
+    if docker_host:
+        env["DOCKER_HOST"] = docker_host
+
+    def stream(
+        args: list[str],
+        timeout: float,
+        stdout_path=None,
+        stdin_path=None,
+        max_bytes: int | None = None,
+    ) -> RunResult:
+        deadline = time.monotonic() + timeout
+        stdin = open(stdin_path, "rb") if stdin_path else subprocess.DEVNULL  # noqa: SIM115
+        # stderr goes to a file so a chatty command can never block on a full pipe
+        errfile = tempfile.TemporaryFile()  # noqa: SIM115
+        try:
+            proc = subprocess.Popen(  # noqa: S603 - fixed binary, argument list, no shell
+                args, stdin=stdin, stdout=subprocess.PIPE, stderr=errfile, env=env
+            )
+        except FileNotFoundError as exc:
+            raise ProviderError("docker CLI not found on the control-plane host") from exc
+        written, too_large = 0, False
+        try:
+            out = open(stdout_path, "wb") if stdout_path else None  # noqa: SIM115
+            try:
+                while chunk := proc.stdout.read(1024 * 1024):
+                    written += len(chunk)
+                    if max_bytes is not None and written > max_bytes:
+                        too_large = True
+                        proc.kill()
+                        break
+                    if out:
+                        out.write(chunk)
+                    if time.monotonic() > deadline:
+                        proc.kill()
+                        raise ProviderError(f"docker command timed out after {timeout:.0f}s")
+            finally:
+                if out:
+                    out.close()
+            remaining = max(1.0, deadline - time.monotonic())
+            proc.wait(timeout=remaining)
+            errfile.seek(0)
+            err = errfile.read()[-65536:]
+        except subprocess.TimeoutExpired as exc:
+            proc.kill()
+            raise ProviderError(f"docker command timed out after {timeout:.0f}s") from exc
+        finally:
+            if stdin_path:
+                stdin.close()
+            errfile.close()
+        if too_large:
+            return RunResult(-1, "", f"output exceeds {max_bytes} bytes")
+        return RunResult(proc.returncode, str(written), err.decode("utf-8", "replace").strip())
+
+    return stream
+
+
 class FileOpError(ProviderError):
     """A file operation failed; ``kind`` says why (the API maps it to an HTTP status)."""
 
@@ -144,7 +207,9 @@ class DockerAdapter:
         docker_host: str | None = None,
         egress_image: str = DEFAULT_EGRESS_IMAGE,
         egress_ready_timeout: float = 30,
+        streamer: Streamer | None = None,
     ) -> None:
+        self._stream = streamer
         self._egress_ready_timeout = egress_ready_timeout
         self._egress_image = egress_image
         self._docker_host = docker_host
@@ -616,3 +681,78 @@ class DockerAdapter:
         res = self._exec(provider_ref, "rm", *(["-r"] if recursive else []), "--", path)
         if res.returncode != 0:
             raise _file_error(res.stderr, path)
+
+    # ------------------------------------------------------------------ snapshots
+    def _snapshot_helper(self, volume: str, image: str, *, writable: bool) -> list[str]:
+        """A throwaway container that can only see the workspace volume: no network,
+        no capabilities, read-only root, running as the environment's user."""
+        _check("volume", volume, _REF)
+        mode = "" if writable else ":ro"
+        return [
+            self._bin,
+            "run",
+            "--rm",
+            *(["--interactive"] if writable else []),
+            "--network",
+            "none",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--read-only",
+            "--user",
+            self._user,
+            "--pids-limit",
+            "64",
+            "--memory",
+            "256m",
+            "--label",
+            f"{MANAGED_LABEL}=true",
+            "--label",
+            "dev.cyberlab.role=snapshot",
+            "--volume",
+            f"{volume}:/workspace{mode}",
+            _check("image", image, _IMAGE),
+        ]
+
+    def export_workspace(self, volume: str, image: str, destination, max_bytes: int) -> int:
+        """Write a gzip-compressed tar of the volume to ``destination``. Returns its size."""
+        if self._stream is None:
+            raise ProviderError("snapshots need a streaming runner")
+        args = [
+            *self._snapshot_helper(volume, image, writable=False),
+            "tar",
+            "-czf",
+            "-",
+            "-C",
+            "/workspace",
+            ".",
+        ]
+        res = self._stream(args, BUILD_TIMEOUT, stdout_path=destination, max_bytes=max_bytes)
+        if res.returncode == -1:
+            raise FileOpError("too_large", f"workspace snapshot is larger than {max_bytes} bytes")
+        if res.returncode != 0:
+            raise _file_error(res.stderr, "/workspace")
+        return int(res.stdout or 0)
+
+    def import_workspace(self, volume: str, image: str, source) -> None:
+        """Replace the volume's contents with the archive at ``source``.
+
+        Runs in the same locked-down helper, which can only write inside the volume.
+        Extraction goes to a staging folder first, so a bad archive changes nothing.
+        """
+        if self._stream is None:
+            raise ProviderError("snapshots need a streaming runner")
+        # Extract into a staging folder first; only if that fully succeeds are the old
+        # files replaced. A bad archive leaves the workspace exactly as it was.
+        script = (
+            'set -eu; s=/workspace/.cyberlab-restore; rm -rf "$s"; mkdir "$s"; '
+            'if ! tar -xzf - -C "$s" --no-same-owner --no-same-permissions; then '
+            "rm -rf \"$s\"; echo 'restore failed: archive could not be extracted' >&2; exit 3; fi; "
+            "find /workspace -mindepth 1 -maxdepth 1 ! -name .cyberlab-restore -exec rm -rf {} +; "
+            'find "$s" -mindepth 1 -maxdepth 1 -exec mv {} /workspace/ \\;; rmdir "$s"'
+        )
+        args = [*self._snapshot_helper(volume, image, writable=True), "sh", "-c", script]
+        res = self._stream(args, BUILD_TIMEOUT, stdin_path=source)
+        if res.returncode != 0:
+            raise _file_error(res.stderr or "restore failed", "/workspace")

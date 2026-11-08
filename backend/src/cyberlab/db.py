@@ -110,6 +110,24 @@ class TerminalTicket(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class Snapshot(Base):
+    """A saved copy of one environment's /workspace. Data lives in the snapshot store."""
+
+    __tablename__ = "snapshots"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    environment_name: Mapped[str] = mapped_column(String(63))
+    label: Mapped[str] = mapped_column(String(200), default="")
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    store: Mapped[str] = mapped_column(String(32))
+    storage_key: Mapped[str] = mapped_column(String(300))
+    created_by: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phases 1-3) | ✅ 185 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
+| Test suite (Phases 1-3) | ✅ 202 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -74,6 +74,13 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | File API | List a folder, download a file, upload (create/replace, parent folders created), delete (folders need `recursive=true`) in a **running** environment's `/workspace`. Binary-safe. Upload limit `CYBERLAB_MAX_FILE_BYTES` (25 MiB), separate from the small limit on other endpoints | `api/files.py` |
 | Safety | Paths must stay inside `/workspace` (`..`, absolute paths, leading `-`, control characters refused). Operations run **inside** the environment as its own user, with the path as a separate argument (never in a shell string), so the API can do nothing the terminal couldn't. Every upload, download and delete is audited | `execution/paths.py`, `execution/docker.py` |
 
+## Implemented (Phase 3, step 2 — snapshots)
+| Area | What works | Where |
+|---|---|---|
+| Create | `POST .../environments/{env}/snapshots` archives `/workspace` (`.tar.gz`) using a throwaway helper container: no network, no capabilities, read-only root, **read-only** view of the workspace, environment's own user. Streamed to disk (never fully in memory), size limit `CYBERLAB_MAX_SNAPSHOT_BYTES`, per-workspace limit `CYBERLAB_MAX_SNAPSHOTS_PER_WORKSPACE`. SHA-256 recorded | `api/snapshots.py`, `execution/docker.py` |
+| Restore | `POST .../environments/{env}/restore` into a **stopped** environment (any environment of the same workspace, including a re-provisioned one). Integrity checked first. Extracted into a staging folder and swapped in only if extraction fully succeeds: a corrupt or crafted archive (e.g. `../` members) is refused and the workspace is left untouched | |
+| Store | `SnapshotStore` interface; `LocalSnapshotStore` keeps files under `CYBERLAB_SNAPSHOT_DIR` with owner-only permissions and atomic writes. Deleting a snapshot or its workspace deletes the data | `storage/__init__.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -82,7 +89,8 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
 | Remote desktop | 6 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
-| Snapshots, S3-compatible storage, export/restore bundles | 3 |
+| S3-compatible snapshot storage with client-side encryption; export/import bundles | 3 |
+| Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | Database migrations (Alembic); Postgres tested in CI | 3 |
 | Scheduler, idle/TTL shutdown, live quota accounting | 4 |
 | Rate limiting | 4 |
@@ -114,8 +122,11 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
    detection-engineering pack is offered on Ubuntu 24.04 only.
 13. Egress limits: TLS SNI is not checked against the CONNECT host (domain fronting), and
    the proxy needs Docker Hub's `python` image (use `CYBERLAB_IMAGE_MIRROR`).
+14. Snapshots of a running environment are taken live (like copying files while they're
+   being written); stop the environment first for a perfectly consistent snapshot. Local
+   snapshots are not encrypted yet (planned with S3 storage).
 
 ## Next milestone
-1. PR #5 (workspace files): CI green, then merge.
-2. **Phase 3 step 2: snapshots.** Save a copy of an environment's `/workspace` and restore
-   it later (stored on the Docker host first, then S3-compatible storage in step 3).
+1. PR #6 (snapshots): CI green, then merge.
+2. **Phase 3 step 3: S3-compatible snapshot storage** (Cloudflare R2, Backblaze B2, MinIO,
+   AWS S3) with client-side encryption, tested against MinIO. No cloud account is created.

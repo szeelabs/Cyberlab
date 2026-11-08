@@ -369,3 +369,70 @@ def test_workspace_files_on_real_container(client):
         assert client.get(base, headers=auth()).status_code == 409
     finally:
         destroy_all(client, ws, [env])
+
+
+def test_snapshot_and_restore_on_real_container(client, tmp_path):
+    import io
+    import tarfile
+
+    ws, (env,) = provision(client, BASIC, "it-snap")
+    name, vol = env["resources"]["container"], env["resources"]["volume"]
+    envbase = f"/v1/workspaces/{ws}/environments/{env['id']}"
+    try:
+        sh(
+            name,
+            "mkdir -p /workspace/notes && echo v1 > /workspace/notes/a.txt "
+            "&& printf 'bin' > /workspace/b.bin",
+        )
+        r = client.post(f"{envbase}/snapshots", json={"label": "v1"}, headers=auth())
+        assert r.status_code == 201, r.text
+        snap = r.json()
+        assert snap["sizeBytes"] > 0
+
+        sh(
+            name,
+            "echo v2 > /workspace/notes/a.txt && rm /workspace/b.bin && touch /workspace/new.txt",
+        )
+        r = client.post(f"{envbase}/restore", json={"snapshotId": snap["id"]}, headers=auth())
+        assert r.status_code == 409  # still running
+
+        client.post(f"{envbase}/stop", headers=auth())
+        r = client.post(f"{envbase}/restore", json={"snapshotId": snap["id"]}, headers=auth())
+        assert r.status_code == 200, r.text
+        client.post(f"{envbase}/start", headers=auth())
+        assert sh(name, "cat /workspace/notes/a.txt")[1] == "v1"
+        assert sh(name, "cat /workspace/b.bin")[1] == "bin"
+        assert sh(name, "ls -A /workspace")[1].split() == ["b.bin", "notes"]  # new.txt gone
+        assert sh(name, "stat -c %U /workspace/notes/a.txt")[1] == "cyberlab"
+
+        # Hostile and corrupt archives change nothing and write nothing outside.
+        adapter = client.app.state.provider
+        image = env["resources"]["image"]
+        client.post(f"{envbase}/stop", headers=auth())
+        corrupt = tmp_path / "corrupt.tar.gz"
+        corrupt.write_bytes(b"\x1f\x8b not really gzip")
+        with pytest.raises(Exception, match="restore failed"):
+            adapter.import_workspace(vol, image, str(corrupt))
+        crafted = tmp_path / "crafted.tar.gz"
+        with tarfile.open(crafted, "w:gz") as tar:
+            for member in ["../escape.txt", "/etc/evil.txt", "ok.txt"]:
+                data = b"x"
+                info = tarfile.TarInfo(member)
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+        # GNU tar refuses the '..' member and exits non-zero, so the whole restore is refused.
+        with pytest.raises(Exception, match="restore failed"):
+            adapter.import_workspace(vol, image, str(crafted))
+        client.post(f"{envbase}/start", headers=auth())
+        listing = sh(name, "ls -A /workspace")[1].split()
+        assert "escape.txt" not in listing
+        assert sh(name, "test -e /escape.txt && echo yes || echo no")[1] == "no"
+        assert sh(name, "test -e /etc/evil.txt && echo yes || echo no")[1] == "no"
+        assert "ok.txt" not in listing  # nothing from the refused archive was applied
+        assert sh(name, "cat /workspace/notes/a.txt")[1] == "v1"  # workspace intact
+        assert ".cyberlab-restore" not in listing
+
+        r = client.delete(f"/v1/workspaces/{ws}/snapshots/{snap['id']}", headers=auth())
+        assert r.status_code == 204
+    finally:
+        destroy_all(client, ws, [env])

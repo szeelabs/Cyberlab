@@ -95,6 +95,6 @@ plus the policy engine is the shared contract every plane uses.
 **Phase 2 (Execution Engine):** part 1 merged (provider interface, hardened Docker adapter,
 approvals, environment lifecycle). Part 2, the **browser terminal**, is built and tested
 (merged in PR #2). Part 3, **tool pack images**, merged (PR #3). Part 4, the **egress proxy**, merged (PR #4).
-**Phase 3 (Persistent Universe):** step 1, the **workspace file API**, is built (PR #5).
-Next: snapshots, S3-compatible storage, export/restore, migrations.
+**Phase 3 (Persistent Universe):** step 1, the **workspace file API**, merged (PR #5); step 2, **snapshots**,
+is built (PR #6). Next: S3-compatible storage with encryption, export/import, migrations.
 Details: `docs/DEVELOPMENT_STATUS.md`.

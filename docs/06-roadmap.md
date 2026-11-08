@@ -28,6 +28,7 @@ been tested.
 
 ## Phase 3 — Persistent Universe (in progress)
 - [x] 1. Workspace file API (list, upload, download, delete), audited.
+- [x] 2. Snapshots: create, list, restore (integrity-checked, all-or-nothing), delete; local store.
 Workspace volumes, file API, snapshots to S3-compatible storage (client-side encryption),
 export bundle = manifest + snapshot, restore. Alembic migrations, Postgres in CI.
 

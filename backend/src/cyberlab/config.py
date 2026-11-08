@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     max_manifest_bytes: int = Field(default=128 * 1024, gt=0)
     max_file_bytes: int = Field(default=25 * 1024 * 1024, gt=0)  # workspace file up/download
 
+    # --- Snapshots -------------------------------------------------------------
+    snapshot_dir: Path = Path("./cyberlab-data/snapshots")  # local snapshot store
+    max_snapshot_bytes: int = Field(default=1024 * 1024 * 1024, gt=0)  # compressed size
+    max_snapshots_per_workspace: int = Field(default=10, ge=1)
+
     quotas: QuotaSettings = Field(default_factory=QuotaSettings)
 
     # --- Execution plane ----------------------------------------------------
