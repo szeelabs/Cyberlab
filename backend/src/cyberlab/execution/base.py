@@ -13,6 +13,7 @@ from typing import Protocol
 
 from cyberlab.execution.shell import ShellSession
 from cyberlab.manifest.models import Environment
+from cyberlab.registry.models import ToolPack
 
 
 class EnvState(StrEnum):
@@ -46,7 +47,8 @@ class ProviderStatus:
 class ProvisionRequest:
     workspace_key: str  # short, slug-safe identifier of the workspace
     environment: Environment
-    image: str  # OCI image reference resolved from the registry
+    image: str  # base OCI image reference resolved from the registry
+    tool_packs: tuple[ToolPack, ...] = ()
     internet_approved: bool = False
     labels: dict[str, str] = field(default_factory=dict)
 

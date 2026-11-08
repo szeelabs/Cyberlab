@@ -102,8 +102,8 @@ def test_provision_lifecycle(client, provider):
     assert r.status_code == 201, r.text
     (env,) = r.json()["environments"]
     assert env["state"] == "running" and env["name"] == "shell"
-    assert env["toolPacksInstalled"] is False
     assert provider.requests[0].image == "docker.io/library/debian:12-slim"
+    assert [p.id for p in provider.requests[0].tool_packs] == ["crypto"]
 
     # a second provision while environments exist is refused
     assert (

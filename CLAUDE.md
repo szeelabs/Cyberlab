@@ -51,8 +51,9 @@ CyberLab principal engineer**. Two goals run together:
 ## Repository
 * **GitHub:** https://github.com/szeelabs/Cyberlab (canonical). The older URL
   `shayanbhai925925-prog/Cyberlab` redirects to the same repository.
-* **Workflow:** work on a `claude/...` branch, open a PR into `main`, CI must pass, the user
-  merges. Never merge or push to `main` directly.
+* **Workflow:** work on a `claude/...` branch and open a PR into `main`. Never push to `main`
+  directly. The user has asked Claude to **merge PRs itself once every CI check is green and
+  GitHub reports no conflicts**, and to tell the user afterwards.
 
 ### Layout
 ```
@@ -77,6 +78,8 @@ uvicorn --factory cyberlab.main:app_factory --reload --port 8000    # dev server
 Local dev auth: `CYBERLAB_ENVIRONMENT=development CYBERLAB_AUTH_MODE=dev`.
 Real provisioning: add `CYBERLAB_EXECUTION_PROVIDER=docker` (needs a Docker daemon).
 Real-Docker tests: `CYBERLAB_DOCKER_TESTS=1 CYBERLAB_TEST_IMAGE_MIRROR=mirror.gcr.io pytest`
+(add `CYBERLAB_DOCKER_BUILD_TESTS=1` where image builds can reach package mirrors; the cloud
+sandbox can't, CI can). Image recipes: `cyberlab image dockerfile --base debian-12 --packs crypto`.
 (this cloud container may need `dockerd` started first; Docker Hub can rate-limit, so use the mirror).
 
 ## CyberLab in one paragraph
@@ -91,5 +94,5 @@ plus the policy engine is the shared contract every plane uses.
 **Phase 1 (Universe Foundation): complete** (merged in PR #1).
 **Phase 2 (Execution Engine):** part 1 merged (provider interface, hardened Docker adapter,
 approvals, environment lifecycle). Part 2, the **browser terminal**, is built and tested
-(PR #2). Next: tool pack images, then the egress proxy.
+(merged in PR #2). Part 3, **tool pack images**, is built (PR #3). Next: the egress proxy.
 Details: `docs/DEVELOPMENT_STATUS.md`.

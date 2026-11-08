@@ -27,7 +27,10 @@ cyberlab manifest schema -o ../spec/universe-manifest.schema.json
 1. Add `registry/toolpacks/<id>.yaml` (see existing packs; `id` must match the file name).
 2. Choose `risk` honestly. `high` triggers an approval requirement. Set
    `requiresIsolation: true` for anything that must never reach the internet.
-3. Keep `status: metadata-only` until a build recipe and published image exist.
+3. For each tool available as a Debian/Ubuntu package, add `package:` and `command:` (an
+   executable CI checks for). A pack with any packages must use `status: buildable`.
+   Preview the recipe: `cyberlab image dockerfile --base ubuntu-24-04 --packs <id>`.
+   CI builds the pack on every compatible base and checks each command.
 4. Run `cyberlab registry` and `pytest`.
 
 ## Pull requests

@@ -19,6 +19,10 @@ pytestmark = pytest.mark.skipif(
 )
 YAML = {"Content-Type": "application/yaml"}
 MINIMAL = (REPO / "examples" / "manifests" / "minimal.universe.yaml").read_text()
+# Same environment without tool packs: still a built image (with the cyberlab user), but
+# no package downloads, so it also works on hosts without internet access for builds.
+BASIC = MINIMAL.replace("toolPacks: [crypto]", "toolPacks: []")
+assert BASIC != MINIMAL
 LAB = """
 apiVersion: cyberlab.dev/v1alpha1
 kind: Universe
@@ -87,10 +91,11 @@ def test_provider_connected(client):
 
 
 def test_minimal_environment_is_isolated_and_hardened(client):
-    ws, (env,) = provision(client, MINIMAL, "it-minimal")
+    ws, (env,) = provision(client, BASIC, "it-minimal")
     name = env["resources"]["container"]
     try:
         assert sh(name, "id -u")[1] == "1000"
+        assert sh(name, "whoami")[1] == "cyberlab"  # real user, not "I have no name!"
         assert "CapEff:\t0000000000000000" in sh(name, "cat /proc/self/status")[1]
         assert "NoNewPrivs:\t1" in sh(name, "cat /proc/self/status")[1]
         assert sh(name, "touch /etc/x")[0] != 0  # read-only root filesystem
@@ -140,7 +145,7 @@ def _read_until(ws, needle: bytes, limit: int = 200) -> bytes:
 def test_browser_terminal_on_real_container(client):
     import json
 
-    ws_id, (env,) = provision(client, MINIMAL, "it-terminal")
+    ws_id, (env,) = provision(client, BASIC, "it-terminal")
     try:
         r = client.post(f"/v1/workspaces/{ws_id}/environments/{env['id']}/terminal", headers=auth())
         assert r.status_code == 201, r.text
@@ -171,3 +176,26 @@ def test_browser_terminal_on_real_container(client):
         assert sh(name, "cat /workspace/from-terminal.txt")[1] == "persisted"
     finally:
         destroy_all(client, ws_id, [env])
+
+
+@pytest.mark.skipif(
+    os.environ.get("CYBERLAB_DOCKER_BUILD_TESTS") != "1",
+    reason="installs packages; needs internet access during image builds",
+)
+def test_tool_pack_is_installed(client):
+    ws, (env,) = provision(client, MINIMAL, "it-crypto")  # crypto pack on debian-12
+    name = env["resources"]["container"]
+    try:
+        assert env["toolPacksInstalled"] is True and env["image"].startswith("cyberlab-env:")
+        for cmd in ["openssl version", "gpg --version", "age --version"]:
+            code, out = sh(name, cmd)
+            assert code == 0, (cmd, out)
+        # the tools work for the unprivileged user inside the hardened container
+        code, out = sh(
+            name,
+            "age-keygen -o /workspace/key.txt 2>/dev/null; "
+            "grep -c AGE-SECRET-KEY /workspace/key.txt",
+        )
+        assert (code, out) == (0, "1")
+    finally:
+        destroy_all(client, ws, [env])

@@ -83,8 +83,9 @@ def _env_out(e: EnvironmentRecord) -> dict:
         "lastError": e.last_error,
         "resources": e.resources,
         "toolPacks": e.spec.get("toolPacks", []),
-        # Tool pack images are not built yet: the environment runs the base image only.
-        "toolPacksInstalled": False,
+        # True once the environment runs an image built with its tool packs installed.
+        "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,
+        "image": e.resources.get("image"),
         "createdAt": e.created_at.isoformat(),
         "updatedAt": e.updated_at.isoformat(),
     }
@@ -304,6 +305,7 @@ def provision_environments(
                     workspace_key=_workspace_key(ws),
                     environment=env,
                     image=reg.base_images[env.base_image].image,
+                    tool_packs=tuple(reg.tool_packs[p] for p in env.tool_packs),
                     internet_approved=env.network.mode == NetworkMode.internet
                     and "security.internet-egress" in needed,
                 )

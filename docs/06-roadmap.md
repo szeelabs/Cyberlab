@@ -20,8 +20,8 @@ been tested.
       hardening flags; real-Docker integration tests in CI.
 - [x] 2. Approval API: `POST /v1/workspaces/{id}/approvals`, per revision, audited.
 - [x] 3. Environment lifecycle API: provision / start / stop / destroy / status refresh.
-4. Tool pack build pipeline: render Dockerfiles from `registry/toolpacks`, build in CI,
-   publish to ghcr.io with SBOM + cosign; packs move `metadata-only → published`.
+- [x] 4. Tool pack images: Dockerfiles rendered from `registry/toolpacks`, built on the Docker
+      host and in CI with smoke tests. Still to do: SBOM, scanning, cosign, ghcr.io publishing.
 - [x] 5. Terminal gateway: WebSocket ↔ `docker exec` with single-use, short-lived tickets;
       browser test page at `/terminal`.
 6. Egress proxy for `restricted-egress`.
