@@ -21,6 +21,7 @@ import hashlib
 import json
 import secrets
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from importlib import resources
 from urllib.parse import urlparse
@@ -184,10 +185,18 @@ async def terminal_socket(websocket: WebSocket) -> None:
             await fail(CLOSE_LIMIT, "too many open terminals")
             return
         counts[subject] = counts.get(subject, 0) + 1
+        released = False
+
+        def release() -> None:
+            nonlocal released
+            if not released:
+                released = True
+                counts[subject] -= 1
+
         try:
-            await _run_session(websocket, db, provider, env, subject, settings)
+            await _run_session(websocket, db, provider, env, subject, settings, release)
         finally:
-            counts[subject] -= 1
+            release()
     finally:
         db.close()
 
@@ -199,6 +208,7 @@ async def _run_session(
     env: EnvironmentRecord,
     subject: str,
     settings: Settings,
+    release: Callable[[], None],
 ) -> None:
     try:
         shell = await provider.open_shell(env.provider_ref)
@@ -299,6 +309,7 @@ async def _run_session(
             },
         )
         db.commit()
+        release()  # free the session slot before telling the client we are done
         if websocket.client_state == WebSocketState.CONNECTED:
             with contextlib.suppress(Exception):
                 await websocket.send_text(json.dumps({"type": "exit", "reason": reason}))

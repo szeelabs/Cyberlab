@@ -87,9 +87,30 @@ def ticket(client, env, user="user-a"):
 
 @contextmanager
 def open_terminal(client, tok, **kw):
+    """Open a terminal; on exit, end a live session the proper way (exit + wait)."""
     with client.websocket_connect("/v1/terminal", **kw) as ws:
         ws.send_text(json.dumps({"type": "auth", "ticket": tok}))
+        state = {"ready": False}
+        orig = ws.receive_text
+
+        def receive_text():
+            text = orig()
+            if json.loads(text).get("type") == "ready":
+                state["ready"] = True
+            elif json.loads(text).get("type") == "exit":
+                state["ready"] = False
+            return text
+
+        ws.receive_text = receive_text
         yield ws
+        if state["ready"]:
+            ws.send_text(json.dumps({"type": "input", "data": "exit\n"}))
+            for _ in range(50):
+                msg = ws.receive()
+                if msg["type"] == "websocket.close" or (
+                    msg.get("text") and json.loads(msg["text"]).get("type") == "exit"
+                ):
+                    break
 
 
 def test_full_session(client, env, provider):
