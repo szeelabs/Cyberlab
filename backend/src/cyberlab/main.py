@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from cyberlab import __version__
 from cyberlab.api.environments import router as env_router
+from cyberlab.api.files import router as files_router
 from cyberlab.api.routes import router
 from cyberlab.api.terminal import router as terminal_router
 from cyberlab.config import Settings, get_settings
@@ -59,7 +60,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             rid = uuid.uuid4().hex
         request.state.request_id = rid
         length = request.headers.get("content-length")
-        if length and (not length.isdigit() or int(length) > settings.max_request_bytes):
+        limit = (
+            settings.max_file_bytes
+            if request.method == "PUT" and request.url.path.endswith("/files/content")
+            else settings.max_request_bytes
+        )
+        if length and (not length.isdigit() or int(length) > limit):
             return JSONResponse(
                 {"detail": "request body too large"},
                 status_code=413,
@@ -84,6 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(router)
     app.include_router(env_router)
+    app.include_router(files_router)
     app.include_router(terminal_router)
     static_dir = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")

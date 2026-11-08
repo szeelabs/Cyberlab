@@ -61,6 +61,7 @@ class RunResult:
     returncode: int
     stdout: str
     stderr: str
+    data: bytes = b""  # raw stdout when the command was run with binary=True
 
 
 Runner = Callable[..., RunResult]  # (args, timeout, input=None) -> RunResult
@@ -71,13 +72,16 @@ def subprocess_runner(docker_host: str | None = None) -> Runner:
     if docker_host:
         env["DOCKER_HOST"] = docker_host
 
-    def run(args: list[str], timeout: float, input: str | None = None) -> RunResult:
+    def run(
+        args: list[str], timeout: float, input: str | bytes | None = None, binary: bool = False
+    ) -> RunResult:
+        raw = binary or isinstance(input, bytes)
         try:
             proc = subprocess.run(  # noqa: S603 - fixed binary, argument list, no shell
                 args,
                 input=input,
                 capture_output=True,
-                text=True,
+                text=not raw,
                 timeout=timeout,
                 env=env,
                 check=False,
@@ -86,9 +90,38 @@ def subprocess_runner(docker_host: str | None = None) -> Runner:
             raise ProviderError("docker CLI not found on the control-plane host") from exc
         except subprocess.TimeoutExpired as exc:
             raise ProviderError(f"docker command timed out after {timeout:.0f}s") from exc
+        if raw:
+            err = proc.stderr.decode("utf-8", "replace").strip()
+            return RunResult(proc.returncode, "", err, data=proc.stdout)
         return RunResult(proc.returncode, proc.stdout.strip(), proc.stderr.strip())
 
     return run
+
+
+class FileOpError(ProviderError):
+    """A file operation failed; ``kind`` says why (the API maps it to an HTTP status)."""
+
+    def __init__(self, kind: str, message: str) -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+def _file_error(stderr: str, path: str) -> FileOpError:
+    low = stderr.lower()
+    rel = path.removeprefix("/workspace/") or "/"
+    if "is not running" in low or "no such container" in low:
+        return FileOpError("not_running", "environment is not running")
+    if "no such file" in low:
+        return FileOpError("not_found", f"{rel} does not exist")
+    if "not a directory" in low:
+        return FileOpError("not_a_directory", f"{rel} is not a directory")
+    if "is a directory" in low:
+        return FileOpError("is_directory", f"{rel} is a directory")
+    if "permission denied" in low:
+        return FileOpError("forbidden", f"permission denied for {rel}")
+    if "no space left" in low or "disk quota" in low:
+        return FileOpError("no_space", "the workspace is full")
+    return FileOpError("failed", (stderr.splitlines() or ["file operation failed"])[-1][:200])
 
 
 def _check(name: str, value: str, pattern: re.Pattern[str]) -> str:
@@ -495,3 +528,91 @@ class DockerAdapter:
         if self._docker_host:
             env["DOCKER_HOST"] = self._docker_host
         return PtyShellSession(self.shell_argv(provider_ref), env=env)
+
+    # ------------------------------------------------------------------ files
+    # Every operation runs *inside* the environment as its own unprivileged user, with the
+    # path as a separate argument, so the API can do nothing the terminal couldn't.
+    def _exec(
+        self,
+        provider_ref: str,
+        *argv: str,
+        input: bytes | None = None,
+        binary: bool = False,
+        timeout: float = 120,
+    ) -> RunResult:
+        _check("container id", provider_ref, _REF)
+        args = [
+            self._bin,
+            "exec",
+            *(["--interactive"] if input is not None else []),
+            provider_ref,
+            *argv,
+        ]
+        if input is not None:
+            return self._run(args, timeout, input=input, binary=True)
+        if binary:
+            return self._run(args, timeout, binary=True)
+        return self._run(args, timeout)
+
+    def list_files(self, provider_ref: str, path: str, limit: int = 1000) -> list[dict]:
+        res = self._exec(
+            provider_ref,
+            "find",
+            path,
+            "-mindepth",
+            "1",
+            "-maxdepth",
+            "1",
+            "-printf",
+            "%y\\t%s\\t%T@\\t%f\\0",
+            binary=True,
+        )
+        if res.returncode != 0:
+            raise _file_error(res.stderr, path)
+        kinds = {"f": "file", "d": "directory", "l": "symlink"}
+        entries = []
+        for record in res.data.split(b"\0"):
+            if not record:
+                continue
+            kind, size, mtime, name = record.decode("utf-8", "replace").split("\t", 3)
+            entries.append(
+                {
+                    "name": name,
+                    "type": kinds.get(kind, "other"),
+                    "size": int(size),
+                    "modified": float(mtime),
+                }
+            )
+        entries.sort(key=lambda e: (e["type"] != "directory", e["name"]))
+        return entries[:limit]
+
+    def read_file(self, provider_ref: str, path: str, max_bytes: int) -> bytes:
+        info = self._exec(provider_ref, "stat", "-L", "-c", "%F\t%s", "--", path)
+        if info.returncode != 0:
+            raise _file_error(info.stderr, path)
+        kind, _, size = info.stdout.partition("\t")
+        if kind == "directory":
+            raise FileOpError("is_directory", f"{path.removeprefix('/workspace/')} is a directory")
+        if not kind.startswith("regular"):
+            raise FileOpError("failed", "only regular files can be downloaded")
+        if int(size or 0) > max_bytes:
+            raise FileOpError("too_large", f"file is larger than {max_bytes} bytes")
+        res = self._exec(provider_ref, "cat", "--", path, binary=True)
+        if res.returncode != 0:
+            raise _file_error(res.stderr, path)
+        return res.data
+
+    def write_file(self, provider_ref: str, path: str, data: bytes) -> None:
+        parent = path.rsplit("/", 1)[0]
+        mk = self._exec(provider_ref, "mkdir", "-p", "--", parent)
+        if mk.returncode != 0:
+            raise _file_error(mk.stderr, parent)
+        # Fixed script; the path is passed as $1, never interpolated into it.
+        res = self._exec(provider_ref, "sh", "-c", 'cat > "$1"', "sh", path, input=data)
+        if res.returncode != 0:
+            raise _file_error(res.stderr, path)
+
+    def delete_path(self, provider_ref: str, path: str, *, recursive: bool) -> None:
+        res = self._exec(provider_ref, "rm", *(["-r"] if recursive else []), "--", path)
+        if res.returncode != 0:
+            raise _file_error(res.stderr, path)

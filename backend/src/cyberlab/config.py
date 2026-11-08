@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = []
     max_request_bytes: int = Field(default=256 * 1024, gt=0)
     max_manifest_bytes: int = Field(default=128 * 1024, gt=0)
+    max_file_bytes: int = Field(default=25 * 1024 * 1024, gt=0)  # workspace file up/download
 
     quotas: QuotaSettings = Field(default_factory=QuotaSettings)
 

@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phase 1 + 2) | ✅ 149 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
+| Test suite (Phases 1-3) | ✅ 185 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -68,6 +68,12 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Environments | `restricted-egress` environments get `HTTP(S)_PROXY` with their own credentials; other environments get none. If the provider can't run a proxy, those environments fail with a clear error | `api/environments.py` |
 | Visibility | Every decision is logged as JSON; `GET /v1/workspaces/{id}/egress-log` shows recent allow/deny decisions with reasons | |
 
+## Implemented (Phase 3, step 1 — workspace files)
+| Area | What works | Where |
+|---|---|---|
+| File API | List a folder, download a file, upload (create/replace, parent folders created), delete (folders need `recursive=true`) in a **running** environment's `/workspace`. Binary-safe. Upload limit `CYBERLAB_MAX_FILE_BYTES` (25 MiB), separate from the small limit on other endpoints | `api/files.py` |
+| Safety | Paths must stay inside `/workspace` (`..`, absolute paths, leading `-`, control characters refused). Operations run **inside** the environment as its own user, with the path as a separate argument (never in a shell string), so the API can do nothing the terminal couldn't. Every upload, download and delete is audited | `execution/paths.py`, `execution/docker.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -76,7 +82,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
 | Remote desktop | 6 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
-| Persistent workspace storage, snapshots, export bundles | 3 |
+| Snapshots, S3-compatible storage, export/restore bundles | 3 |
 | Database migrations (Alembic); Postgres tested in CI | 3 |
 | Scheduler, idle/TTL shutdown, live quota accounting | 4 |
 | Rate limiting | 4 |
@@ -110,6 +116,6 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
    the proxy needs Docker Hub's `python` image (use `CYBERLAB_IMAGE_MIRROR`).
 
 ## Next milestone
-1. PR #4 (egress proxy): CI green, then merge. **This completes Phase 2's core.**
-2. **Phase 3 — Persistent Universe:** workspace file access, snapshots to S3-compatible
-   storage, export/restore bundles, Alembic migrations and Postgres in CI.
+1. PR #5 (workspace files): CI green, then merge.
+2. **Phase 3 step 2: snapshots.** Save a copy of an environment's `/workspace` and restore
+   it later (stored on the Docker host first, then S3-compatible storage in step 3).

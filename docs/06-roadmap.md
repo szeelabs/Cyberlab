@@ -26,7 +26,8 @@ been tested.
       browser test page at `/terminal`.
 - [x] 6. Egress proxy for `restricted-egress` (per-environment allow-lists, audit log).
 
-## Phase 3 — Persistent Universe
+## Phase 3 — Persistent Universe (in progress)
+- [x] 1. Workspace file API (list, upload, download, delete), audited.
 Workspace volumes, file API, snapshots to S3-compatible storage (client-side encryption),
 export bundle = manifest + snapshot, restore. Alembic migrations, Postgres in CI.
 
