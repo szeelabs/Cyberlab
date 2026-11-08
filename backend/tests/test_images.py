@@ -122,3 +122,8 @@ def test_cli_matrix(capsys):
     assert {"base": "debian-12", "pack": "crypto"} in m
     assert {"base": "debian-12", "pack": "web-appsec"} not in m  # not compatible
     assert all(x["base"] in ("ubuntu-24-04", "debian-12") for x in m)
+
+
+def test_detection_engineering_not_offered_on_debian(registry):
+    # Found by CI: Suricata has no installation candidate in Debian 12 (bookworm) main.
+    assert registry.tool_packs["detection-engineering"].compatible_bases == ["ubuntu-24-04"]

@@ -5,7 +5,7 @@ category: defensive-security
 description: Write and test detection rules and inspect host telemetry.
 status: buildable
 risk: low
-compatibleBases: [ubuntu-24-04, debian-12]
+compatibleBases: [ubuntu-24-04]  # Suricata is not in Debian 12 (bookworm) main
 minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 2}
 tools:
   - {name: Suricata, purpose: Network IDS rule testing against captures, homepage: "https://suricata.io", package: suricata, command: suricata}

@@ -57,7 +57,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Image recipes | "base image + tool packs" → a generated Dockerfile: installs packages, creates the `cyberlab` user (uid/gid 1000, home `/workspace`), `USER 1000`. Tag = hash of the Dockerfile, so images are reused and rebuilt only when the recipe changes | `execution/images.py` |
 | Provisioning | Every environment now runs its built image (built once on the Docker host, Dockerfile via stdin, no build context). Build failures are reported and nothing is started. `toolPacksInstalled` and `image` are reported per environment | `execution/docker.py`, `api/environments.py` |
 | CLI | `cyberlab image dockerfile`, `image commands`, `image matrix` | `cli.py` |
-| CI | `image-plan` builds the matrix from the registry; `toolpack-images` builds every buildable pack on Ubuntu 24.04 and Debian 12 and checks every tool command as `cyberlab` in a hardened, network-less container; the real-Docker job also installs a pack end to end | `.github/workflows/ci.yml` |
+| CI | `image-plan` builds the matrix from the registry; `toolpack-images` builds every buildable pack on each compatible base (Ubuntu 24.04, Debian 12) and checks every tool command as `cyberlab` in a hardened, network-less container; the real-Docker job also installs a pack end to end | `.github/workflows/ci.yml` |
 
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
@@ -96,6 +96,8 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 10. The first provision of a new base/pack combination builds an image, which can take minutes;
    the request waits for it. Background provisioning is a later improvement.
 11. Image builds need internet access to package mirrors on the Docker host.
+12. Found by CI: Suricata is not packaged in Debian 12 (bookworm) main, so the
+   detection-engineering pack is offered on Ubuntu 24.04 only.
 
 ## Next milestone
 1. PR #3 (tool pack images): CI green, then merge.
