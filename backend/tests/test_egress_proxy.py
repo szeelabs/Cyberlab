@@ -4,6 +4,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import socket
 
 import pytest
 
@@ -242,5 +243,26 @@ def test_split_host_port():
 def test_policy_resolution_uses_real_dns_rules():
     # A name that does not resolve is refused, not passed through.
     policy = Policy({"clients": {}})
-    addr, reason = asyncio.run(policy.resolve("does-not-exist.invalid", 443))
-    assert addr is None and reason == "dns"
+    addrs, reason = asyncio.run(policy.resolve("does-not-exist.invalid", 443))
+    assert addrs == [] and reason == "dns"
+
+
+def test_falls_back_across_addresses(monkeypatch):
+    # Found on GitHub's runners: "localhost" resolved to ::1 first while the server only
+    # listened on 127.0.0.1. The proxy must try every checked address, in order.
+    async def fn(px, up):
+        loop = asyncio.get_running_loop()
+        real = loop.getaddrinfo
+
+        async def ipv6_first(host, port, **kw):
+            infos = await real("127.0.0.1", port, **kw)
+            return [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::1", port, 0, 0)), *infos]
+
+        monkeypatch.setattr(loop, "getaddrinfo", ipv6_first)
+        return await request(
+            px,
+            f"GET http://localhost:{up}/ HTTP/1.1\r\nHost: localhost\r\n"
+            f"Proxy-Authorization: {auth()}\r\n\r\n",
+        )
+
+    assert run(fn).startswith("HTTP/1.1 200 OK")

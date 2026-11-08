@@ -81,22 +81,22 @@ class Policy:
             return "not-allowed"
         return None
 
-    async def resolve(self, host: str, port: int) -> tuple[str | None, str | None]:
-        """Resolve once; refuse if any address is not public. Returns (address, reason)."""
+    async def resolve(self, host: str, port: int) -> tuple[list[str], str | None]:
+        """Resolve once; refuse if any address is not public. Returns (addresses, reason)."""
         loop = asyncio.get_running_loop()
         try:
             infos = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         except OSError:
-            return None, "dns"
-        addrs = [i[4][0] for i in infos]
+            return [], "dns"
+        addrs = list(dict.fromkeys(i[4][0] for i in infos))  # unique, resolver order
         if not addrs:
-            return None, "dns"
+            return [], "dns"
         if not self.allow_private:
             for a in addrs:
                 ip = ipaddress.ip_address(a.split("%")[0])
                 if not ip.is_global:
-                    return None, "non-public-address"
-        return addrs[0], None
+                    return [], "non-public-address"
+        return addrs, None
 
 
 def split_host_port(authority: str, default_port: int) -> tuple[str, int]:
@@ -205,22 +205,29 @@ class EgressProxy:
             return
 
         reason = self.policy.check_target(client, host, port)
-        address = None
+        addresses: list[str] = []
         if reason is None:
-            address, reason = await self.policy.resolve(host, port)
+            addresses, reason = await self.policy.resolve(host, port)
         entry = {"client": client["name"], "host": host.lower(), "port": port, "method": method}
         if reason is not None:
             log(decision="deny", reason=reason, **entry)
             await self.respond(writer, "403 Forbidden")
             return
-        try:
-            up_reader, up_writer = await asyncio.wait_for(
-                asyncio.open_connection(address, port), CONNECT_TIMEOUT
-            )
-        except (OSError, TimeoutError):
+        # Try each checked address in turn (e.g. IPv6 first, then IPv4), never re-resolving.
+        upstream = None
+        for address in addresses:
+            try:
+                upstream = await asyncio.wait_for(
+                    asyncio.open_connection(address, port), CONNECT_TIMEOUT
+                )
+                break
+            except (OSError, TimeoutError):
+                continue
+        if upstream is None:
             log(decision="error", reason="connect", **entry)
             await self.respond(writer, "502 Bad Gateway")
             return
+        up_reader, up_writer = upstream
         log(decision="allow", **entry)
 
         if method == "CONNECT":
