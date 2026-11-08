@@ -310,3 +310,62 @@ def test_restricted_egress_through_proxy(settings):
             destroy_all(c, ws, [env])
     assert docker("inspect", f"cyberlab-{key}-egress-proxy").returncode != 0
     assert docker("network", "inspect", f"cyberlab-{key}-egress").returncode != 0
+
+
+def test_workspace_files_on_real_container(client):
+    ws, (env,) = provision(client, BASIC, "it-files")
+    name = env["resources"]["container"]
+    base = f"/v1/workspaces/{ws}/environments/{env['id']}/files"
+    blob = bytes(range(256)) * 64  # binary data, 16 KiB
+    odd = "odd name; $(touch pwned) & co.txt"
+    try:
+        r = client.put(
+            f"{base}/content",
+            params={"path": "captures/day1/data.bin"},
+            content=blob,
+            headers=auth(),
+        )
+        assert r.status_code == 201, r.text
+        # written by the environment's own user, not root
+        assert sh(name, "stat -c %U:%G /workspace/captures/day1/data.bin")[1] == "cyberlab:cyberlab"
+        r = client.put(f"{base}/content", params={"path": odd}, content=b"hi", headers=auth())
+        assert r.status_code == 201
+        assert sh(name, "ls /workspace")[1].splitlines() == ["captures", odd]  # no "pwned"
+
+        root = client.get(base, headers=auth()).json()["entries"]
+        assert [(e["name"], e["type"]) for e in root] == [("captures", "directory"), (odd, "file")]
+        nested = client.get(base, params={"path": "captures/day1"}, headers=auth()).json()
+        assert nested["entries"][0]["size"] == len(blob)
+
+        dl = client.get(
+            f"{base}/content", params={"path": "captures/day1/data.bin"}, headers=auth()
+        )
+        assert dl.status_code == 200 and dl.content == blob
+
+        # a file created in the terminal is visible through the API too
+        sh(name, "echo from-terminal > /workspace/t.txt")
+        assert (
+            client.get(f"{base}/content", params={"path": "t.txt"}, headers=auth()).content
+            == b"from-terminal\n"
+        )
+
+        assert (
+            client.get(f"{base}/content", params={"path": "captures"}, headers=auth()).status_code
+            == 409
+        )  # a directory
+        assert client.get(base, params={"path": "missing"}, headers=auth()).status_code == 404
+        assert (
+            client.delete(base, params={"path": "captures"}, headers=auth()).status_code == 409
+        )  # needs recursive
+        assert (
+            client.delete(
+                base, params={"path": "captures", "recursive": True}, headers=auth()
+            ).status_code
+            == 204
+        )
+        assert sh(name, "test -e /workspace/captures && echo yes || echo no")[1] == "no"
+
+        client.post(f"/v1/workspaces/{ws}/environments/{env['id']}/stop", headers=auth())
+        assert client.get(base, headers=auth()).status_code == 409
+    finally:
+        destroy_all(client, ws, [env])
