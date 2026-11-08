@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyberlab.dev/schemas/universe-manifest/v1alpha1.json",
+  "title": "CyberLab Universe Manifest (v1alpha1)",
+  "$defs": {
+    "Access": {
+      "additionalProperties": false,
+      "properties": {
+        "terminal": {
+          "default": true,
+          "title": "Terminal",
+          "type": "boolean"
+        },
+        "desktop": {
+          "default": false,
+          "title": "Desktop",
+          "type": "boolean"
+        }
+      },
+      "title": "Access",
+      "type": "object"
+    },
+    "Environment": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "baseImage": {
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "title": "Baseimage",
+          "type": "string"
+        },
+        "resources": {
+          "$ref": "#/$defs/Resources"
+        },
+        "toolPacks": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Toolpacks",
+          "type": "array"
+        },
+        "network": {
+          "$ref": "#/$defs/Network"
+        },
+        "access": {
+          "$ref": "#/$defs/Access"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/Lifecycle"
+        }
+      },
+      "required": [
+        "name",
+        "baseImage",
+        "resources"
+      ],
+      "title": "Environment",
+      "type": "object"
+    },
+    "Lifecycle": {
+      "additionalProperties": false,
+      "properties": {
+        "ephemeral": {
+          "default": false,
+          "title": "Ephemeral",
+          "type": "boolean"
+        },
+        "idleTimeoutMinutes": {
+          "anyOf": [
+            {
+              "maximum": 1440,
+              "minimum": 5,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 60,
+          "title": "Idletimeoutminutes"
+        },
+        "ttlHours": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ttlhours"
+        }
+      },
+      "title": "Lifecycle",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Description",
+          "type": "string"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 32,
+          "title": "Labels",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "Network": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/NetworkMode",
+          "default": "lab"
+        },
+        "allowedEgress": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Allowedegress",
+          "type": "array"
+        }
+      },
+      "title": "Network",
+      "type": "object"
+    },
+    "NetworkMode": {
+      "enum": [
+        "isolated",
+        "lab",
+        "restricted-egress",
+        "internet"
+      ],
+      "title": "NetworkMode",
+      "type": "string"
+    },
+    "Preferences": {
+      "additionalProperties": false,
+      "properties": {
+        "shell": {
+          "default": "bash",
+          "enum": [
+            "bash",
+            "zsh",
+            "fish",
+            "sh"
+          ],
+          "title": "Shell",
+          "type": "string"
+        },
+        "editor": {
+          "default": "vim",
+          "maxLength": 32,
+          "title": "Editor",
+          "type": "string"
+        },
+        "theme": {
+          "default": "system",
+          "enum": [
+            "dark",
+            "light",
+            "system"
+          ],
+          "title": "Theme",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "maxLength": 64,
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "title": "Preferences",
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "exclusiveMinimum": 0,
+          "maximum": 64,
+          "title": "Cpu",
+          "type": "number"
+        },
+        "memoryMiB": {
+          "exclusiveMinimum": 0,
+          "maximum": 262144,
+          "title": "Memorymib",
+          "type": "integer"
+        },
+        "storageGiB": {
+          "maximum": 2048,
+          "minimum": 1,
+          "title": "Storagegib",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpu",
+        "memoryMiB",
+        "storageGiB"
+      ],
+      "title": "Resources",
+      "type": "object"
+    },
+    "UniverseSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "environments": {
+          "items": {
+            "$ref": "#/$defs/Environment"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Environments",
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/Workspace"
+        },
+        "preferences": {
+          "$ref": "#/$defs/Preferences"
+        }
+      },
+      "required": [
+        "environments"
+      ],
+      "title": "UniverseSpec",
+      "type": "object"
+    },
+    "Workspace": {
+      "additionalProperties": false,
+      "properties": {
+        "persistent": {
+          "default": true,
+          "title": "Persistent",
+          "type": "boolean"
+        },
+        "storageGiB": {
+          "default": 5,
+          "maximum": 1024,
+          "minimum": 0,
+          "title": "Storagegib",
+          "type": "integer"
+        },
+        "snapshotPolicy": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "daily",
+            "on-stop"
+          ],
+          "title": "Snapshotpolicy",
+          "type": "string"
+        }
+      },
+      "title": "Workspace",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "cyberlab.dev/v1alpha1",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "kind": {
+      "const": "Universe",
+      "title": "Kind",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/UniverseSpec"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "type": "object"
+}

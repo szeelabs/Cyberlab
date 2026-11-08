@@ -1,0 +1,12 @@
+id: detection-engineering
+name: Detection Engineering
+version: 0.1.0
+category: defensive-security
+description: Write and test detection rules and inspect host telemetry.
+risk: low
+compatibleBases: [ubuntu-24-04, debian-12]
+minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 2}
+tools:
+  - {name: Suricata, purpose: Network IDS rule testing against captures, homepage: "https://suricata.io"}
+  - {name: YARA, purpose: Pattern-matching rules for files, homepage: "https://virustotal.github.io/yara/"}
+  - {name: osquery, purpose: Host telemetry via SQL, homepage: "https://osquery.io"}

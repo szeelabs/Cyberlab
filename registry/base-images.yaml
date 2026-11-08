@@ -1,0 +1,22 @@
+# Base operating systems an environment can start from (upstream OCI images).
+- id: ubuntu-24-04
+  name: Ubuntu 24.04 LTS
+  family: debian
+  image: docker.io/library/ubuntu:24.04
+  description: General-purpose LTS base with the widest package availability.
+  minResources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+  supportsDesktop: true
+- id: debian-12
+  name: Debian 12 (slim)
+  family: debian
+  image: docker.io/library/debian:12-slim
+  description: Small, stable base for lightweight environments.
+  minResources: {cpu: 0.25, memoryMiB: 256, storageGiB: 1}
+  supportsDesktop: false
+- id: kali-rolling
+  name: Kali Linux (rolling)
+  family: debian
+  image: docker.io/kalilinux/kali-rolling:latest
+  description: Security-focused distribution with most tools available as packages.
+  minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
+  supportsDesktop: true

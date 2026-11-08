@@ -1,0 +1,25 @@
+apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata:
+  name: blue-team-lab
+  description: Defensive lab - detection rules, forensics and image scanning on a private lab network.
+  labels: {track: defensive, level: beginner}
+spec:
+  environments:
+    - name: analyst
+      baseImage: ubuntu-24-04
+      resources: {cpu: 2, memoryMiB: 4096, storageGiB: 10}
+      toolPacks: [detection-engineering, forensics, crypto]
+      network: {mode: lab}
+      access: {terminal: true, desktop: true}
+      lifecycle: {idleTimeoutMinutes: 30}
+    - name: scanner
+      baseImage: debian-12
+      resources: {cpu: 1, memoryMiB: 1024, storageGiB: 5}
+      toolPacks: [vuln-assessment]
+      network:
+        mode: restricted-egress
+        allowedEgress: [mirror.gcr.io, ghcr.io]   # vulnerability DB downloads
+      lifecycle: {ephemeral: true, idleTimeoutMinutes: 15, ttlHours: 8}
+  workspace: {persistent: true, storageGiB: 5, snapshotPolicy: on-stop}
+  preferences: {shell: zsh, editor: nvim, theme: dark, timezone: UTC}

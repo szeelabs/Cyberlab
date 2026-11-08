@@ -1,0 +1,31 @@
+# Tool Universe categories. Every tool pack belongs to exactly one category.
+- id: network-security
+  name: Network Security
+  description: Traffic capture, protocol analysis and network discovery on networks you own or are authorized to assess.
+- id: web-application-security
+  name: Web Application Security
+  description: Testing web applications you own or are authorized to test, e.g. intentionally vulnerable training apps.
+- id: digital-forensics
+  name: Digital Forensics
+  description: Disk, memory and file-system evidence analysis.
+- id: malware-analysis
+  name: Malware Analysis
+  description: Reserved for fully network-isolated, ephemeral environments. No packs are published yet.
+- id: cryptography
+  name: Cryptography
+  description: Encryption, hashing, certificates and encoding utilities.
+- id: osint
+  name: OSINT
+  description: Public-information research such as DNS and domain registration lookups.
+- id: vulnerability-assessment
+  name: Vulnerability Assessment
+  description: Scanning your own images, dependencies and hosts for known vulnerabilities and misconfigurations.
+- id: penetration-testing
+  name: Penetration Testing
+  description: Reserved for authorized engagements inside lab networks. No packs are published yet.
+- id: defensive-security
+  name: Defensive Security
+  description: Detection engineering, intrusion detection, host telemetry and rule writing.
+- id: ai-security
+  name: AI Security
+  description: Evaluating the robustness and safety of AI systems you operate. No packs are published yet.

@@ -1,0 +1,11 @@
+id: osint-dns
+name: DNS and Domain Research
+version: 0.1.0
+category: osint
+description: Public DNS and domain registration lookups. Needs outbound access to resolvers and registries.
+risk: low
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+minResources: {cpu: 0.25, memoryMiB: 256, storageGiB: 1}
+tools:
+  - {name: dig, purpose: DNS queries, homepage: "https://www.isc.org/bind/"}
+  - {name: whois, purpose: Domain registration lookups}

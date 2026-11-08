@@ -1,0 +1,82 @@
+# CyberLab — a virtual cybersecurity universe
+
+CyberLab aims to give every user a personal, browser-accessible virtual computer for
+**authorized** security learning and work: remote Linux environments, modular tool packs,
+isolated lab networks, persistent workspaces and portable configurations. Your physical
+machine becomes just a window.
+
+> **Status: Phase 2 in progress.** The control plane, Universe Manifest, registry and
+> policy engine work (Phase 1). CyberLab can now **start real, hardened Linux containers**
+> on a Docker host from an approved manifest (Phase 2, part 1). Tool packs are not installed
+> yet, and there is no browser terminal, storage, AI or web UI yet. See
+> [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
+
+## What works today
+* **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of
+  environments, tool packs, resources, networking, workspace and preferences, with a
+  generated [JSON Schema](spec/universe-manifest.schema.json).
+* **Tool registry**: 10 categories, 3 base images, 7 tool packs (metadata only, no images published yet).
+* **Policy engine**: registry compatibility, minimum resources, quotas, network isolation
+  rules, approval requirements (internet egress, high-risk packs) and a resource estimate.
+* **API**: workspaces, manifest import/export with revisions, audit log, JWT auth.
+* **CLI**: `cyberlab manifest validate`, `cyberlab manifest schema`, `cyberlab registry`.
+
+## Quick start (no local install: use a Codespace)
+1. On GitHub: **Code → Codespaces → Create codespace**. The devcontainer installs everything.
+2. In the terminal:
+   ```bash
+   cd backend
+   cyberlab registry
+   cyberlab manifest validate ../examples/manifests/*.yaml
+   pytest
+   uvicorn --factory cyberlab.main:app_factory --reload --port 8000
+   ```
+3. Open the forwarded port at `/docs` for interactive API docs (development only).
+
+Local alternative (Python 3.11+):
+```bash
+cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
+```
+
+## Documentation
+| | |
+|---|---|
+| [00 Assessment](docs/00-assessment.md) | Starting point and gaps |
+| [01 Repository structure](docs/01-repository-structure.md) | Where things live |
+| [02 Architecture](docs/02-architecture.md) | Planes and interfaces |
+| [03 Technology decisions](docs/03-technology-decisions.md) | What we chose, and why |
+| [04 Threat model](docs/04-threat-model.md) | Risks and mitigations |
+| [05 Free-first infrastructure](docs/05-infrastructure-strategy.md) | Running on free tiers / your own hosts |
+| [06 Roadmap](docs/06-roadmap.md) | Phases and next steps |
+| [07 Universe Manifest spec](docs/07-universe-manifest.md) | The portable format |
+| [Development status](docs/DEVELOPMENT_STATUS.md) | What is built, what isn't, known issues |
+| [Learning progress](docs/LEARNING_PROGRESS.md) | Maintainer's learning log |
+
+## API overview (Phase 1)
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/healthz`, `/readyz` | – |
+| GET | `/v1/registry/categories`, `/v1/registry/base-images`, `/v1/registry/tool-packs[?category=]`, `/v1/registry/tool-packs/{id}` | – |
+| POST | `/v1/manifests/validate` (YAML/JSON body) | ✔ |
+| GET | `/v1/me` | ✔ |
+| GET/POST | `/v1/workspaces` | ✔ |
+| GET/DELETE | `/v1/workspaces/{id}` | ✔ |
+| PUT/GET | `/v1/workspaces/{id}/manifest[?format=json&revision=N]` | ✔ |
+| GET | `/v1/audit` | ✔ |
+| GET | `/v1/system/execution` (provider CONNECTED / NOT CONNECTED) | ✔ |
+| GET | `/v1/workspaces/{id}/plan[?revision=N]` | ✔ |
+| POST | `/v1/workspaces/{id}/approvals` | ✔ |
+| GET/POST | `/v1/workspaces/{id}/environments[?refresh=true]` | ✔ |
+| POST | `/v1/workspaces/{id}/environments/{env}/start`, `/stop` | ✔ |
+| DELETE | `/v1/workspaces/{id}/environments/{env}[?keep_workspace=false]` | ✔ |
+
+To provision, set `CYBERLAB_EXECUTION_PROVIDER=docker` (local Docker, or a remote host via
+`CYBERLAB_DOCKER_HOST=ssh://user@host`). Without it, the API reports **NOT CONNECTED** and
+provisions nothing.
+
+## Acceptable use
+CyberLab is for learning, defense and **authorized** testing only. Use it only against
+systems you own or have written permission to test. See [SECURITY.md](SECURITY.md).
+
+## License
+MIT. See [LICENSE](LICENSE). Contributions welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).

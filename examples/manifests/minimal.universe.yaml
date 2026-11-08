@@ -1,0 +1,12 @@
+apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata:
+  name: my-first-universe
+  description: A single Debian shell with crypto utilities.
+spec:
+  environments:
+    - name: shell
+      baseImage: debian-12
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      toolPacks: [crypto]
+      network: {mode: isolated}

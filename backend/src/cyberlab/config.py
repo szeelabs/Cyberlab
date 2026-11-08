@@ -1,0 +1,88 @@
+"""Runtime configuration.
+
+All settings come from environment variables prefixed ``CYBERLAB_`` (or a local
+``.env`` file). Nothing secret is ever hardcoded; secrets have no defaults.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_registry_dir() -> Path:
+    # backend/src/cyberlab/config.py -> repo root /registry
+    return Path(__file__).resolve().parents[3] / "registry"
+
+
+class QuotaSettings(BaseSettings):
+    """Per-user resource quotas enforced at manifest validation time."""
+
+    model_config = SettingsConfigDict(env_prefix="CYBERLAB_QUOTA_", extra="ignore")
+
+    max_environments: int = Field(default=4, ge=1)
+    max_cpu_per_environment: float = Field(default=4, gt=0)
+    max_memory_mib_per_environment: int = Field(default=8192, gt=0)
+    max_total_cpu: float = Field(default=6, gt=0)
+    max_total_memory_mib: int = Field(default=12288, gt=0)
+    max_total_storage_gib: int = Field(default=40, gt=0)
+    max_ttl_hours: int = Field(default=72, gt=0)
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CYBERLAB_", env_file=".env", extra="ignore")
+
+    environment: Literal["development", "test", "production"] = "development"
+    database_url: str = "sqlite:///./cyberlab-dev.db"
+    registry_dir: Path = Field(default_factory=_default_registry_dir)
+
+    # --- Authentication -------------------------------------------------
+    # "jwt": verify bearer tokens issued by an OIDC/JWT provider (e.g. Supabase Auth).
+    # "dev": a fixed local developer identity. Refused outside development/test.
+    auth_mode: Literal["jwt", "dev"] = "jwt"
+    auth_jwt_secret: SecretStr | None = None  # HS256 shared secret
+    auth_jwks_url: str | None = None  # asymmetric keys (RS256/ES256)
+    auth_algorithms: list[str] = ["HS256"]
+    auth_audience: str | None = "authenticated"  # Supabase default audience
+    auth_issuer: str | None = None
+    dev_user_subject: str = "dev-user"
+
+    # --- HTTP hardening ---------------------------------------------------
+    cors_origins: list[str] = []
+    max_request_bytes: int = Field(default=256 * 1024, gt=0)
+    max_manifest_bytes: int = Field(default=128 * 1024, gt=0)
+
+    quotas: QuotaSettings = Field(default_factory=QuotaSettings)
+
+    # --- Execution plane ----------------------------------------------------
+    # "none": nothing can be provisioned; the API reports NOT CONNECTED.
+    # "docker": a Docker Engine reached via the docker CLI (local, or remote via DOCKER_HOST).
+    execution_provider: Literal["none", "docker"] = "none"
+    docker_host: str | None = None  # e.g. ssh://cyberlab@my-server
+    docker_binary: str = "docker"
+    image_mirror: str | None = None  # e.g. mirror.gcr.io, replaces the docker.io/ prefix
+
+    @model_validator(mode="after")
+    def _check_security(self) -> Settings:
+        if self.auth_mode == "dev" and self.environment == "production":
+            raise ValueError("CYBERLAB_AUTH_MODE=dev is not allowed in production")
+        if self.auth_mode == "jwt":
+            asymmetric = [a for a in self.auth_algorithms if not a.startswith("HS")]
+            if "none" in (a.lower() for a in self.auth_algorithms):
+                raise ValueError("JWT algorithm 'none' is never allowed")
+            if asymmetric and not self.auth_jwks_url:
+                raise ValueError("Asymmetric JWT algorithms require CYBERLAB_AUTH_JWKS_URL")
+            if self.environment == "production" and not asymmetric and self.auth_jwt_secret is None:
+                raise ValueError("CYBERLAB_AUTH_JWT_SECRET is required in production")
+        if self.environment == "production" and "*" in self.cors_origins:
+            raise ValueError("Wildcard CORS origin is not allowed in production")
+        return self
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

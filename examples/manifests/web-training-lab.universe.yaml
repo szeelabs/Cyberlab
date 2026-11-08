@@ -1,0 +1,14 @@
+apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata:
+  name: web-training-lab
+  description: Web security practice against your own training app on a private lab network.
+spec:
+  environments:
+    - name: tester
+      baseImage: kali-rolling
+      resources: {cpu: 2, memoryMiB: 4096, storageGiB: 8}
+      toolPacks: [web-appsec, network-analysis]
+      network: {mode: lab}
+      lifecycle: {idleTimeoutMinutes: 30, ttlHours: 24}
+  workspace: {storageGiB: 2}
