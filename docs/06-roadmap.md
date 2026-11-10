@@ -37,6 +37,7 @@ export bundle = manifest + snapshot, restore. Alembic migrations, Postgres in CI
 
 ## Phase 4 — Resource Intelligence (in progress)
 - [x] 1. Reaper: idle shutdown, TTL destroy, ephemeral cleanup (audited, `cyberlab reaper run-once`).
+- [x] 2. Live quotas across a user's environments; per-client and per-IP rate limiting.
 Scheduler, idle reaper and TTL reaper, live quota accounting, provider cost classes, a
 user-owned-host adapter, rate limiting, audit export/retention.
 

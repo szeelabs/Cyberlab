@@ -24,6 +24,7 @@ from cyberlab.api.terminal import router as terminal_router
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
 from cyberlab.execution import build_provider
+from cyberlab.ratelimit import EXEMPT_PREFIXES, RateLimiter, client_key, retry_after_header
 from cyberlab.registry import load_registry
 from cyberlab.storage import build_store
 
@@ -72,6 +73,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.provider = build_provider(settings)
     app.state.terminal_sessions = {}
     app.state.active_terminals = {}
+    app.state.rate_limiter = RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst)
+    app.state.ip_limiter = RateLimiter(
+        settings.rate_limit_per_minute * 4, settings.rate_limit_burst * 4
+    )
     app.state.snapshot_store = build_store(settings)
 
     if settings.auth_mode == "dev":
@@ -83,6 +88,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not (0 < len(rid) <= 64 and rid.replace("-", "").isalnum()):
             rid = uuid.uuid4().hex
         request.state.request_id = rid
+        limiter: RateLimiter = app.state.rate_limiter
+        if limiter.enabled and not request.url.path.startswith(EXEMPT_PREFIXES):
+            ip = request.client.host if request.client else None
+            # Two buckets: per client (token or IP), and per IP with 4x the allowance, so
+            # sending a different fake token on every request doesn't escape the limit.
+            wait = max(
+                limiter.check(client_key(request.headers.get("authorization"), ip)),
+                app.state.ip_limiter.check(f"ip:{ip or 'unknown'}"),
+            )
+            if wait:
+                return JSONResponse(
+                    {"detail": "too many requests; slow down"},
+                    status_code=429,
+                    headers={
+                        "Retry-After": retry_after_header(wait),
+                        "X-Request-ID": rid,
+                        **SECURITY_HEADERS,
+                    },
+                )
         length = request.headers.get("content-length")
         if request.method == "PUT" and request.url.path.endswith("/files/content"):
             limit = settings.max_file_bytes

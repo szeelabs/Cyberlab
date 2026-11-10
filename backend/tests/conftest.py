@@ -29,6 +29,7 @@ def settings(tmp_path):
     return Settings(
         snapshot_dir=tmp_path / "snapshots",
         reaper_interval_seconds=0,  # tests drive the reaper explicitly
+        rate_limit_per_minute=0,  # tested on its own in test_quotas_ratelimit.py
         environment="test",
         database_url="sqlite://",
         registry_dir=REPO / "registry",

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from cyberlab import quotas
 from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
@@ -105,6 +106,16 @@ def _env_owned(db: Session, ws: Workspace, env_id: str) -> EnvironmentRecord:
 
 
 # ---------------------------------------------------------------- provider status
+@router.get("/v1/me/usage")
+def my_usage(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """What you're using now (across all your workspaces) and your limits."""
+    return {"usage": quotas.usage(db, user).to_dict(), "limits": quotas.limits(settings.quotas)}
+
+
 @router.get("/v1/system/execution")
 def execution_status(
     _: User = Depends(current_user),
@@ -290,9 +301,16 @@ def provision_environments(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "workspace already has environments; destroy them first"
         )
+    manifest = UniverseManifest.model_validate(rev.content)
+    specs = [e.model_dump(mode="json", by_alias=True) for e in manifest.spec.environments]
+    problems = quotas.check_new(quotas.usage(db, user), specs, settings.quotas)
+    if problems:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"detail": "this would exceed your resource limits", "problems": problems},
+        )
     adapter = _require_provider(provider)
 
-    manifest = UniverseManifest.model_validate(rev.content)
     proxy_urls, egress_error = _configure_egress(adapter, ws, manifest, settings)
     created = []
     for env in manifest.spec.environments:
@@ -403,6 +421,7 @@ def _lifecycle(action: str):
         keep_workspace: bool = True,
         user: User = Depends(current_user),
         db: Session = Depends(get_db),
+        settings: Settings = Depends(get_settings),
         provider: ProviderAdapter | None = Depends(get_provider),
     ) -> dict:
         ws = _owned(db, user, ws_id)
@@ -418,6 +437,21 @@ def _lifecycle(action: str):
             adapter = _require_provider(provider)
             try:
                 if action == "start":
+                    if rec.state != EnvState.running:
+                        problems = quotas.check_new(
+                            quotas.usage(db, user, exclude={rec.id}),
+                            [rec.spec],
+                            settings.quotas,
+                            new_environments=False,
+                        )
+                        if problems:
+                            raise HTTPException(
+                                status.HTTP_409_CONFLICT,
+                                {
+                                    "detail": "starting this would exceed your resource limits",
+                                    "problems": problems,
+                                },
+                            )
                     rec.state = adapter.start(rec.provider_ref).value
                     rec.last_activity_at = datetime.now(UTC)  # restart the idle timer
                 elif action == "stop":

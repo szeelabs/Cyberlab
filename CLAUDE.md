@@ -102,5 +102,6 @@ approvals, environment lifecycle). Part 2, the **browser terminal**, is built an
 merged (PR #6); step 3, **encrypted S3 storage** (PR #7); step 4,
 **export/import bundles** (PR #8); step 5, **migrations** (PR #9). Phase 3 is complete.
 **Phase 4 (Resource Intelligence):** step 1, the **reaper** (idle/TTL/ephemeral), is built
-(PR #10). Next: live quotas across environments and rate limiting.
+(PR #10); step 2, **live quotas and rate limiting** (PR #11). Next: user-owned hosts
+over SSH and provider cost classes.
 Details: `docs/DEVELOPMENT_STATUS.md`.
