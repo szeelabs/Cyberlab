@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     snapshot_dir: Path = Path("./cyberlab-data/snapshots")  # local snapshot store
     max_snapshot_bytes: int = Field(default=1024 * 1024 * 1024, gt=0)  # compressed size
     max_snapshots_per_workspace: int = Field(default=10, ge=1)
+    snapshot_store: Literal["local", "s3"] = "local"
+    # 32-byte key (base64 or hex). When set, snapshots are encrypted (AES-256-GCM) before
+    # they are stored. Required for S3. Generate one: python -m cyberlab.storage.keygen
+    snapshot_encryption_key: SecretStr | None = None
+    s3_bucket: str | None = None
+    s3_prefix: str = "cyberlab-snapshots"
+    s3_endpoint_url: str | None = None  # e.g. https://<account>.r2.cloudflarestorage.com
+    s3_region: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: SecretStr | None = None
 
     quotas: QuotaSettings = Field(default_factory=QuotaSettings)
 
@@ -95,6 +105,18 @@ class Settings(BaseSettings):
                 raise ValueError("Asymmetric JWT algorithms require CYBERLAB_AUTH_JWKS_URL")
             if self.environment == "production" and not asymmetric and self.auth_jwt_secret is None:
                 raise ValueError("CYBERLAB_AUTH_JWT_SECRET is required in production")
+        if self.snapshot_store == "s3":
+            if not self.s3_bucket:
+                raise ValueError("CYBERLAB_S3_BUCKET is required when CYBERLAB_SNAPSHOT_STORE=s3")
+            if self.snapshot_encryption_key is None:
+                raise ValueError(
+                    "CYBERLAB_SNAPSHOT_ENCRYPTION_KEY is required with S3 storage: "
+                    "snapshots never leave this server unencrypted"
+                )
+        if self.snapshot_encryption_key is not None:
+            from cyberlab.storage.crypto import parse_key
+
+            parse_key(self.snapshot_encryption_key.get_secret_value())  # fail fast if malformed
         if self.environment == "production" and self.egress_allow_private:
             raise ValueError("CYBERLAB_EGRESS_ALLOW_PRIVATE is for local testing only")
         if self.environment == "production" and "*" in self.cors_origins:

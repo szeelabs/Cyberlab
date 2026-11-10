@@ -83,6 +83,25 @@ def _adapter(provider: ProviderAdapter | None) -> ProviderAdapter:
     return adapter
 
 
+@router.get("/v1/system/storage")
+def storage_status(
+    _: User = Depends(current_user), store: SnapshotStore = Depends(get_store)
+) -> dict:
+    """Which snapshot store is configured, whether it is reachable, and if it is encrypted."""
+    try:
+        getattr(store, "check", lambda: "ok")()
+        connected, detail = True, "ok"
+    except StorageError as exc:
+        connected, detail = False, str(exc)
+    return {
+        "store": store.name,
+        "encrypted": store.name.endswith("+aes256gcm"),
+        "connected": connected,
+        "status": "CONNECTED" if connected else "NOT CONNECTED",
+        "detail": detail,
+    }
+
+
 @router.post("/v1/workspaces/{ws_id}/environments/{env_id}/snapshots", status_code=201)
 def create_snapshot(
     ws_id: str,
@@ -186,6 +205,12 @@ def restore_snapshot(
     if rec.provider_ref:
         rec.state = adapter.inspect(rec.provider_ref).value
         db.commit()
+    if snap.store != store.name:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"this snapshot is in the {snap.store!r} store, but the server now uses "
+            f"{store.name!r}; switch back or re-create the snapshot",
+        )
     if rec.state != EnvState.stopped:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "stop the environment before restoring a snapshot"
