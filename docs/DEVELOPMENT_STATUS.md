@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phases 1-4) | ✅ 268 passed, 3 skipped locally: 2 PostgreSQL tests (need `CYBERLAB_TEST_POSTGRES_URL`) and the package-build test (needs internet for builds); all three run in CI |
+| Test suite (Phases 1-4) | ✅ 282 passed, 3 skipped locally: 2 PostgreSQL tests (need `CYBERLAB_TEST_POSTGRES_URL`) and the package-build test (needs internet for builds); all three run in CI |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -122,6 +122,13 @@ against a real cloud provider account (none was created).
 | Live quotas | When provisioning or starting, limits apply across **all** of a user's environments, not one manifest: CPU and memory count running/provisioning environments (stopping frees them, starting again is checked); environment count and storage count everything not destroyed. Refusals list each exceeded limit. `GET /v1/me/usage` shows usage and limits | `quotas.py`, `api/environments.py` |
 | Rate limiting | Token bucket per client (bearer-token hash, else IP) **and** per IP (4x allowance, so rotating fake tokens doesn't escape it). `CYBERLAB_RATE_LIMIT_PER_MINUTE` (300) / `_BURST` (60); `429` with `Retry-After`; health checks and static files exempt | `ratelimit.py`, `main.py` |
 
+## Implemented (Phase 4, step 3 — your own server, cost classes)
+| Area | What works | Where |
+|---|---|---|
+| Own server over SSH | `CYBERLAB_DOCKER_HOST=ssh://user@host` runs environments on a machine you control; the terminal, files, snapshots and builds all go through SSH. Step-by-step guide in `docs/guides/own-server.md`. **CI runs the real-Docker suite through `ssh://` on every PR** | `execution/docker.py`, `.github/workflows/ci.yml` |
+| Host safety | Only `ssh://`, `unix://`, `tcp://`, `npipe://` hosts accepted; **unencrypted `tcp://` refused in production** (the Docker API is root on that host); TLS via `CYBERLAB_DOCKER_TLS_VERIFY` + `CYBERLAB_DOCKER_CERT_PATH` | `config.py` |
+| Cost classes | `CYBERLAB_EXECUTION_COST_CLASS` = `free` / `user-owned` / `paid`; a `paid` provider reports NOT CONNECTED and provisions nothing unless `CYBERLAB_ALLOW_PAID_PROVIDERS=true` | `execution/docker.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -165,7 +172,7 @@ against a real cloud provider account (none was created).
    `CYBERLAB_SNAPSHOT_ENCRYPTION_KEY`, local snapshots are stored unencrypted.
 
 ## Next milestone
-1. Merge PR #10 (reaper) and PR #11 (live quotas, rate limiting).
-2. **Phase 4 step 3: user-owned hosts and provider cost classes.** Run environments on your
-   own server over SSH (`DOCKER_HOST=ssh://...`) with a documented, tested setup, and refuse
-   `paid` providers unless explicitly enabled. Then Phase 4 is complete.
+**Phase 4 (Resource Intelligence) is complete** once PR #11 merges.
+
+Next phase, needing the user's go-ahead: **Phase 5 — AI Lab Architect** (describe a lab in
+plain English, get a manifest you can review and approve) or **Phase 6 — the web app**.

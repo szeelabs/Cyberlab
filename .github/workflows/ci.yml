@@ -153,3 +153,37 @@ jobs:
         run: |
           cyberlab db upgrade
           cyberlab db current
+
+  docker-over-ssh:
+    # The same real-Docker tests, but CyberLab reaches the engine through ssh:// as it would
+    # on a user-owned server.
+    runs-on: ubuntu-latest
+    needs: backend
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e '.[dev]'
+      - name: Enable SSH to this runner with a key
+        run: |
+          sudo apt-get install -y openssh-server >/dev/null
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 -q
+          cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+          chmod go-w ~
+          sudo systemctl start ssh
+          ssh-keyscan -H localhost >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -o BatchMode=yes "$USER@localhost" docker version --format '{{.Server.Version}}'
+      - name: Real Docker tests through ssh://
+        env:
+          CYBERLAB_DOCKER_TESTS: "1"
+          CYBERLAB_TEST_IMAGE_MIRROR: mirror.gcr.io
+        run: |
+          export CYBERLAB_TEST_DOCKER_HOST="ssh://$USER@localhost"
+          pytest tests/test_docker_integration.py -v -k "not egress and not tool_pack"

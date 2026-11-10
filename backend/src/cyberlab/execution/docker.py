@@ -68,10 +68,22 @@ class RunResult:
 Runner = Callable[..., RunResult]  # (args, timeout, input=None) -> RunResult
 
 
-def subprocess_runner(docker_host: str | None = None) -> Runner:
+def docker_env(
+    docker_host: str | None = None, *, tls_verify: bool = False, cert_path: str | None = None
+) -> dict[str, str]:
+    """Environment for the docker CLI: which engine to use and how to authenticate to it."""
     env = dict(os.environ)
     if docker_host:
         env["DOCKER_HOST"] = docker_host
+    if tls_verify:
+        env["DOCKER_TLS_VERIFY"] = "1"
+        if cert_path:
+            env["DOCKER_CERT_PATH"] = cert_path
+    return env
+
+
+def subprocess_runner(docker_host: str | None = None, *, env: dict | None = None) -> Runner:
+    env = env if env is not None else docker_env(docker_host)
 
     def run(
         args: list[str], timeout: float, input: str | bytes | None = None, binary: bool = False
@@ -102,11 +114,9 @@ def subprocess_runner(docker_host: str | None = None) -> Runner:
 Streamer = Callable[..., RunResult]  # (args, timeout, stdout_path=, stdin_path=, max_bytes=)
 
 
-def subprocess_streamer(docker_host: str | None = None) -> Streamer:
+def subprocess_streamer(docker_host: str | None = None, *, env: dict | None = None) -> Streamer:
     """Run docker with stdout streamed into a file, or stdin streamed from one."""
-    env = dict(os.environ)
-    if docker_host:
-        env["DOCKER_HOST"] = docker_host
+    env = env if env is not None else docker_env(docker_host)
 
     def stream(
         args: list[str],
@@ -208,11 +218,17 @@ class DockerAdapter:
         egress_image: str = DEFAULT_EGRESS_IMAGE,
         egress_ready_timeout: float = 30,
         streamer: Streamer | None = None,
+        env: dict | None = None,
+        cost_class: CostClass = CostClass.user_owned,
+        allow_paid: bool = False,
     ) -> None:
         self._stream = streamer
         self._egress_ready_timeout = egress_ready_timeout
         self._egress_image = egress_image
         self._docker_host = docker_host
+        self._env = env
+        self._cost_class = cost_class
+        self._allow_paid = allow_paid
         self._run = runner
         self._bin = binary
         self._user = run_as
@@ -376,16 +392,23 @@ class DockerAdapter:
 
     # ------------------------------------------------------------------ interface
     def status(self) -> ProviderStatus:
+        cost = self._cost_class
+        if cost == CostClass.paid and not self._allow_paid:
+            return ProviderStatus(
+                self.name,
+                False,
+                "not connected: this provider is marked as paid; set "
+                "CYBERLAB_ALLOW_PAID_PROVIDERS=true only if you accept its costs",
+                cost,
+            )
         try:
             res = self._docker("version", "--format", "{{.Server.Version}}", timeout=15, ok=True)
         except ProviderError as exc:
-            return ProviderStatus(self.name, False, str(exc), CostClass.user_owned)
+            return ProviderStatus(self.name, False, str(exc), cost)
         if res.returncode != 0 or not res.stdout:
             detail = (res.stderr or "daemon unreachable").splitlines()[-1][:200]
-            return ProviderStatus(
-                self.name, False, f"not connected: {detail}", CostClass.user_owned
-            )
-        return ProviderStatus(self.name, True, f"Docker Engine {res.stdout}", CostClass.user_owned)
+            return ProviderStatus(self.name, False, f"not connected: {detail}", cost)
+        return ProviderStatus(self.name, True, f"Docker Engine {res.stdout}", cost)
 
     def provision(self, request: ProvisionRequest) -> ProvisionResult:
         env = request.environment
@@ -589,9 +612,7 @@ class DockerAdapter:
         ]
 
     async def open_shell(self, provider_ref: str) -> ShellSession:
-        env = dict(os.environ)
-        if self._docker_host:
-            env["DOCKER_HOST"] = self._docker_host
+        env = self._env if self._env is not None else docker_env(self._docker_host)
         return PtyShellSession(self.shell_argv(provider_ref), env=env)
 
     # ------------------------------------------------------------------ files
