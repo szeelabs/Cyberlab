@@ -17,6 +17,7 @@ dependencies = [
   "pyjwt[crypto]>=2.8",
   "uvicorn>=0.30",
   "websockets>=12",
+  "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
@@ -31,7 +32,7 @@ cyberlab = "cyberlab.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cyberlab = ["static/*", "static/vendor/xterm/*"]
+cyberlab = ["static/*", "static/vendor/xterm/*", "migrations/script.py.mako"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

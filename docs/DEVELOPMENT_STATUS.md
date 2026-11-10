@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phases 1-3) | ✅ 239 passed, 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
+| Test suite (Phases 1-3) | ✅ 248 passed (with PostgreSQL), 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -99,6 +99,14 @@ against a real cloud provider account (none was created).
 | Import | `POST /v1/workspaces/import[?name=]` creates a new workspace from a bundle; snapshots are re-encrypted with this server's key. **Nothing is provisioned or restored automatically** | |
 | Safety | Bundles are untrusted: only `bundle.json` and `snapshots/<uuid>.tar.gz`, regular files only, never extracted by archive names, size/count limits (`CYBERLAB_MAX_BUNDLE_BYTES`), compressed bundles refused, every checksum must match the index, and the manifest is re-validated by this server's policy engine and quotas | |
 
+## Implemented (Phase 3, step 5 — database migrations)
+| Area | What works | Where |
+|---|---|---|
+| Migrations | Alembic, shipped inside the package. Baseline `0001` creates today's schema. Startup applies pending migrations (`CYBERLAB_DATABASE_AUTO_MIGRATE`, default on); with it off, CyberLab refuses to start on an out-of-date database. `cyberlab db upgrade` / `cyberlab db current` | `migrations/`, `cli.py` |
+| Adoption | Databases created before migrations existed are adopted (stamped) when all their tables are present; a partial unknown database is refused with a clear message | `migrations/__init__.py` |
+| Drift check | A test fails if the models and the migrations ever disagree | `tests/test_migrations.py` |
+| PostgreSQL | Migrations, downgrade/upgrade and a real API flow run against PostgreSQL 16 (locally and in a CI job) | `.github/workflows/ci.yml` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -109,7 +117,6 @@ against a real cloud provider account (none was created).
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
-| Database migrations (Alembic); Postgres tested in CI | 3 |
 | Scheduler, idle/TTL shutdown, live quota accounting | 4 |
 | Rate limiting | 4 |
 | AI Lab Architect | 5 |
@@ -124,7 +131,7 @@ against a real cloud provider account (none was created).
 2. Supabase Auth has **not** been tested against a real project. Only the HS256 token path
    has automated tests; the JWKS (asymmetric key) path is untested.
 3. The test client prints a Starlette deprecation warning about `httpx`. Harmless for now.
-4. Tables are created at startup (`create_all`); no migrations yet.
+4. **Fixed in Phase 3:** the schema is now managed by Alembic migrations.
 5. Work reaches `main` only through reviewed pull requests (PR #1 merged Phase 1 and Phase 2 part 1).
 6. Docker Hub rate-limits shared cloud IPs. Use `CYBERLAB_IMAGE_MIRROR=mirror.gcr.io`.
 7. **Fixed during Phase 2:** new Docker volumes are owned by root, so the unprivileged user
@@ -145,6 +152,8 @@ against a real cloud provider account (none was created).
    `CYBERLAB_SNAPSHOT_ENCRYPTION_KEY`, local snapshots are stored unencrypted.
 
 ## Next milestone
-1. Merge PR #7 (encrypted S3 storage), then PR #8 (export/import bundles) once CI is green.
-2. **Phase 3 step 5: database migrations** (Alembic) tested against Postgres in CI. This
-   completes Phase 3.
+**Phase 3 (Persistent Universe) is complete** once PR #9 (migrations) merges.
+
+Next phase: **Phase 4 — Resource Intelligence**: automatic shutdown of idle environments,
+time limits (TTL) and cleanup of ephemeral environments, live quota accounting, rate
+limiting. This keeps CyberLab inside free-tier limits. Needs the user's go-ahead.

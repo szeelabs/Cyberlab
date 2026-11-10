@@ -18,6 +18,10 @@ pip install -e '.[dev]'
 ruff check src tests && ruff format src tests
 pytest
 ```
+If you change a database model in `db.py`, add an Alembic migration in
+`backend/src/cyberlab/migrations/versions/`; `tests/test_migrations.py` fails until the
+migrations match the models.
+
 If you change `manifest/models.py`, regenerate the schema (CI checks for drift):
 ```bash
 cyberlab manifest schema -o ../spec/universe-manifest.schema.json

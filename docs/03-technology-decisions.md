@@ -5,7 +5,7 @@ Each decision states what was chosen, why, and what would make us revisit it.
 | Area | Decision | Status | Reasoning |
 |---|---|---|---|
 | Backend | **Python 3.11+ / FastAPI / Pydantic v2** | ✅ adopted | Typed request validation and auto-generated JSON Schema from the same models as the manifest. Most security tooling and AI SDKs are Python-first. |
-| Database | **PostgreSQL** (prod), **SQLite** (dev/test) via SQLAlchemy 2.0 | ✅ adopted | Postgres has free tiers (Supabase, Neon) and JSONB for manifests. SQLite means zero local install. Alembic migrations arrive in Phase 3, before the schema changes on real data. |
+| Database | **PostgreSQL** (prod), **SQLite** (dev/test) via SQLAlchemy 2.0 | ✅ adopted | Postgres has free tiers (Supabase, Neon) and JSONB for manifests. SQLite means zero local install. Alembic migrations (Phase 3) with a drift test; PostgreSQL tested in CI. |
 | Auth | **External IdP + local JWT verification**, Supabase Auth documented default | ✅ verifier adopted; Supabase **not yet tested live** | We store no passwords. Supabase's free tier covers this, and any OIDC provider (Keycloak, Auth0, Zitadel) works by setting the JWKS URL, so there's no lock-in. |
 | Manifest format | **YAML/JSON, `apiVersion`/`kind`** (Kubernetes-style), JSON Schema 2020-12 | ✅ adopted | Familiar to people who write it by hand, versionable, and editors can validate it through the schema. |
 | Frontend | **Next.js + TypeScript** | ⏳ Phase 6 | Suits a heavy client app; can be hosted for free on Vercel/Cloudflare Pages. Could be swapped for Vite + React if we never use SSR. |

@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     environment: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite:///./cyberlab-dev.db"
+    # Apply pending migrations on startup. Turn off to run `cyberlab db upgrade` yourself.
+    database_auto_migrate: bool = True
     registry_dir: Path = Field(default_factory=_default_registry_dir)
 
     # --- Authentication -------------------------------------------------

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cyberlab import __version__
+from cyberlab import __version__, migrations
 from cyberlab.api.bundles import router as bundles_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
@@ -49,7 +49,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.registry = load_registry(settings.registry_dir)
     app.state.db = Database(settings.database_url)
-    app.state.db.create_all()
+    if settings.database_auto_migrate:
+        migrations.upgrade(app.state.db.engine)
+    elif migrations.current(app.state.db.engine) != migrations.head():
+        raise RuntimeError("database schema is out of date: run `cyberlab db upgrade`")
     app.state.provider = build_provider(settings)
     app.state.terminal_sessions = {}
     app.state.snapshot_store = build_store(settings)
