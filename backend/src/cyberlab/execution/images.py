@@ -71,7 +71,10 @@ def render(base_image: str, packs: Iterable[ToolPack]) -> ImageRecipe:
     ]
     if packages:
         lines += [
-            "RUN apt-get update \\",
+            # Fail over and retry instead of hanging forever on a stalled mirror connection.
+            'RUN printf \'Acquire::Retries "3";\\nAcquire::http::Timeout "30";\\n'
+            'Acquire::https::Timeout "30";\\n\' > /etc/apt/apt.conf.d/80cyberlab-network \\',
+            " && apt-get update \\",
             " && apt-get install -y --no-install-recommends \\",
             *[f"      {p} \\" for p in packages],
             " && apt-get clean \\",

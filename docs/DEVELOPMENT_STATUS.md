@@ -170,6 +170,9 @@ against a real cloud provider account (none was created).
 14. Snapshots of a running environment are taken live (like copying files while they're
    being written); stop the environment first for a perfectly consistent snapshot. Without
    `CYBERLAB_SNAPSHOT_ENCRYPTION_KEY`, local snapshots are stored unencrypted.
+15. **Fixed:** a stalled Ubuntu package mirror could hang an image build indefinitely (seen
+   twice in CI). Builds now use a 30 s network timeout with 3 retries, and every CI job has a
+   time limit.
 
 ## Next milestone
 **Phase 4 (Resource Intelligence) is complete** once PR #11 merges.

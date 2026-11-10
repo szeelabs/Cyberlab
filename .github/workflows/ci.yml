@@ -11,6 +11,7 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # fail fast instead of hanging for hours
     defaults:
       run:
         working-directory: backend
@@ -41,6 +42,7 @@ jobs:
   docker-integration:
     # Starts real (hardened) containers through the API on the runner's Docker Engine.
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # fail fast instead of hanging for hours
     needs: backend
     defaults:
       run:
@@ -68,6 +70,7 @@ jobs:
   image-plan:
     # Build list comes from the registry, so new tool packs are tested automatically.
     runs-on: ubuntu-latest
+    timeout-minutes: 5  # fail fast instead of hanging for hours
     needs: backend
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -87,6 +90,7 @@ jobs:
     # unprivileged cyberlab user in a hardened container.
     name: toolpack (${{ matrix.pack }} on ${{ matrix.base }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # fail fast instead of hanging for hours
     needs: image-plan
     strategy:
       fail-fast: false
@@ -120,6 +124,7 @@ jobs:
   postgres:
     # Migrations and core API flows against a real PostgreSQL server.
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # fail fast instead of hanging for hours
     needs: backend
     services:
       postgres:
@@ -158,6 +163,7 @@ jobs:
     # The same real-Docker tests, but CyberLab reaches the engine through ssh:// as it would
     # on a user-owned server.
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # fail fast instead of hanging for hours
     needs: backend
     defaults:
       run:
