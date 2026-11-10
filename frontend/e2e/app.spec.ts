@@ -69,6 +69,38 @@ test("dashboard, workspace setup with validation, tool universe", async ({ page 
   expect(errors).toEqual([]);
 });
 
+test("beginner form builds a valid manifest", async ({ page }) => {
+  const errors = watchConsole(page);
+  await createWorkspace(page, "e2e-form");
+  await page.getByRole("button", { name: "Build with a form" }).click();
+  const form = page.getByRole("region", { name: "Build with a form" });
+
+  await form.getByLabel("Lab name").fill("Bad Name");
+  await expect(form.getByRole("list", { name: "Fix these first" })).toContainText("Lab name");
+  await expect(form.getByRole("button", { name: "Use this manifest" })).toBeDisabled();
+  await form.getByLabel("Lab name").fill("web-practice");
+
+  const machine = form.getByRole("group", { name: "Machine 1" });
+  await machine.getByLabel("Operating system").selectOption("ubuntu-24-04");
+  await machine.getByRole("checkbox", { name: /crypto/ }).check();
+  await machine.getByRole("checkbox", { name: /web-appsec/ }).check(); // Ubuntu-only pack
+  await machine.getByLabel("Size", { exact: true }).selectOption("medium");
+  await machine.getByLabel("Network", { exact: true }).selectOption("restricted-egress");
+  await expect(form.getByRole("list", { name: "Fix these first" })).toContainText("at least one website");
+  await machine.getByLabel("Websites it may reach").fill("ghcr.io, mirror.gcr.io");
+  await machine.getByLabel("Time limit hours").fill("8");
+
+  await form.getByRole("button", { name: "Use this manifest" }).click();
+  // Back in the editor with the generated YAML, already checked by the server.
+  const editor = page.getByLabel("Manifest YAML");
+  await expect(editor).toHaveValue(/toolPacks: \["crypto", "web-appsec"\]/);
+  await expect(editor).toHaveValue(/allowedEgress: \["ghcr.io", "mirror.gcr.io"\]/);
+  await expect(page.getByRole("region", { name: "Check result" })).toContainText("valid");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Saved as revision 1.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("full lab: environment, terminal, files, snapshot, destroy", async ({ page }) => {
   test.skip(process.env.E2E_DOCKER !== "1", "set E2E_DOCKER=1 to run against a real Docker Engine");
   const errors = watchConsole(page);
