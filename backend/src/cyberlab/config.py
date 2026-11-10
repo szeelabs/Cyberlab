@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     snapshot_dir: Path = Path("./cyberlab-data/snapshots")  # local snapshot store
     max_snapshot_bytes: int = Field(default=1024 * 1024 * 1024, gt=0)  # compressed size
     max_snapshots_per_workspace: int = Field(default=10, ge=1)
+    max_bundle_bytes: int = Field(default=2 * 1024 * 1024 * 1024, gt=0)  # import upload
     snapshot_store: Literal["local", "s3"] = "local"
     # 32-byte key (base64 or hex). When set, snapshots are encrypted (AES-256-GCM) before
     # they are stored. Required for S3. Generate one: python -m cyberlab.storage.keygen
