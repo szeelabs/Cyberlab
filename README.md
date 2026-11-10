@@ -33,6 +33,8 @@ machine becomes just a window.
    ```
 3. Open the forwarded port at `/docs` for interactive API docs (development only).
 
+Run environments on your own server: see [docs/guides/own-server.md](docs/guides/own-server.md).
+
 Local alternative (Python 3.11+):
 ```bash
 cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'

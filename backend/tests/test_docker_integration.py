@@ -2,6 +2,8 @@
 
 Run with: CYBERLAB_DOCKER_TESTS=1 pytest tests/test_docker_integration.py
 Optional: CYBERLAB_TEST_IMAGE_MIRROR=mirror.gcr.io (avoids Docker Hub rate limits).
+Optional: CYBERLAB_TEST_DOCKER_HOST=ssh://user@host runs every test through the SSH transport
+(the test helpers themselves use the local docker CLI, so it must be the same engine).
 """
 
 import os
@@ -62,6 +64,8 @@ def client(settings):
         update={
             "execution_provider": "docker",
             "image_mirror": os.environ.get("CYBERLAB_TEST_IMAGE_MIRROR") or None,
+            # e.g. ssh://runner@localhost: run every test through CyberLab's SSH transport
+            "docker_host": os.environ.get("CYBERLAB_TEST_DOCKER_HOST") or None,
         }
     )
     with TestClient(create_app(s)) as c:
@@ -238,6 +242,8 @@ def test_restricted_egress_through_proxy(settings):
         update={
             "execution_provider": "docker",
             "image_mirror": os.environ.get("CYBERLAB_TEST_IMAGE_MIRROR") or None,
+            # e.g. ssh://runner@localhost: run every test through CyberLab's SSH transport
+            "docker_host": os.environ.get("CYBERLAB_TEST_DOCKER_HOST") or None,
             "egress_allow_private": True,  # the fake "internet" below uses private addresses
         }
     )

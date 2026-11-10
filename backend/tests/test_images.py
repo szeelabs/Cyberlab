@@ -127,3 +127,11 @@ def test_cli_matrix(capsys):
 def test_detection_engineering_not_offered_on_debian(registry):
     # Found by CI: Suricata has no installation candidate in Debian 12 (bookworm) main.
     assert registry.tool_packs["detection-engineering"].compatible_bases == ["ubuntu-24-04"]
+
+
+def test_package_installs_cannot_hang_forever(registry):
+    # Found in CI: a stalled Ubuntu mirror connection hung a build for 10+ minutes.
+    df = render(BASE, [registry.tool_packs["crypto"]]).dockerfile
+    assert 'Acquire::http::Timeout \\"30\\"' not in df  # rendered for the shell, not escaped
+    assert "Acquire::Retries" in df and "Acquire::http::Timeout" in df
+    assert df.index("80cyberlab-network") < df.index("apt-get update")

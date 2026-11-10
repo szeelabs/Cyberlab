@@ -81,7 +81,14 @@ class Settings(BaseSettings):
     # "none": nothing can be provisioned; the API reports NOT CONNECTED.
     # "docker": a Docker Engine reached via the docker CLI (local, or remote via DOCKER_HOST).
     execution_provider: Literal["none", "docker"] = "none"
-    docker_host: str | None = None  # e.g. ssh://cyberlab@my-server
+    # Which Docker Engine runs environments: unset = local socket; ssh://user@host for your
+    # own server (recommended); tcp://host:2376 only with TLS (the Docker API is root-level).
+    docker_host: str | None = None
+    docker_tls_verify: bool = False
+    docker_cert_path: str | None = None  # folder with ca.pem, cert.pem, key.pem
+    # What running environments costs you. "paid" providers are refused unless allowed.
+    execution_cost_class: Literal["free", "user-owned", "paid"] = "user-owned"
+    allow_paid_providers: bool = False
     docker_binary: str = "docker"
     image_mirror: str | None = None  # e.g. mirror.gcr.io, replaces the docker.io/ prefix
 
@@ -115,6 +122,19 @@ class Settings(BaseSettings):
                 raise ValueError("Asymmetric JWT algorithms require CYBERLAB_AUTH_JWKS_URL")
             if self.environment == "production" and not asymmetric and self.auth_jwt_secret is None:
                 raise ValueError("CYBERLAB_AUTH_JWT_SECRET is required in production")
+        if self.docker_host:
+            scheme = self.docker_host.split("://", 1)[0] if "://" in self.docker_host else ""
+            if scheme not in ("ssh", "unix", "tcp", "npipe"):
+                raise ValueError(
+                    "CYBERLAB_DOCKER_HOST must start with ssh://, unix://, tcp:// or npipe://"
+                )
+            if scheme == "tcp" and not self.docker_tls_verify and self.environment == "production":
+                raise ValueError(
+                    "an unencrypted tcp:// Docker connection gives anyone on the network root "
+                    "on that host; use ssh:// or set CYBERLAB_DOCKER_TLS_VERIFY with certificates"
+                )
+        if self.docker_tls_verify and not self.docker_cert_path:
+            raise ValueError("CYBERLAB_DOCKER_TLS_VERIFY needs CYBERLAB_DOCKER_CERT_PATH")
         if self.snapshot_store == "s3":
             if not self.s3_bucket:
                 raise ValueError("CYBERLAB_S3_BUCKET is required when CYBERLAB_SNAPSHOT_STORE=s3")
