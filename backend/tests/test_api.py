@@ -109,3 +109,29 @@ def test_audit_log(client):
     assert [e["action"] for e in events] == ["manifest.import", "workspace.create"]
     assert all(e["requestId"] for e in events)
     assert client.get("/v1/audit", headers=auth("eve")).json() == []
+
+
+def test_new_user_parallel_first_requests(settings, tmp_path):
+    """Regression: a new user's first requests arriving together all created the user, and
+    all but one failed with a unique-constraint error (found by the browser tests)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from fastapi.testclient import TestClient
+
+    from cyberlab.main import create_app
+
+    app = create_app(
+        settings.model_copy(update={"database_url": f"sqlite:///{tmp_path / 'race.db'}"})
+    )
+    paths = [
+        "/v1/me",
+        "/v1/me/usage",
+        "/v1/workspaces",
+        "/v1/system/execution",
+        "/v1/system/storage",
+    ] * 6
+    with TestClient(app) as c, ThreadPoolExecutor(max_workers=30) as pool:
+        for n in range(5):  # several brand-new users, each with a burst of first requests
+            user = f"brand-new-{n}"
+            codes = list(pool.map(lambda p, u=user: c.get(p, headers=auth(u)).status_code, paths))
+            assert codes == [200] * len(paths), (user, codes)

@@ -193,3 +193,42 @@ jobs:
         run: |
           export CYBERLAB_TEST_DOCKER_HOST="ssh://$USER@localhost"
           pytest tests/test_docker_integration.py -v -k "not egress and not tool_pack"
+
+  web:
+    # The web app: type check, unit tests, production build, then real-browser tests
+    # against a real control plane (development sign-in) and a real Docker Engine.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # fail fast instead of hanging for hours
+    needs: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -e './backend'
+      - name: Install web app dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Type check and unit tests
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npm test
+      - name: Production build
+        working-directory: frontend
+        run: npm run build
+      - name: Browser tests (Chromium, real Docker)
+        working-directory: frontend
+        env:
+          E2E_DOCKER: "1"
+          E2E_IMAGE_MIRROR: mirror.gcr.io
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e

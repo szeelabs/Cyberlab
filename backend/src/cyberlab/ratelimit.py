@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 MAX_CLIENTS = 10_000
-EXEMPT_PREFIXES = ("/healthz", "/readyz", "/static/", "/terminal")
+EXEMPT_PREFIXES = ("/healthz", "/readyz", "/static/", "/terminal", "/app")
 
 
 @dataclass

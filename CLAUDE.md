@@ -66,6 +66,15 @@ docs/              architecture, decisions, threat model, roadmap, status, learn
 .devcontainer/     Codespaces setup
 ```
 
+### Web app (from `frontend/`)
+```bash
+npm ci && npm run build      # builds frontend/dist, served by the backend at /app
+npm run typecheck && npm test
+E2E_PYTHON=../backend/.venv/bin/python npm run e2e            # real browser, no Docker
+E2E_DOCKER=1 E2E_IMAGE_MIRROR=mirror.gcr.io E2E_PYTHON=... npm run e2e   # full lab
+```
+`@playwright/test` is pinned to the preinstalled Playwright (1.63.0) so it finds its browser.
+
 ### Commands (from `backend/`)
 ```bash
 pip install -e '.[dev]'
@@ -103,6 +112,7 @@ merged (PR #6); step 3, **encrypted S3 storage** (PR #7); step 4,
 **export/import bundles** (PR #8); step 5, **migrations** (PR #9). Phase 3 is complete.
 **Phase 4 (Resource Intelligence):** step 1, the **reaper** (idle/TTL/ephemeral), is built
 (PR #10); step 2, **live quotas and rate limiting** (both merged in PR #10); step 3, **own server
-over SSH and cost classes** (PR #11). Phase 4 is complete. Next phase (5: AI Lab Architect,
-or 6: web app) needs the user's go-ahead.
+over SSH and cost classes** (PR #11). Phase 4 is complete.
+**Phase 6 (Visual Universe):** chosen next by Claude (the user delegated the choice); step 1,
+the **web app** at `/app`, is built (PR #12). Phase 5 (AI Lab Architect) comes after.
 Details: `docs/DEVELOPMENT_STATUS.md`.

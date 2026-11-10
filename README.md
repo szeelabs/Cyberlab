@@ -31,7 +31,11 @@ machine becomes just a window.
    pytest
    uvicorn --factory cyberlab.main:app_factory --reload --port 8000
    ```
-3. Open the forwarded port at `/docs` for interactive API docs (development only).
+3. Build the web app once, then open the forwarded port at `/app`:
+   ```bash
+   cd frontend && npm ci && npm run build
+   ```
+   `/docs` has the interactive API docs (development only).
 
 Run environments on your own server: see [docs/guides/own-server.md](docs/guides/own-server.md).
 

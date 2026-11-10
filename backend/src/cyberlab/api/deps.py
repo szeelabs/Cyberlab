@@ -4,6 +4,7 @@ from collections.abc import Iterator
 
 from fastapi import Depends, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cyberlab.auth import Principal, current_principal
@@ -32,5 +33,11 @@ def current_user(
     if user is None:
         user = User(subject=principal.subject, email=principal.email)
         db.add(user)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # A parallel request (e.g. the dashboard loading several panels at once) created
+            # this user first; use theirs.
+            db.rollback()
+            user = db.scalar(select(User).where(User.subject == principal.subject))
     return user
