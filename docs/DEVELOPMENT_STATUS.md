@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phases 1-3) | ✅ 248 passed (with PostgreSQL), 1 skipped locally (the package-install test needs internet for builds; it runs in CI) |
+| Test suite (Phases 1-4) | ✅ 259 passed, 3 skipped locally: 2 PostgreSQL tests (need `CYBERLAB_TEST_POSTGRES_URL`) and the package-build test (needs internet for builds); all three run in CI |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -107,6 +107,15 @@ against a real cloud provider account (none was created).
 | Drift check | A test fails if the models and the migrations ever disagree | `tests/test_migrations.py` |
 | PostgreSQL | Migrations, downgrade/upgrade and a real API flow run against PostgreSQL 16 (locally and in a CI job) | `.github/workflows/ci.yml` |
 
+## Implemented (Phase 4, step 1 — lifecycle enforcement: the reaper)
+| Area | What works | Where |
+|---|---|---|
+| Idle shutdown | A running environment unused for its `idleTimeoutMinutes` is **stopped** (files kept). Activity = provisioning, starting, an **open terminal** (never idle while open), file operations, snapshots; the timer restarts when the last terminal closes | `reaper.py` |
+| TTL | Environments get `expiresAt` from `ttlHours` at provisioning; once expired they are **destroyed** (running or stopped) | |
+| Ephemeral | `ephemeral: true` environments are destroyed **with their workspace data** when idle or expired | |
+| Operation | Runs every `CYBERLAB_REAPER_INTERVAL_SECONDS` (default 60, 0 = off) inside the server, or `cyberlab reaper run-once`. Failures are recorded and retried next run; every action is audited as `system:reaper`; the last destroy in a workspace removes its networks | `main.py`, `cli.py` |
+| Data | Migration `0002` adds `last_activity_at` and `expires_at` (existing environments count as active at upgrade time) | `migrations/versions/0002_*` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -117,7 +126,7 @@ against a real cloud provider account (none was created).
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
-| Scheduler, idle/TTL shutdown, live quota accounting | 4 |
+| Live quota accounting across all of a user's running environments | 4 |
 | Rate limiting | 4 |
 | AI Lab Architect | 5 |
 | Web UI, virtual desktop | 6 |
@@ -152,8 +161,6 @@ against a real cloud provider account (none was created).
    `CYBERLAB_SNAPSHOT_ENCRYPTION_KEY`, local snapshots are stored unencrypted.
 
 ## Next milestone
-**Phase 3 (Persistent Universe) is complete** once PR #9 (migrations) merges.
-
-Next phase: **Phase 4 — Resource Intelligence**: automatic shutdown of idle environments,
-time limits (TTL) and cleanup of ephemeral environments, live quota accounting, rate
-limiting. This keeps CyberLab inside free-tier limits. Needs the user's go-ahead.
+1. Merge PR #9 (migrations, completes Phase 3) and PR #10 (the reaper).
+2. **Phase 4 step 2: live quota accounting** (limits apply across all of a user's running
+   environments, not just one manifest) **and rate limiting**.

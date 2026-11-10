@@ -37,6 +37,7 @@ from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import EnvironmentRecord, TerminalTicket, User, record_audit
 from cyberlab.execution import EnvState, ProviderAdapter, ProviderError
+from cyberlab.reaper import touch
 
 router = APIRouter(tags=["terminal"])
 
@@ -185,6 +186,10 @@ async def terminal_socket(websocket: WebSocket) -> None:
             await fail(CLOSE_LIMIT, "too many open terminals")
             return
         counts[subject] = counts.get(subject, 0) + 1
+        active: dict[str, int] = app.state.active_terminals
+        active[env.id] = active.get(env.id, 0) + 1  # an open terminal is never idle
+        touch(db, env.id)
+        db.commit()
         released = False
 
         def release() -> None:
@@ -192,6 +197,11 @@ async def terminal_socket(websocket: WebSocket) -> None:
             if not released:
                 released = True
                 counts[subject] -= 1
+                active[env.id] -= 1
+                if not active[env.id]:
+                    del active[env.id]
+                touch(db, env.id)  # the idle timer starts when the last terminal closes
+                db.commit()
 
         try:
             await _run_session(websocket, db, provider, env, subject, settings, release)

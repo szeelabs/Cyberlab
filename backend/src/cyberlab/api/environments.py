@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -89,6 +90,8 @@ def _env_out(e: EnvironmentRecord) -> dict:
         # True once the environment runs an image built with its tool packs installed.
         "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,
         "image": e.resources.get("image"),
+        "lastActivityAt": e.last_activity_at.isoformat() if e.last_activity_at else None,
+        "expiresAt": e.expires_at.isoformat() if e.expires_at else None,
         "createdAt": e.created_at.isoformat(),
         "updatedAt": e.updated_at.isoformat(),
     }
@@ -300,6 +303,12 @@ def provision_environments(
             provider=adapter.name,
             state=EnvState.provisioning.value,
             spec=env.model_dump(mode="json", by_alias=True),
+            last_activity_at=datetime.now(UTC),
+            expires_at=(
+                datetime.now(UTC) + timedelta(hours=env.lifecycle.ttl_hours)
+                if env.lifecycle.ttl_hours
+                else None
+            ),
         )
         db.add(rec)
         db.commit()  # record intent before touching the provider
@@ -410,6 +419,7 @@ def _lifecycle(action: str):
             try:
                 if action == "start":
                     rec.state = adapter.start(rec.provider_ref).value
+                    rec.last_activity_at = datetime.now(UTC)  # restart the idle timer
                 elif action == "stop":
                     rec.state = adapter.stop(rec.provider_ref).value
                 else:

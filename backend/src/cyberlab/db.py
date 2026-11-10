@@ -91,6 +91,9 @@ class EnvironmentRecord(Base):
     spec: Mapped[dict] = mapped_column(JSON)
     resources: Mapped[dict] = mapped_column(JSON, default=dict)
     last_error: Mapped[str | None] = mapped_column(Text)
+    # Resource intelligence (Phase 4): when it was last used, and when it must be destroyed.
+    last_activity_at: Mapped[datetime | None] = mapped_column(default=_now)
+    expires_at: Mapped[datetime | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 

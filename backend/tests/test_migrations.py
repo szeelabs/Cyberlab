@@ -41,7 +41,11 @@ def test_upgrade_is_idempotent(sqlite_engine):
 
 
 def test_adopts_database_created_before_migrations(sqlite_engine):
-    Base.metadata.create_all(sqlite_engine)  # how CyberLab created databases before
+    # A database exactly as CyberLab created it before migrations existed: the 0001 schema
+    # with no migration history.
+    migrations.upgrade(sqlite_engine, "0001")
+    with sqlite_engine.begin() as conn:
+        conn.execute(text("DROP TABLE alembic_version"))
     with sqlite_engine.begin() as conn:
         conn.execute(
             text(
@@ -152,3 +156,30 @@ def test_postgres_api_flow(settings, pg_url):
         assert c.get(f"/v1/workspaces/{ws}", headers=auth("mallory")).status_code == 404
     app.state.db.engine.dispose()
     assert MINIMAL
+
+
+def test_0002_keeps_environments_and_marks_them_active(sqlite_engine):
+    migrations.upgrade(sqlite_engine, "0001")
+    with sqlite_engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO users (id, subject, created_at) VALUES ('u', 's', '2026-01-01')")
+        )
+        conn.execute(
+            text(
+                "INSERT INTO workspaces (id, owner_id, name, description, created_at, updated_at) "
+                "VALUES ('w', 'u', 'ws', '', '2026-01-01', '2026-01-01')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO environments (id, workspace_id, revision, name, provider, state, spec,"
+                " resources, created_at, updated_at) VALUES ('e', 'w', 1, 'shell', 'docker',"
+                " 'running', '{}', '{}', '2026-01-01', '2026-03-04 05:06:07')"
+            )
+        )
+    migrations.upgrade(sqlite_engine)
+    with sqlite_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT state, last_activity_at, expires_at FROM environments")
+        ).one()
+    assert row[0] == "running" and str(row[1]).startswith("2026-03-04") and row[2] is None

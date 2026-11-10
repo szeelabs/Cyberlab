@@ -25,6 +25,7 @@ from cyberlab.config import Settings, get_settings
 from cyberlab.db import EnvironmentRecord, Snapshot, User, Workspace, record_audit
 from cyberlab.execution import EnvState, ProviderAdapter, ProviderError
 from cyberlab.execution.docker import FileOpError
+from cyberlab.reaper import touch
 from cyberlab.storage import SnapshotStore, StorageError
 
 router = APIRouter(tags=["snapshots"])
@@ -153,6 +154,7 @@ def create_snapshot(
         except (ProviderError, StorageError) as exc:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
     db.add(snap)
+    touch(db, rec.id)
     record_audit(
         db,
         actor=user.subject,

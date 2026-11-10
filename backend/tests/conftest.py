@@ -28,6 +28,7 @@ def quotas():
 def settings(tmp_path):
     return Settings(
         snapshot_dir=tmp_path / "snapshots",
+        reaper_interval_seconds=0,  # tests drive the reaper explicitly
         environment="test",
         database_url="sqlite://",
         registry_dir=REPO / "registry",

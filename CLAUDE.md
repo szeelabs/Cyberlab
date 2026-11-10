@@ -101,5 +101,6 @@ approvals, environment lifecycle). Part 2, the **browser terminal**, is built an
 **Phase 3 (Persistent Universe):** step 1, the **workspace file API**, merged (PR #5); step 2, **snapshots**,
 merged (PR #6); step 3, **encrypted S3 storage** (PR #7); step 4,
 **export/import bundles** (PR #8); step 5, **migrations** (PR #9). Phase 3 is complete.
-Next: Phase 4, Resource Intelligence (idle shutdown, TTL, quotas). Ask the user first.
+**Phase 4 (Resource Intelligence):** step 1, the **reaper** (idle/TTL/ephemeral), is built
+(PR #10). Next: live quotas across environments and rate limiting.
 Details: `docs/DEVELOPMENT_STATUS.md`.

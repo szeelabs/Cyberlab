@@ -130,6 +130,22 @@ def _cmd_db(args: argparse.Namespace) -> int:
     return 0 if args.db_command == "upgrade" or rev == head else 1
 
 
+def _cmd_reaper(args: argparse.Namespace) -> int:
+    from cyberlab.main import create_app, reap_now
+
+    app = create_app(get_settings())
+    actions = reap_now(app)
+    for a in actions:
+        status = "ok" if a.ok else f"FAILED: {a.error}"
+        print(
+            f"{a.action:7} {a.name} ({a.reason}{', data deleted' if a.delete_data else ''})"
+            f" {status}"
+        )
+    if not actions:
+        print("nothing to do")
+    return 0 if all(a.ok for a in actions) else 1
+
+
 def _cmd_registry(args: argparse.Namespace) -> int:
     reg = load_registry(Path(args.registry) if args.registry else get_settings().registry_dir)
     for cat in reg.categories.values():
@@ -179,6 +195,10 @@ def main(argv: list[str] | None = None) -> int:
         ("current", "show the schema revision (exit 1 if out of date)"),
     ]:
         dsub.add_parser(name, help=text).set_defaults(func=_cmd_db)
+
+    rp = sub.add_parser("reaper", help="enforce idle timeouts, TTLs and ephemeral cleanup")
+    rsub = rp.add_subparsers(dest="reaper_command", required=True)
+    rsub.add_parser("run-once", help="run the reaper once now").set_defaults(func=_cmd_reaper)
 
     r = sub.add_parser("registry", help="list registry contents")
     r.set_defaults(func=_cmd_registry)
