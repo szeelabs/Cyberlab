@@ -1,8 +1,8 @@
 """Persistence: SQLAlchemy 2.0 models.
 
-PostgreSQL in deployment, SQLite for local development and tests. Tables are
-created on startup in Phase 1; Alembic migrations arrive with Phase 3 when
-the schema starts changing under real data.
+PostgreSQL in deployment, SQLite for local development and tests. The schema is
+managed by Alembic migrations in ``cyberlab/migrations`` (applied on startup, or with
+``cyberlab db upgrade``).
 """
 
 from __future__ import annotations
@@ -157,6 +157,7 @@ class Database:
         return self._sessions()
 
     def create_all(self) -> None:
+        """Create tables directly (tests only). The app uses migrations instead."""
         Base.metadata.create_all(self.engine)
 
     def session(self) -> Iterator[Session]:

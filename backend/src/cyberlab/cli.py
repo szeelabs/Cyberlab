@@ -117,6 +117,19 @@ def _cmd_image_matrix(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_db(args: argparse.Namespace) -> int:
+    from sqlalchemy import create_engine
+
+    from cyberlab import migrations
+
+    engine = create_engine(get_settings().database_url)
+    if args.db_command == "upgrade":
+        migrations.upgrade(engine)
+    rev, head = migrations.current(engine), migrations.head()
+    print(f"database revision: {rev or 'none'} (latest: {head})")
+    return 0 if args.db_command == "upgrade" or rev == head else 1
+
+
 def _cmd_registry(args: argparse.Namespace) -> int:
     reg = load_registry(Path(args.registry) if args.registry else get_settings().registry_dir)
     for cat in reg.categories.values():
@@ -158,6 +171,14 @@ def main(argv: list[str] | None = None) -> int:
     mx = isub.add_parser("matrix", help="JSON CI build matrix of buildable packs")
     mx.add_argument("--bases", required=True, help="comma-separated base image ids")
     mx.set_defaults(func=_cmd_image_matrix)
+
+    db = sub.add_parser("db", help="database migrations")
+    dsub = db.add_subparsers(dest="db_command", required=True)
+    for name, text in [
+        ("upgrade", "apply pending migrations"),
+        ("current", "show the schema revision (exit 1 if out of date)"),
+    ]:
+        dsub.add_parser(name, help=text).set_defaults(func=_cmd_db)
 
     r = sub.add_parser("registry", help="list registry contents")
     r.set_defaults(func=_cmd_registry)

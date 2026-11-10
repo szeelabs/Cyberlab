@@ -72,6 +72,7 @@ pip install -e '.[dev]'
 ruff check src tests && ruff format --check src tests
 cyberlab manifest validate ../examples/manifests/*.yaml
 cyberlab manifest schema -o ../spec/universe-manifest.schema.json   # after model changes
+cyberlab db upgrade                                                  # apply migrations
 pytest
 uvicorn --factory cyberlab.main:app_factory --reload --port 8000    # dev server
 ```
@@ -80,6 +81,8 @@ Real provisioning: add `CYBERLAB_EXECUTION_PROVIDER=docker` (needs a Docker daem
 Real-Docker tests: `CYBERLAB_DOCKER_TESTS=1 CYBERLAB_TEST_IMAGE_MIRROR=mirror.gcr.io pytest`
 (add `CYBERLAB_DOCKER_BUILD_TESTS=1` where image builds can reach package mirrors; the cloud
 sandbox can't, CI can). Image recipes: `cyberlab image dockerfile --base debian-12 --packs crypto`.
+Changing a model in `db.py`? Add a migration (see `migrations/versions/0001_*` for the style);
+`tests/test_migrations.py` fails on drift. Postgres tests: set `CYBERLAB_TEST_POSTGRES_URL`.
 (this cloud container may need `dockerd` started first; Docker Hub can rate-limit, so use the mirror).
 
 ## CyberLab in one paragraph
@@ -97,5 +100,6 @@ approvals, environment lifecycle). Part 2, the **browser terminal**, is built an
 (merged in PR #2). Part 3, **tool pack images**, merged (PR #3). Part 4, the **egress proxy**, merged (PR #4).
 **Phase 3 (Persistent Universe):** step 1, the **workspace file API**, merged (PR #5); step 2, **snapshots**,
 merged (PR #6); step 3, **encrypted S3 storage** (PR #7); step 4,
-**export/import bundles** (PR #8). Next: Alembic migrations with Postgres in CI.
+**export/import bundles** (PR #8); step 5, **migrations** (PR #9). Phase 3 is complete.
+Next: Phase 4, Resource Intelligence (idle shutdown, TTL, quotas). Ask the user first.
 Details: `docs/DEVELOPMENT_STATUS.md`.

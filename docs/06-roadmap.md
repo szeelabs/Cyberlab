@@ -26,11 +26,12 @@ been tested.
       browser test page at `/terminal`.
 - [x] 6. Egress proxy for `restricted-egress` (per-environment allow-lists, audit log).
 
-## Phase 3 — Persistent Universe (in progress)
+## Phase 3 — Persistent Universe ✅
 - [x] 1. Workspace file API (list, upload, download, delete), audited.
 - [x] 2. Snapshots: create, list, restore (integrity-checked, all-or-nothing), delete; local store.
 - [x] 3. S3-compatible snapshot storage with client-side AES-256-GCM encryption.
 - [x] 4. Export/import bundles (manifest + snapshots) between servers; imports treated as untrusted.
+- [x] 5. Alembic migrations, PostgreSQL in CI.
 Workspace volumes, file API, snapshots to S3-compatible storage (client-side encryption),
 export bundle = manifest + snapshot, restore. Alembic migrations, Postgres in CI.
 
