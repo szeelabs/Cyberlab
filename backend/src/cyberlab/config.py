@@ -19,6 +19,11 @@ def _default_registry_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "registry"
 
 
+def _default_webapp_dir() -> Path:
+    # the built web app: repo root /frontend/dist (cd frontend && npm ci && npm run build)
+    return Path(__file__).resolve().parents[3] / "frontend" / "dist"
+
+
 class QuotaSettings(BaseSettings):
     """Per-user resource quotas enforced at manifest validation time."""
 
@@ -41,6 +46,7 @@ class Settings(BaseSettings):
     # Apply pending migrations on startup. Turn off to run `cyberlab db upgrade` yourself.
     database_auto_migrate: bool = True
     registry_dir: Path = Field(default_factory=_default_registry_dir)
+    webapp_dir: Path = Field(default_factory=_default_webapp_dir)
 
     # --- Authentication -------------------------------------------------
     # "jwt": verify bearer tokens issued by an OIDC/JWT provider (e.g. Supabase Auth).

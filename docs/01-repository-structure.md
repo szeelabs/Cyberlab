@@ -33,6 +33,6 @@ cyberlab/
 │   └── tests/                        ✅
 ├── gateway/                          ⏳ Phase 2: terminal WebSocket gateway
 ├── images/                           ⏳ Phase 2: Dockerfiles built from tool packs
-├── frontend/                         ⏳ Phase 6: Next.js + TypeScript
+├── frontend/                         ✅ web app (Vite + React + TypeScript), served at /app
 └── skills/cyberlab/                  ⏳ Phase 7: Claude Code Skill
 ```

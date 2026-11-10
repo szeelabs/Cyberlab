@@ -223,3 +223,9 @@ __marimo__/
 *.db
 *.db-journal
 cyberlab-data/
+
+# Web app (frontend)
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/

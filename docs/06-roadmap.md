@@ -47,7 +47,8 @@ user-owned-host adapter, rate limiting, audit export/retention.
 draft restricted to registry IDs, policy engine review, approval UI, a troubleshooting
 assistant that reads environment status and logs. Evaluated with a fixture prompt set.
 
-## Phase 6 — Visual Universe
+## Phase 6 — Visual Universe (in progress)
+- [x] 1. Web app at `/app`: dashboard, workspace (setup, environments, terminal, files, snapshots), tool universe; browser-tested.
 Next.js app: sign-in, workspace "desktop", environment dashboard, xterm.js terminal,
 tool-universe explorer, manifest editor with live validation, optional Guacamole/noVNC.
 

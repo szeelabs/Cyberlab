@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from cyberlab import __version__, migrations, reaper
@@ -29,6 +29,22 @@ from cyberlab.registry import load_registry
 from cyberlab.storage import build_store
 
 log = logging.getLogger("cyberlab")
+
+# The web app's own scripts and styles only: no inline scripts, no third-party code.
+# 'unsafe-inline' for styles is needed by the terminal widget and progress bars (style
+# attributes); it cannot run code.
+WEBAPP_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; img-src 'self' data:; font-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
+NOT_BUILT = """<!doctype html><meta charset="utf-8"><title>CyberLab</title>
+<body style="font-family:system-ui;background:#0e1311;color:#dde7e2;padding:2rem">
+<h1>The CyberLab web app isn't built yet</h1>
+<p>Build it once, then reload this page:</p>
+<pre>cd frontend &amp;&amp; npm ci &amp;&amp; npm run build</pre>
+<p>The API itself is running: see
+<a style="color:#4fc08d" href="/healthz">/healthz</a>.</p></body>"""
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -122,6 +138,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         response = await call_next(request)
         response.headers["X-Request-ID"] = rid
+        if request.url.path.startswith("/app"):
+            response.headers.setdefault("Content-Security-Policy", WEBAPP_CSP)
         for k, v in SECURITY_HEADERS.items():
             if k == "Content-Security-Policy" and request.url.path == "/docs":
                 continue  # Swagger UI (dev only) needs its own scripts
@@ -145,7 +163,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(terminal_router)
     static_dir = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    _mount_webapp(app, Path(settings.webapp_dir))
     return app
+
+
+def _mount_webapp(app: FastAPI, directory: Path) -> None:
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse("/app/")
+
+    if (directory / "index.html").is_file():
+        app.mount("/app", StaticFiles(directory=directory, html=True), name="webapp")
+    else:
+
+        @app.get("/app", include_in_schema=False)
+        @app.get("/app/{_path:path}", include_in_schema=False)
+        def not_built(_path: str = "") -> HTMLResponse:
+            return HTMLResponse(NOT_BUILT, status_code=503)
 
 
 def reap_now(app: FastAPI) -> list:

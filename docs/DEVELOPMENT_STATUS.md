@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phases 1-4) | ✅ 282 passed, 3 skipped locally: 2 PostgreSQL tests (need `CYBERLAB_TEST_POSTGRES_URL`) and the package-build test (needs internet for builds); all three run in CI |
+| Test suite (Phases 1-6) | ✅ backend 287 passed, 3 skipped locally (2 PostgreSQL tests and the package-build test; all run in CI); web app 3 unit tests and 2 browser tests (Chromium, real Docker) passed |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -129,6 +129,16 @@ against a real cloud provider account (none was created).
 | Host safety | Only `ssh://`, `unix://`, `tcp://`, `npipe://` hosts accepted; **unencrypted `tcp://` refused in production** (the Docker API is root on that host); TLS via `CYBERLAB_DOCKER_TLS_VERIFY` + `CYBERLAB_DOCKER_CERT_PATH` | `config.py` |
 | Cost classes | `CYBERLAB_EXECUTION_COST_CLASS` = `free` / `user-owned` / `paid`; a `paid` provider reports NOT CONNECTED and provisions nothing unless `CYBERLAB_ALLOW_PAID_PROVIDERS=true` | `execution/docker.py` |
 
+## Implemented (Phase 6, step 1 — the web app)
+| Area | What works | Where |
+|---|---|---|
+| App | React + TypeScript, built with Vite, served at `/app` (`/` redirects there); strict Content-Security-Policy with no inline scripts; shows how to build it if it isn't built yet | `frontend/`, `main.py` |
+| Dashboard | Execution and storage status (CONNECTED / NOT CONNECTED), usage against limits, workspaces, create a workspace | `pages/Dashboard.tsx` |
+| Workspace | **Setup:** manifest editor with Check/Save, findings and estimates, approvals. **Environments:** create, start, stop, destroy (two-step confirm, keep or delete files), browser terminal. **Files:** browse, upload, download, delete. **Snapshots:** save, restore into a stopped environment, delete. Export bundle, delete workspace | `pages/Workspace.tsx`, `components/Terminal.tsx` |
+| Tool universe | Categories and tool packs with risk, compatible bases, and which tools are not installable yet | `pages/Tools.tsx` |
+| Settings | API token for real sign-in, kept for the browser tab only | `pages/Settings.tsx` |
+| Tests | Unit tests (Vitest), and Playwright browser tests against a real control plane: basic flow, and a full lab on real Docker (terminal command, file upload, snapshot, destroy). They fail on any script error, CSP violation or server error. CI job `web` | `frontend/e2e`, `.github/workflows/ci.yml` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -140,7 +150,7 @@ against a real cloud provider account (none was created).
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect | 5 |
-| Web UI, virtual desktop | 6 |
+| Real sign-in in the web app (e.g. Supabase login; today: paste a token), virtual desktop | 6 |
 | Claude Code Skill, release automation | 7 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
@@ -159,7 +169,7 @@ against a real cloud provider account (none was created).
    `nocopy` mount (Docker otherwise resets ownership from the image).
 8. **Fixed in part 3:** the terminal prompt showed `I have no name!`; images now create a real
    `cyberlab` user.
-9. The `/terminal` page is a functional test page, not the final UI (Phase 6).
+9. The `/terminal` page is the original test page; the web app at `/app` has its own terminal.
 10. The first provision of a new base/pack combination builds an image, which can take minutes;
    the request waits for it. Background provisioning is a later improvement.
 11. Image builds need internet access to package mirrors on the Docker host.
@@ -173,9 +183,11 @@ against a real cloud provider account (none was created).
 15. **Fixed:** a stalled Ubuntu package mirror could hang an image build indefinitely (seen
    twice in CI). Builds now use a 30 s network timeout with 3 retries, and every CI job has a
    time limit.
+16. **Fixed (found by the browser tests):** a new user's first requests arriving together
+   (the dashboard loads several panels at once) all tried to create the user, and all but one
+   failed with a unique-constraint error. Regression test fails 5/5 without the fix.
 
 ## Next milestone
-**Phase 4 (Resource Intelligence) is complete** once PR #11 merges.
-
-Next phase, needing the user's go-ahead: **Phase 5 — AI Lab Architect** (describe a lab in
-plain English, get a manifest you can review and approve) or **Phase 6 — the web app**.
+1. Merge PR #12 (web app) once CI, including the new browser-test job, is green.
+2. **Phase 6 step 2:** real sign-in in the web app (Supabase or any OIDC provider), a
+   manifest-building form for beginners, and an easy "try it in a Codespace" path.
