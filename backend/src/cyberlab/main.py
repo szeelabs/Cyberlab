@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from cyberlab import __version__
+from cyberlab.api.bundles import router as bundles_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
 from cyberlab.api.routes import router
@@ -63,11 +64,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             rid = uuid.uuid4().hex
         request.state.request_id = rid
         length = request.headers.get("content-length")
-        limit = (
-            settings.max_file_bytes
-            if request.method == "PUT" and request.url.path.endswith("/files/content")
-            else settings.max_request_bytes
-        )
+        if request.method == "PUT" and request.url.path.endswith("/files/content"):
+            limit = settings.max_file_bytes
+        elif request.method == "POST" and request.url.path == "/v1/workspaces/import":
+            limit = settings.max_bundle_bytes
+        else:
+            limit = settings.max_request_bytes
         if length and (not length.isdigit() or int(length) > limit):
             return JSONResponse(
                 {"detail": "request body too large"},
@@ -92,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    app.include_router(bundles_router)
     app.include_router(env_router)
     app.include_router(files_router)
     app.include_router(snapshots_router)
