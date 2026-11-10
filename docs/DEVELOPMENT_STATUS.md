@@ -14,7 +14,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Lint (`ruff check`, `ruff format --check`) | ✅ clean |
 | Example manifests validate | ✅ 3/3 valid |
 | Committed JSON Schema matches models | ✅ in sync |
-| Test suite (Phases 1-6) | ✅ backend 287 passed, 3 skipped locally (2 PostgreSQL tests and the package-build test; all run in CI); web app 3 unit tests and 2 browser tests (Chromium, real Docker) passed |
+| Test suite (Phases 1-6) | ✅ backend 287 passed, 3 skipped locally (2 PostgreSQL tests and the package-build test; all run in CI); web app 9 unit tests and 3 browser tests (Chromium, real Docker) passed |
 | Egress proxy end to end on real Docker (allowed 200, blocked 403, no credentials 407, no direct route, audit log) | ✅ |
 | Real-Docker end-to-end via HTTP API (import → provision → exec → destroy) | ✅ |
 | Browser terminal in real Chromium against a real container (no console errors under CSP) | ✅ |
@@ -139,6 +139,13 @@ against a real cloud provider account (none was created).
 | Settings | API token for real sign-in, kept for the browser tab only | `pages/Settings.tsx` |
 | Tests | Unit tests (Vitest), and Playwright browser tests against a real control plane: basic flow, and a full lab on real Docker (terminal command, file upload, snapshot, destroy). They fail on any script error, CSP violation or server error. CI job `web` | `frontend/e2e`, `.github/workflows/ci.yml` |
 
+## Implemented (Phase 6, step 2 — beginner form, one-command start)
+| Area | What works | Where |
+|---|---|---|
+| Beginner form | "Build with a form" on the Setup tab: lab name, machines (operating system, size presets, network mode with plain-English choices, allowed websites, only compatible tool packs with their risk, idle/time limits, throwaway). Shows what to fix before generating; generated YAML is written with JSON-quoted strings so no input can break it, then checked by the server automatically | `components/ManifestBuilder.tsx`, `manifestBuilder.ts` |
+| One-command start | `./scripts/dev.sh`: installs the backend if needed, builds the web app, detects Docker, keeps data in `./cyberlab-data`, and listens on 127.0.0.1 only (development mode has no sign-in) | `scripts/dev.sh` |
+| Codespaces | Dev container installs Python and Node, builds the web app, forwards port 8000; README has an "open in Codespace" link | `.devcontainer/devcontainer.json` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -150,7 +157,8 @@ against a real cloud provider account (none was created).
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect | 5 |
-| Real sign-in in the web app (e.g. Supabase login; today: paste a token), virtual desktop | 6 |
+| Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
+| Remote desktop (graphical environments) | 6 |
 | Claude Code Skill, release automation | 7 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
@@ -188,6 +196,7 @@ against a real cloud provider account (none was created).
    failed with a unique-constraint error. Regression test fails 5/5 without the fix.
 
 ## Next milestone
-1. Merge PR #12 (web app) once CI, including the new browser-test job, is green.
-2. **Phase 6 step 2:** real sign-in in the web app (Supabase or any OIDC provider), a
-   manifest-building form for beginners, and an easy "try it in a Codespace" path.
+1. Merge PR #13 (beginner form, one-command start).
+2. Next phase, needing the user's go-ahead: **Phase 5 — AI Lab Architect** (describe a lab in
+   plain English; the AI fills in the same form/manifest; the policy engine checks it; you
+   approve). The web app now gives it a natural home.

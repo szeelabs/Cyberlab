@@ -114,5 +114,7 @@ merged (PR #6); step 3, **encrypted S3 storage** (PR #7); step 4,
 (PR #10); step 2, **live quotas and rate limiting** (both merged in PR #10); step 3, **own server
 over SSH and cost classes** (PR #11). Phase 4 is complete.
 **Phase 6 (Visual Universe):** chosen next by Claude (the user delegated the choice); step 1,
-the **web app** at `/app`, is built (PR #12). Phase 5 (AI Lab Architect) comes after.
+the **web app** at `/app`, merged (PR #12); step 2, **beginner form + `./scripts/dev.sh`**
+(PR #13). Real sign-in is deferred until a provider account exists to test it.
+Next: Phase 5 (AI Lab Architect), needs the user's go-ahead.
 Details: `docs/DEVELOPMENT_STATUS.md`.

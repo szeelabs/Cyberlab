@@ -49,6 +49,7 @@ assistant that reads environment status and logs. Evaluated with a fixture promp
 
 ## Phase 6 — Visual Universe (in progress)
 - [x] 1. Web app at `/app`: dashboard, workspace (setup, environments, terminal, files, snapshots), tool universe; browser-tested.
+- [x] 2. Beginner manifest form; `./scripts/dev.sh`; Codespaces setup. Still to do: real sign-in (needs a provider account to test), remote desktop.
 Next.js app: sign-in, workspace "desktop", environment dashboard, xterm.js terminal,
 tool-universe explorer, manifest editor with live validation, optional Guacamole/noVNC.
 

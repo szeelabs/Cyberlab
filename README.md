@@ -21,28 +21,27 @@ machine becomes just a window.
 * **API**: workspaces, manifest import/export with revisions, audit log, JWT auth.
 * **CLI**: `cyberlab manifest validate`, `cyberlab manifest schema`, `cyberlab registry`.
 
-## Quick start (no local install: use a Codespace)
-1. On GitHub: **Code → Codespaces → Create codespace**. The devcontainer installs everything.
-2. In the terminal:
-   ```bash
-   cd backend
-   cyberlab registry
-   cyberlab manifest validate ../examples/manifests/*.yaml
-   pytest
-   uvicorn --factory cyberlab.main:app_factory --reload --port 8000
-   ```
-3. Build the web app once, then open the forwarded port at `/app`:
-   ```bash
-   cd frontend && npm ci && npm run build
-   ```
-   `/docs` has the interactive API docs (development only).
+## Try CyberLab
 
-Run environments on your own server: see [docs/guides/own-server.md](docs/guides/own-server.md).
-
-Local alternative (Python 3.11+):
+**In your browser (nothing to install):** [open CyberLab in a GitHub Codespace](https://codespaces.new/szeelabs/Cyberlab).
+When it has finished setting up, run:
 ```bash
-cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
+./scripts/dev.sh
 ```
+then open the forwarded port **8000** and go to `/app`. GitHub's free Codespaces allowance
+applies; stop the Codespace when you're done.
+
+**On any Linux/macOS machine** with Python 3.11+, Node.js 20+ and (optionally) Docker:
+```bash
+./scripts/dev.sh
+```
+It installs what's missing, builds the web app, and serves it on http://127.0.0.1:8000/app/.
+Without Docker everything works except running environments (shown as NOT CONNECTED).
+
+Development mode has **no sign-in**, so the script only listens on this machine
+(`127.0.0.1`). For real deployments, configure sign-in (see `.env.example`).
+
+**Run environments on your own server:** [docs/guides/own-server.md](docs/guides/own-server.md).
 
 ## Documentation
 | | |
