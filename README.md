@@ -59,6 +59,7 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[
 | GET | `/v1/registry/categories`, `/v1/registry/base-images`, `/v1/registry/tool-packs[?category=]`, `/v1/registry/tool-packs/{id}` | – |
 | POST | `/v1/manifests/validate` (YAML/JSON body) | ✔ |
 | GET | `/v1/me` | ✔ |
+| GET | `/v1/me/usage` (resources in use across all your environments, and your limits) | ✔ |
 | GET/POST | `/v1/workspaces` | ✔ |
 | GET/DELETE | `/v1/workspaces/{id}` | ✔ |
 | PUT/GET | `/v1/workspaces/{id}/manifest[?format=json&revision=N]` | ✔ |

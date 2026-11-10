@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from cyberlab import quotas
 from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
@@ -89,6 +91,8 @@ def _env_out(e: EnvironmentRecord) -> dict:
         # True once the environment runs an image built with its tool packs installed.
         "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,
         "image": e.resources.get("image"),
+        "lastActivityAt": e.last_activity_at.isoformat() if e.last_activity_at else None,
+        "expiresAt": e.expires_at.isoformat() if e.expires_at else None,
         "createdAt": e.created_at.isoformat(),
         "updatedAt": e.updated_at.isoformat(),
     }
@@ -102,6 +106,16 @@ def _env_owned(db: Session, ws: Workspace, env_id: str) -> EnvironmentRecord:
 
 
 # ---------------------------------------------------------------- provider status
+@router.get("/v1/me/usage")
+def my_usage(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """What you're using now (across all your workspaces) and your limits."""
+    return {"usage": quotas.usage(db, user).to_dict(), "limits": quotas.limits(settings.quotas)}
+
+
 @router.get("/v1/system/execution")
 def execution_status(
     _: User = Depends(current_user),
@@ -287,9 +301,16 @@ def provision_environments(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "workspace already has environments; destroy them first"
         )
+    manifest = UniverseManifest.model_validate(rev.content)
+    specs = [e.model_dump(mode="json", by_alias=True) for e in manifest.spec.environments]
+    problems = quotas.check_new(quotas.usage(db, user), specs, settings.quotas)
+    if problems:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"detail": "this would exceed your resource limits", "problems": problems},
+        )
     adapter = _require_provider(provider)
 
-    manifest = UniverseManifest.model_validate(rev.content)
     proxy_urls, egress_error = _configure_egress(adapter, ws, manifest, settings)
     created = []
     for env in manifest.spec.environments:
@@ -300,6 +321,12 @@ def provision_environments(
             provider=adapter.name,
             state=EnvState.provisioning.value,
             spec=env.model_dump(mode="json", by_alias=True),
+            last_activity_at=datetime.now(UTC),
+            expires_at=(
+                datetime.now(UTC) + timedelta(hours=env.lifecycle.ttl_hours)
+                if env.lifecycle.ttl_hours
+                else None
+            ),
         )
         db.add(rec)
         db.commit()  # record intent before touching the provider
@@ -394,6 +421,7 @@ def _lifecycle(action: str):
         keep_workspace: bool = True,
         user: User = Depends(current_user),
         db: Session = Depends(get_db),
+        settings: Settings = Depends(get_settings),
         provider: ProviderAdapter | None = Depends(get_provider),
     ) -> dict:
         ws = _owned(db, user, ws_id)
@@ -409,7 +437,23 @@ def _lifecycle(action: str):
             adapter = _require_provider(provider)
             try:
                 if action == "start":
+                    if rec.state != EnvState.running:
+                        problems = quotas.check_new(
+                            quotas.usage(db, user, exclude={rec.id}),
+                            [rec.spec],
+                            settings.quotas,
+                            new_environments=False,
+                        )
+                        if problems:
+                            raise HTTPException(
+                                status.HTTP_409_CONFLICT,
+                                {
+                                    "detail": "starting this would exceed your resource limits",
+                                    "problems": problems,
+                                },
+                            )
                     rec.state = adapter.start(rec.provider_ref).value
+                    rec.last_activity_at = datetime.now(UTC)  # restart the idle timer
                 elif action == "stop":
                     rec.state = adapter.stop(rec.provider_ref).value
                 else:

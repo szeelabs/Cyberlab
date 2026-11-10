@@ -90,6 +90,13 @@ class Settings(BaseSettings):
     # Lets allow-listed names resolve to private addresses. Tests only; refused in production.
     egress_allow_private: bool = False
 
+    # --- Resource intelligence ---------------------------------------------------
+    # How often the reaper enforces idle timeouts, TTLs and ephemeral cleanup. 0 = off.
+    reaper_interval_seconds: int = Field(default=60, ge=0)
+    # API requests per client per minute (0 = no limit), with short bursts allowed.
+    rate_limit_per_minute: int = Field(default=300, ge=0)
+    rate_limit_burst: int = Field(default=60, ge=1)
+
     # --- Browser terminal ----------------------------------------------------
     terminal_ticket_ttl_seconds: int = Field(default=60, ge=5, le=600)
     terminal_idle_timeout_seconds: int = Field(default=900, ge=30)

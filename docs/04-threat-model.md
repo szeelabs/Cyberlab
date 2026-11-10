@@ -22,7 +22,7 @@ attacker (tool images).
 | **Tampering** | Malicious shared manifest (YAML tags, alias bombs, unknown fields like `privileged`) | SafeLoader subclass with aliases rejected; single document; size limits; `extra="forbid"`; no privileged/host options exist in the schema | ✅ tested |
 | **Repudiation** | "I didn't start that lab" | Append-only audit log with request IDs | ✅ (export/retention: Phase 4) |
 | **Information disclosure** | Reading another user's workspace | Owner-scoped queries, uniform 404; security headers; docs disabled in prod | ✅ tested |
-| **DoS / cost abuse** | Huge manifests, many environments, never-stopping labs | Request/manifest size caps; quotas; idle/TTL fields; warnings when no idle shutdown | ✅ validation; enforcement Phase 4 |
+| **DoS / cost abuse** | Huge manifests, many environments, never-stopping labs, request floods | Request/manifest size caps; manifest quotas plus live quotas across all of a user's environments; reaper enforces idle/TTL/ephemeral; per-client and per-IP rate limiting | ✅ enforced and tested |
 | **Elevation of privilege** | Container escape | Non-root, cap-drop ALL, Docker's default seccomp profile, no-new-privileges, read-only rootfs, pids/CPU/memory limits; microVMs before hostile code | ✅ containers (tested on real Docker); microVM ⏳ |
 | **Abuse of third parties** | Scanning or attacking external hosts from our IPs | Default network `lab` = Docker `--internal` network (no internet, tested); `internet` needs a recorded approval; `restricted-egress` goes only through the egress proxy (per-environment credentials, exact hostnames, ports 80/443, non-public addresses refused, all decisions logged); high-risk packs need approval; audit | ✅ enforced and tested on real Docker |
 | **Terminal hijacking** | A malicious website opens a WebSocket to the user's terminal (cross-site WebSocket hijacking); a leaked or replayed terminal link | Single-use tickets (hash stored, 60 s), sent inside the socket not the URL; cross-site `Origin` rejected; ticket bound to one user and one running environment; session/idle/size limits; content never logged | ✅ tested |
@@ -45,9 +45,9 @@ attacker (tool images).
    resources need explicit opt-in.
 
 ## Known gaps (honest list)
-* No rate limiting yet (add at the reverse proxy or with middleware before public exposure).
+* Rate limiting is per server process (in memory); several processes each enforce their own
+  share. A shared store would be needed for one global limit.
 * Storage size (`storageGiB`) is not enforced on Docker's default storage driver yet.
-* No live quota accounting across running environments yet (Phase 4).
 * JWKS path implemented but only the HS256 path is covered by automated tests.
 * Egress proxy: TLS SNI is not compared with the CONNECT hostname, so a client could use
   domain fronting through an allowed CDN host. Mitigation would need TLS inspection.

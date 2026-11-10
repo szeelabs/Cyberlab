@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -11,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from cyberlab import __version__, migrations
+from cyberlab import __version__, migrations, reaper
 from cyberlab.api.bundles import router as bundles_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
@@ -21,6 +24,7 @@ from cyberlab.api.terminal import router as terminal_router
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
 from cyberlab.execution import build_provider
+from cyberlab.ratelimit import EXEMPT_PREFIXES, RateLimiter, client_key, retry_after_header
 from cyberlab.registry import load_registry
 from cyberlab.storage import build_store
 
@@ -38,7 +42,20 @@ SECURITY_HEADERS = {
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     is_prod = settings.environment == "production"
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        task = None
+        if settings.reaper_interval_seconds > 0:
+            task = asyncio.create_task(_reaper_loop(app, settings.reaper_interval_seconds))
+        yield
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
     app = FastAPI(
+        lifespan=lifespan,
         title="CyberLab Universe Control Plane",
         version=__version__,
         docs_url=None if is_prod else "/docs",
@@ -55,6 +72,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise RuntimeError("database schema is out of date: run `cyberlab db upgrade`")
     app.state.provider = build_provider(settings)
     app.state.terminal_sessions = {}
+    app.state.active_terminals = {}
+    app.state.rate_limiter = RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst)
+    app.state.ip_limiter = RateLimiter(
+        settings.rate_limit_per_minute * 4, settings.rate_limit_burst * 4
+    )
     app.state.snapshot_store = build_store(settings)
 
     if settings.auth_mode == "dev":
@@ -66,6 +88,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not (0 < len(rid) <= 64 and rid.replace("-", "").isalnum()):
             rid = uuid.uuid4().hex
         request.state.request_id = rid
+        limiter: RateLimiter = app.state.rate_limiter
+        if limiter.enabled and not request.url.path.startswith(EXEMPT_PREFIXES):
+            ip = request.client.host if request.client else None
+            # Two buckets: per client (token or IP), and per IP with 4x the allowance, so
+            # sending a different fake token on every request doesn't escape the limit.
+            wait = max(
+                limiter.check(client_key(request.headers.get("authorization"), ip)),
+                app.state.ip_limiter.check(f"ip:{ip or 'unknown'}"),
+            )
+            if wait:
+                return JSONResponse(
+                    {"detail": "too many requests; slow down"},
+                    status_code=429,
+                    headers={
+                        "Retry-After": retry_after_header(wait),
+                        "X-Request-ID": rid,
+                        **SECURITY_HEADERS,
+                    },
+                )
         length = request.headers.get("content-length")
         if request.method == "PUT" and request.url.path.endswith("/files/content"):
             limit = settings.max_file_bytes
@@ -105,6 +146,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     static_dir = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     return app
+
+
+def reap_now(app: FastAPI) -> list:
+    with app.state.db.new_session() as db:
+        return reaper.run_once(db, app.state.provider, active=set(app.state.active_terminals))
+
+
+async def _reaper_loop(app: FastAPI, interval: int) -> None:
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            actions = await asyncio.to_thread(reap_now, app)
+            for a in actions:
+                log.info("reaper: %s %s (%s) ok=%s", a.action, a.name, a.reason, a.ok)
+        except Exception:  # noqa: BLE001 - the loop must survive one bad run
+            log.exception("reaper run failed")
 
 
 def app_factory() -> FastAPI:  # for `uvicorn --factory cyberlab.main:app_factory`

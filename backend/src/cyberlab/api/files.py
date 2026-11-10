@@ -17,6 +17,7 @@ from cyberlab.db import EnvironmentRecord, User, record_audit
 from cyberlab.execution import EnvState, ProviderAdapter
 from cyberlab.execution.docker import FileOpError
 from cyberlab.execution.paths import UnsafePath, workspace_path
+from cyberlab.reaper import touch
 
 router = APIRouter(tags=["files"])
 
@@ -43,6 +44,8 @@ def _target(
         raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "provider has no file access")
     if rec.provider_ref is None or rec.state != EnvState.running:
         raise HTTPException(status.HTTP_409_CONFLICT, "start the environment first")
+    touch(db, rec.id)  # file activity keeps the environment from idling out
+    db.commit()
     return adapter, rec
 
 

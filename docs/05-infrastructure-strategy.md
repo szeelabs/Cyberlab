@@ -30,7 +30,8 @@ server and no network.
    (Phase 4) refuses `paid` unless the user explicitly enabled it.
 2. **Defaults fit free tiers.** Default quotas: 4 environments, 6 vCPU, 12 GiB RAM, 40 GiB
    storage total, configurable via `CYBERLAB_QUOTA_*`.
-3. **Everything idles down.** `idleTimeoutMinutes` defaults to 60. Ephemeral and TTL
-   environments are reaped.
+3. **Everything idles down.** `idleTimeoutMinutes` defaults to 60 and is enforced by the
+   reaper (Phase 4): idle environments stop, expired ones are destroyed, ephemeral ones
+   take their data with them.
 4. **Bring your own infrastructure** is a first-class path, not an afterthought.
 5. **Nothing is deployed by this repository.** CI only tests. There are no deploy workflows.
