@@ -13,6 +13,8 @@ machine becomes just a window.
 > not yet tested with a real key). Real sign-in and remote desktop are not built yet. The
 > exact, tested status is in [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
+![Describe your lab: plain words in, a checked lab plan out](docs/images/describe-your-lab.png)
+
 ## What works today
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of
   environments, tool packs, resources, networking, workspace and preferences, with a
