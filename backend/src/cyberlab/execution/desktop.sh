@@ -5,7 +5,13 @@
 set -u
 export DISPLAY=:1
 GEOMETRY="${CYBERLAB_DESKTOP_GEOMETRY:-1280x800}"
-running() { kill -0 "$( { tr -d ' ' < /tmp/.X1-lock; } 2>/dev/null)" 2>/dev/null; }
+# Is the X server from an earlier session still alive? Checks for a real process number
+# first: some shells (bash 5.3 on BlackArch) report success for `kill -0 ""`.
+running() {
+  pid="$( { tr -d ' \n' < /tmp/.X1-lock; } 2>/dev/null)"
+  case "$pid" in '' | *[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null
+}
 if ! running; then
   rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
   nohup setsid Xvfb :1 -screen 0 "${GEOMETRY}x24" -nolisten tcp \

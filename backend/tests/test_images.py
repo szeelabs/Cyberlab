@@ -242,3 +242,29 @@ def test_desktop_script_opens_no_network_port():
     script = desktop_script()
     assert "-rfbport" not in script and "-listen" not in script
     assert "-nolisten tcp" in script  # the X server itself is not reachable over the network
+
+
+@pytest.mark.parametrize("shell", ["sh", "bash"])
+@pytest.mark.parametrize(
+    "lock, expected",
+    [(None, 1), ("", 1), ("junk\n", 1), ("  999999999\n", 1), ("PID\n", 0)],
+)
+def test_desktop_running_check(tmp_path, shell, lock, expected):
+    # Regression: on BlackArch, bash reports success for `kill -0 ""`, so a fresh machine
+    # looked like it already had a running screen and the desktop never started.
+    import os
+    import re
+    import shutil
+    import subprocess
+
+    from cyberlab.execution.images import desktop_script
+
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} not installed")
+    func = re.search(r"^running\(\) \{.*?^\}", desktop_script(), re.S | re.M).group(0)
+    path = tmp_path / ".X1-lock"
+    if lock is not None:
+        path.write_text(lock.replace("PID", str(os.getpid())))
+    func = func.replace("/tmp/.X1-lock", str(path))  # noqa: S108 - text substitution only
+    r = subprocess.run([shell, "-c", f"{func}\nrunning"], capture_output=True, check=False)
+    assert r.returncode == expected

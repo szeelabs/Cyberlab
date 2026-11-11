@@ -229,10 +229,17 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
    CommonJS build); 1.7.0 is used, and the web app now targets ES2022 browsers
    (Chrome/Edge 89+, Firefox 89+, Safari 15+).
 
+21. **Fixed (found by CI):** on BlackArch the desktop never started. Its shell (bash 5.3)
+   reports success for `kill -0 ""`, so the launcher thought a screen was already running.
+   The launcher now checks for a real process number first; it also stops with a clear
+   message if the screen fails to start, and CI prints the desktop's logs on failure.
+
 ## Next milestone
-1. Merge the Parrot OS / BlackArch PR and the AI Lab Architect PR.
+1. Merge the remote desktop PR (#16).
 2. Try the `anthropic` planner with a real key (user decision: it costs money).
 3. Phase 5 step 2: troubleshooting assistant, and a fixture prompt set to evaluate drafts.
+4. Remote desktop extras (clipboard, screen resizing); a supported way to add user-supplied
+   installers (e.g. Cisco Packet Tracer) to a machine's image.
 
 ## Operating system wish list (requested by the user, not yet built unless marked)
 Everything runs on a remote host, so none of it uses laptop disk. The free hosts still have
