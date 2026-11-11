@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api, ApiError, download, formatBytes, type Environment, type Plan } from "../api";
+import { Architect } from "../components/Architect";
 import { ManifestBuilder } from "../components/ManifestBuilder";
 import { Terminal } from "../components/Terminal";
 import { ErrorNotice, Pill, timeAgo, useAction, useLoad } from "../ui";
@@ -123,6 +124,7 @@ function SetupTab({ id, hasManifest, onSaved }: { id: string; hasManifest: boole
   const [plan, setPlan] = useState<Plan | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
+  const [describing, setDescribing] = useState(false);
   // Only ask for a manifest or plan the workspace actually has (no pointless 404s).
   const [saved_, setSaved_] = useState(hasManifest);
   const approval = useLoad(() => (saved_ ? api.plan(id) : Promise.resolve(null)), [id, saved_]);
@@ -170,6 +172,17 @@ function SetupTab({ id, hasManifest, onSaved }: { id: string; hasManifest: boole
         }}
       />
     );
+  if (describing)
+    return (
+      <Architect
+        onCancel={() => setDescribing(false)}
+        onUse={(yaml) => {
+          setText(yaml);
+          setDescribing(false);
+          void act.run(async () => { setSaved(null); setPlan(await api.validate(yaml)); });
+        }}
+      />
+    );
   const needsApproval = approval.data && approval.data.approvalCodes.length > 0 && !approval.data.approved;
   return (
     <>
@@ -178,6 +191,7 @@ function SetupTab({ id, hasManifest, onSaved }: { id: string; hasManifest: boole
           <h2>Universe Manifest</h2>
           <span className="muted small">describes the environments, tools, network and limits of this workspace</span>
           <span className="spacer" />
+          <button onClick={() => setDescribing(true)}>Describe your lab</button>
           <button onClick={() => setBuilding(true)}>Build with a form</button>
           <button onClick={check} disabled={act.busy}>Check</button>
           <button className="primary" onClick={save} disabled={act.busy}>Save</button>

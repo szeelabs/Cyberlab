@@ -110,6 +110,14 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=300, ge=0)
     rate_limit_burst: int = Field(default=60, ge=1)
 
+    # --- AI Lab Architect ------------------------------------------------------
+    # rules = built-in keyword planner (free, offline, no AI); anthropic = Claude (paid,
+    # needs a key and CYBERLAB_ALLOW_PAID_PROVIDERS=true); off = disabled.
+    ai_provider: Literal["off", "rules", "anthropic"] = "rules"
+    ai_api_key: SecretStr | None = None  # never commit it; set it in .env
+    ai_model: str = Field(default="claude-opus-5-5", pattern=r"^[a-z0-9][a-z0-9.-]{1,63}$")
+    ai_timeout_seconds: float = Field(default=120, gt=0, le=600)
+
     # --- Browser terminal ----------------------------------------------------
     terminal_ticket_ttl_seconds: int = Field(default=60, ge=5, le=600)
     terminal_idle_timeout_seconds: int = Field(default=900, ge=30)
@@ -155,6 +163,14 @@ class Settings(BaseSettings):
             parse_key(self.snapshot_encryption_key.get_secret_value())  # fail fast if malformed
         if self.environment == "production" and self.egress_allow_private:
             raise ValueError("CYBERLAB_EGRESS_ALLOW_PRIVATE is for local testing only")
+        if self.ai_provider == "anthropic":
+            if self.ai_api_key is None or not self.ai_api_key.get_secret_value().strip():
+                raise ValueError("CYBERLAB_AI_PROVIDER=anthropic needs CYBERLAB_AI_API_KEY")
+            if not self.allow_paid_providers:
+                raise ValueError(
+                    "The Anthropic API is a paid service: set CYBERLAB_ALLOW_PAID_PROVIDERS=true "
+                    "to allow it, or use CYBERLAB_AI_PROVIDER=rules (free, no AI)"
+                )
         if self.environment == "production" and "*" in self.cors_origins:
             raise ValueError("Wildcard CORS origin is not allowed in production")
         return self

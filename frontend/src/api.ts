@@ -51,6 +51,12 @@ export type Usage = {
   limits: { environments: number; cpu: number; memoryMiB: number; storageGiB: number };
 };
 
+export type AiStatus = { provider: string | null; status: "READY" | "OFF"; detail: string; paid: boolean; model?: string | null };
+
+export type ArchitectDraft =
+  | { provider: string; refused: true; reason: string }
+  | { provider: string; refused: false; explanation: string; manifestYaml: string; plan: Plan };
+
 export type ServiceStatus = { status: "CONNECTED" | "NOT CONNECTED"; detail: string; [k: string]: unknown };
 
 export type ToolPack = {
@@ -135,6 +141,13 @@ export const api = {
   usage: () => request<Usage>("/v1/me/usage"),
   execution: () => request<ServiceStatus>("/v1/system/execution"),
   storage: () => request<ServiceStatus>("/v1/system/storage"),
+  ai: () => request<AiStatus>("/v1/system/ai"),
+  draftLab: (prompt: string) =>
+    request<ArchitectDraft>("/v1/architect/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    }),
 
   categories: () => request<Category[]>("/v1/registry/categories"),
   toolPacks: () => request<ToolPack[]>("/v1/registry/tool-packs"),

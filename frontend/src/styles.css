@@ -86,3 +86,4 @@ tr:last-child td { border-bottom: none; }
 .crumbs { display: flex; gap: 4px; flex-wrap: wrap; font-family: var(--mono); font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+button.link { background: none; border: none; padding: 0 4px; color: var(--accent); text-decoration: underline; cursor: pointer; font-size: inherit; }

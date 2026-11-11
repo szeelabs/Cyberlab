@@ -56,6 +56,18 @@ that leaves one out, so a wrong guess fails loudly instead of silently. Parrot's
 only the tool packs they need. VMware is not offered: a hypervisor cannot run inside a
 container, and CyberLab's own machines and lab networks already fill that role.
 
+## AI Lab Architect: free keyword planner by default, Claude opt-in
+*Status: implemented (Claude path tested with a fake client only).* The user has no budget,
+so the default planner is a small keyword matcher: free, offline, predictable, and honest
+about being "no AI". Claude is used through the official `anthropic` SDK with structured
+outputs: the JSON Schema lists the registry's operating systems and tool packs as enums, so
+the model cannot invent them, and the server re-validates anyway. Effort is set to `medium`
+explicitly, and the server-side refusal fallback (`fallbacks: "default"`) is on, because
+security topics can trip safety classifiers. Using it needs a key **and**
+`CYBERLAB_ALLOW_PAID_PROVIDERS=true`, the same opt-in as paid execution. The architect only
+returns drafts: there is deliberately no code path from a draft to saving, approving or
+provisioning.
+
 ## Rejected / deferred
 * **Kubernetes now:** too heavy for the free-first target and impossible locally on this
   machine. A Kubernetes adapter can come later behind `ProviderAdapter`.
