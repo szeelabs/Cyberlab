@@ -200,3 +200,17 @@ against a real cloud provider account (none was created).
 2. Next phase, needing the user's go-ahead: **Phase 5 — AI Lab Architect** (describe a lab in
    plain English; the AI fills in the same form/manifest; the policy engine checks it; you
    approve). The web app now gives it a natural home.
+
+## Operating system wish list (requested by the user, not yet built unless marked)
+Everything runs on a remote host, so none of it uses laptop disk. The free hosts still have
+real limits (for example Codespaces: about 32 GB disk and a monthly free-hours allowance).
+
+| Wish | Status | How it would work / why not |
+|---|---|---|
+| Kali Linux | **Implemented** (`kali-rolling` base image) | container, browser terminal |
+| Parrot OS | Planned, feasible | official `parrotsec/core` container image, apt-based like our packs |
+| BlackArch | Planned, feasible with work | official container image; Arch uses `pacman`, so the image recipes need a pacman path |
+| Predator-OS | Unverified | no official container image found yet; would need checking |
+| Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
+| Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it; needs the remote desktop (not built yet) |
+| VMware | Not planned | it is a commercial hypervisor and cannot run inside a container; CyberLab itself plays VMware's role (machines + lab networks) |
