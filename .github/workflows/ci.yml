@@ -181,6 +181,11 @@ jobs:
               print(f"connection {attempt}: VNC OK, screen {w}x{h}")
               p.kill()
           PY
+      - name: Desktop logs (on failure)
+        if: failure()
+        run: |
+          docker exec desk sh -c 'for f in /tmp/*.log; do echo "== $f"; tail -n 40 "$f"; done' || true
+          docker exec desk sh -c 'ls -la /tmp /tmp/.X11-unix; command -v Xvfb x11vnc openbox xterm socat setsid nohup' || true
       - name: Image size
         if: always()
         run: docker image ls desktop-test --format '{{.Size}}'

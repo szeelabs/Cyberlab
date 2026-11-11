@@ -12,6 +12,11 @@ if ! running; then
     >/tmp/xvfb.log 2>&1 &
   i=0
   while [ ! -e /tmp/.X11-unix/X1 ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+  if ! running; then
+    echo "cyberlab-desktop: the virtual screen (Xvfb) did not start:" >&2
+    tail -n 20 /tmp/xvfb.log >&2
+    exit 1
+  fi
   nohup setsid openbox >/tmp/openbox.log 2>&1 &
   (cd "$HOME" && nohup setsid xterm -geometry 100x30+40+40 -bg '#0e1311' -fg '#dde7e2' \
     -cr '#3ecf8e' -title 'CyberLab terminal' >/tmp/xterm.log 2>&1 &)
