@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import { api, ApiError, download, formatBytes, type Environment, type Plan } from "../api";
 import { Architect } from "../components/Architect";
 import { ManifestBuilder } from "../components/ManifestBuilder";
 import { Terminal } from "../components/Terminal";
 import { ErrorNotice, Pill, timeAgo, useAction, useLoad } from "../ui";
+
+// Loaded only when a desktop is opened (noVNC is large).
+const Desktop = lazy(() => import("../components/Desktop").then((m) => ({ default: m.Desktop })));
 
 const STARTER = `apiVersion: cyberlab.dev/v1alpha1
 kind: Universe
@@ -221,6 +224,7 @@ function SetupTab({ id, hasManifest, onSaved }: { id: string; hasManifest: boole
 function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Environment[]; error: string | null; reload: () => Promise<void> }) {
   const act = useAction();
   const [terminal, setTerminal] = useState<Environment | null>(null);
+  const [desktop, setDesktop] = useState<Environment | null>(null);
   const [keepData, setKeepData] = useState(true);
   const live = envs.filter((e) => e.state !== "destroyed");
   const run = (fn: () => Promise<unknown>) => act.run(async () => { await fn(); await reload(); });
@@ -265,10 +269,11 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
                     <td>
                       <div className="row">
                         {e.state === "running" && <button onClick={() => setTerminal(e)}>Terminal</button>}
+                        {e.state === "running" && e.desktop && <button onClick={() => setDesktop(e)}>Desktop</button>}
                         {e.state === "running" && <button disabled={act.busy} onClick={() => run(() => api.stop(id, e.id))}>Stop</button>}
                         {e.state === "stopped" && <button disabled={act.busy} onClick={() => run(() => api.start(id, e.id))}>Start</button>}
                         <ConfirmButton label="Destroy" confirm="Confirm destroy" disabled={act.busy}
-                          onConfirm={() => run(async () => { if (terminal?.id === e.id) setTerminal(null); await api.destroy(id, e.id, keepData); })} />
+                          onConfirm={() => run(async () => { if (terminal?.id === e.id) setTerminal(null); if (desktop?.id === e.id) setDesktop(null); await api.destroy(id, e.id, keepData); })} />
                       </div>
                     </td>
                   </tr>
@@ -278,6 +283,11 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
           </div>
         )}
       </section>
+      {desktop && (
+        <Suspense fallback={<div className="muted">Loading the desktop viewer…</div>}>
+          <Desktop key={desktop.id} workspaceId={id} environmentId={desktop.id} name={desktop.name} onClose={() => setDesktop(null)} />
+        </Suspense>
+      )}
       {terminal && <Terminal key={terminal.id} workspaceId={id} environmentId={terminal.id} name={terminal.name} onClose={() => setTerminal(null)} />}
     </>
   );

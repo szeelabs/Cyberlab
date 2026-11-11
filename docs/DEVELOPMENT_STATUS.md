@@ -158,19 +158,27 @@ against a real cloud provider account (none was created).
 **Not tested:** the real Anthropic API. No key was used; every Anthropic test uses a fake
 client. Treat the `anthropic` planner as untested until someone runs it with a real key.
 
+## Implemented (Phase 6, step 3 — remote desktop)
+| Area | What works | Where |
+|---|---|---|
+| Desktop in the machine | `access.desktop: true` adds a light desktop to the image: Xvfb (virtual screen, 1280x800), Openbox (window manager, right-click menu), xterm, and x11vnc. A launcher starts it on first use and reuses it after. Machines with a desktop get `--init` and `DISPLAY=:1`, so graphical programs started from the terminal show on the desktop | `execution/desktop.sh`, `execution/images.py`, `execution/docker.py` |
+| Connection | `POST .../desktop` gives a single-use desktop ticket; `/v1/desktop` carries VNC over the WebSocket, through `docker exec` to `x11vnc -inetd` (via socat). **No network port is opened**, so it also works on your own server over SSH. Tickets now have a purpose (migration 0003): terminal and desktop tickets are not interchangeable. Desktop sessions count toward the same per-user session limit and keep the machine "in use" for the reaper | `api/desktop.py`, `api/terminal.py`, `migrations/versions/0003_*` |
+| Web app | "Desktop" button for machines with a desktop; noVNC viewer (loaded only when opened), full screen; "Remote desktop" checkbox in the beginner form (only on systems that support it, and it asks for Medium or larger); "Describe your lab" understands "desktop"/"graphical" | `components/Desktop.tsx`, `desktopChannel.ts`, `components/ManifestBuilder.tsx`, `architect/rules.py` |
+| Systems | Ubuntu 24.04, Parrot OS and BlackArch (desktop builds and a VNC handshake in a hardened container, in CI job `desktop-images`); Kali is marked as supporting it but its desktop is not built in CI (large image) | `registry/base-images.yaml`, `.github/workflows/ci.yml` |
+| Tests | Backend: desktop API (binary bridge, audit, ticket purpose swap refused, single use, owner only, origin, session limit, open failure, policy), recipe and run args; real Docker: API → WebSocket → VNC handshake twice, desktop runs as `cyberlab`, nothing listens on a TCP port; real browser: open the desktop, check the screen is drawn, type into its terminal and find the created file in Files | `tests/test_desktop.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
 | Tools without a distro package (ZAP, Volatility 3, Trivy, Grype, osquery): need vendor installs with pinned checksums | 2 |
 | Kali base images are not built in CI (large image, Docker Hub limits) | 2 |
 | Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
-| Remote desktop | 6 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect: troubleshooting assistant (reads environment status and logs), evaluation with a fixture prompt set, other model providers | 5 |
 | Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
-| Remote desktop (graphical environments) | 6 |
+| Remote desktop extras: copy/paste between your computer and the desktop, resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Claude Code Skill, release automation | 7 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
@@ -214,10 +222,24 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
    real-target check is a heuristic, not a guarantee. The policy engine and human approval
    remain the actual safety boundary.
 
+19. Remote desktop limits: the screen is a fixed 1280x800 (scaled to the browser); no copy/
+   paste with your own computer yet; the desktop keeps running (and using memory) until the
+   machine is stopped, even after the browser tab closes.
+20. Found while building the desktop: noVNC 1.6 cannot be bundled (top-level `await` in its
+   CommonJS build); 1.7.0 is used, and the web app now targets ES2022 browsers
+   (Chrome/Edge 89+, Firefox 89+, Safari 15+).
+
+21. **Fixed (found by CI):** on BlackArch the desktop never started. Its shell (bash 5.3)
+   reports success for `kill -0 ""`, so the launcher thought a screen was already running.
+   The launcher now checks for a real process number first; it also stops with a clear
+   message if the screen fails to start, and CI prints the desktop's logs on failure.
+
 ## Next milestone
-1. Merge the Parrot OS / BlackArch PR and the AI Lab Architect PR.
+1. Merge the remote desktop PR (#16).
 2. Try the `anthropic` planner with a real key (user decision: it costs money).
 3. Phase 5 step 2: troubleshooting assistant, and a fixture prompt set to evaluate drafts.
+4. Remote desktop extras (clipboard, screen resizing); a supported way to add user-supplied
+   installers (e.g. Cisco Packet Tracer) to a machine's image.
 
 ## Operating system wish list (requested by the user, not yet built unless marked)
 Everything runs on a remote host, so none of it uses laptop disk. The free hosts still have
@@ -230,5 +252,5 @@ real limits (for example Codespaces: about 32 GB disk and a monthly free-hours a
 | BlackArch | **Implemented** (`blackarch` base image) | official `blackarchlinux/blackarch` image; recipes use `pacman` (`family: arch`, per-tool `archPackage`); boot and safe user tested locally, tool-pack builds tested in CI |
 | Predator-OS | Unverified | no official container image found yet; would need checking |
 | Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
-| Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it; needs the remote desktop (not built yet) |
+| Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it. The remote desktop it needs now exists; still missing: a supported way to install a user-supplied `.deb` (machines run without root, so it must go into the image build) |
 | VMware | Not planned | it is a commercial hypervisor and cannot run inside a container; CyberLab itself plays VMware's role (machines + lab networks) |

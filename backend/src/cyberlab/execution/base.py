@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
-from cyberlab.execution.shell import ShellSession
+from cyberlab.execution.shell import ShellSession, StreamSession
 from cyberlab.manifest.models import Environment
 from cyberlab.registry.models import ToolPack
 
@@ -81,4 +81,8 @@ class ProviderAdapter(Protocol):
 
     async def open_shell(self, provider_ref: str) -> ShellSession:
         """Open an interactive shell in a running environment (browser terminal)."""
+        ...
+
+    async def open_desktop(self, provider_ref: str) -> StreamSession:
+        """Open a VNC stream to a running environment's desktop (remote desktop)."""
         ...

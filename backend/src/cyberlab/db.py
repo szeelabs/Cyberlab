@@ -99,7 +99,11 @@ class EnvironmentRecord(Base):
 
 
 class TerminalTicket(Base):
-    """A single-use, short-lived permission to open one terminal. Only a hash is stored."""
+    """A single-use, short-lived permission to open one terminal or desktop session.
+
+    Only a hash of the ticket is stored. ``purpose`` stops a terminal ticket from opening a
+    desktop and vice versa.
+    """
 
     __tablename__ = "terminal_tickets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -108,6 +112,7 @@ class TerminalTicket(Base):
         ForeignKey("environments.id", ondelete="CASCADE"), index=True
     )
     user_subject: Mapped[str] = mapped_column(String(255))
+    purpose: Mapped[str] = mapped_column(String(16), default="terminal", server_default="terminal")
     expires_at: Mapped[datetime] = mapped_column()
     used_at: Mapped[datetime | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=_now)

@@ -103,3 +103,60 @@ class PtyShellSession:
                 self._proc.kill()
                 await asyncio.to_thread(self._proc.wait)
         os.close(self._fd)
+
+
+class StreamSession(Protocol):
+    """A raw two-way byte stream (no terminal), e.g. VNC for the remote desktop."""
+
+    async def read(self) -> bytes:
+        """Next chunk; ``b""`` means the stream has ended."""
+        ...
+
+    async def write(self, data: bytes) -> None: ...
+
+    async def close(self) -> None: ...
+
+
+class PipeSession:
+    """Runs ``argv`` with stdin/stdout pipes. stderr is discarded (it is not part of the stream)."""
+
+    def __init__(self, proc: asyncio.subprocess.Process) -> None:
+        self._proc = proc
+        self._closed = False
+
+    @classmethod
+    async def start(cls, argv: list[str], env: dict[str, str] | None = None) -> PipeSession:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=env,
+            start_new_session=True,
+        )
+        return cls(proc)
+
+    async def read(self) -> bytes:
+        assert self._proc.stdout is not None
+        return await self._proc.stdout.read(READ_CHUNK)
+
+    async def write(self, data: bytes) -> None:
+        assert self._proc.stdin is not None
+        if self._closed:
+            return
+        self._proc.stdin.write(data)
+        await self._proc.stdin.drain()
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self._proc.stdin is not None:
+            self._proc.stdin.close()
+        if self._proc.returncode is None:
+            self._proc.terminate()
+            try:
+                await asyncio.wait_for(self._proc.wait(), timeout=5)
+            except TimeoutError:
+                self._proc.kill()
+                await self._proc.wait()

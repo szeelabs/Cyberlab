@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from cyberlab.manifest.policy import DESKTOP_OVERHEAD_MIB
+
 if TYPE_CHECKING:
     from cyberlab.registry import Registry
 
@@ -116,8 +118,15 @@ class RulesModel:
         ]
         asked_base = next((b for b, w in BASE_WORDS.items() if b in bases and _has(text, w)), None)
 
+        want_desktop = _has(
+            topic_text, ("desktop", "gui", "graphical", "screen", "windows and mouse")
+        )
+
         def fits(base: str) -> bool:
             return all(base in reg.tool_packs[p].compatible_bases for p in packs)
+
+        def fits_all(base: str) -> bool:
+            return fits(base) and (not want_desktop or reg.base_images[base].supports_desktop)
 
         notes: list[str] = []
         if asked_base and not fits(asked_base):
@@ -127,7 +136,16 @@ class RulesModel:
                 f"{', '.join(dropped)} does not work on {reg.base_images[asked_base].name} yet, "
                 f"so it was left out."
             )
-        base = asked_base or next((b for b in PREFERRED_BASES if b in bases and fits(b)), None)
+        base = asked_base or next(
+            (b for b in PREFERRED_BASES if b in bases and fits_all(b)),
+            next((b for b in PREFERRED_BASES if b in bases and fits(b)), None),
+        )
+        if want_desktop and base and not reg.base_images[base].supports_desktop:
+            want_desktop = False
+            notes.append(
+                f"{reg.base_images[base].name} has no remote desktop yet, so this lab uses the "
+                f"browser terminal only."
+            )
         if base is None:
             raise ArchitectError("no single operating system supports all of those tools")
 
@@ -155,7 +173,7 @@ class RulesModel:
         if m:
             count = int(m.group(1))
 
-        def machine_for(name: str, base_id: str, pack_ids: list[str]) -> dict:
+        def machine_for(name: str, base_id: str, pack_ids: list[str], desktop: bool) -> dict:
             b = reg.base_images[base_id]
             min_cpu = max(
                 [b.min_resources.cpu] + [reg.tool_packs[p].min_resources.cpu for p in pack_ids]
@@ -164,6 +182,8 @@ class RulesModel:
                 [b.min_resources.memory_mib]
                 + [reg.tool_packs[p].min_resources.memory_mib for p in pack_ids]
             )
+            if desktop:
+                min_mem += DESKTOP_OVERHEAD_MIB
             return {
                 "name": name,
                 "baseImage": base_id,
@@ -173,6 +193,7 @@ class RulesModel:
                 "allowedEgress": [],
                 "idleTimeoutMinutes": 60,
                 "ephemeral": ephemeral,
+                "desktop": desktop,
             }
 
         if two_roles or count >= 2:
@@ -181,11 +202,14 @@ class RulesModel:
                 notes.append(
                     "Isolated machines cannot reach each other, so they share a lab network."
                 )
-            envs = [machine_for("attacker", base, packs), machine_for("target", "debian-12", [])]
+            envs = [
+                machine_for("attacker", base, packs, want_desktop),
+                machine_for("target", "debian-12", [], False),
+            ]
             for i in range(3, max(count, 2) + 1):
-                envs.append(machine_for(f"machine-{i}", "debian-12", []))
+                envs.append(machine_for(f"machine-{i}", "debian-12", [], False))
         else:
-            envs = [machine_for("workstation", base, packs)]
+            envs = [machine_for("workstation", base, packs, want_desktop)]
 
         topic = packs[0] if packs else "practice"
         name = f"{topic}-lab"
@@ -203,6 +227,10 @@ class RulesModel:
             lines.insert(
                 1,
                 "'attacker' has your tools; 'target' is a plain Debian machine to practise on.",
+            )
+        if want_desktop:
+            lines.append(
+                f"'{envs[0]['name']}' has a remote desktop: open it from the Environments tab."
             )
         if ephemeral:
             lines.append("It is throwaway: its files are deleted when it is removed.")

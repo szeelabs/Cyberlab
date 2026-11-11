@@ -442,3 +442,65 @@ def test_snapshot_and_restore_on_real_container(client, tmp_path):
         assert r.status_code == 204
     finally:
         destroy_all(client, ws, [env])
+
+
+DESKTOP = """
+apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: desk}
+spec:
+  environments:
+    - name: gui
+      baseImage: ubuntu-24-04
+      resources: {cpu: 1, memoryMiB: 2048, storageGiB: 4}
+      network: {mode: isolated}
+      access: {desktop: true}
+"""
+
+
+@pytest.mark.skipif(
+    os.environ.get("CYBERLAB_DOCKER_BUILD_TESTS") != "1",
+    reason="installs desktop packages; needs internet access during image builds",
+)
+def test_remote_desktop_vnc_handshake_on_real_container(client):
+    """The whole path: API ticket -> WebSocket -> docker exec -> x11vnc in a hardened,
+    network-less container. Completes a VNC handshake and reads the screen size."""
+    import json
+
+    ws_id, (env,) = provision(client, DESKTOP, "it-desktop")
+    name = env["resources"]["container"]
+    try:
+        assert env["desktop"] is True
+        for _attempt in range(2):  # the second connection reuses the running desktop
+            r = client.post(
+                f"/v1/workspaces/{ws_id}/environments/{env['id']}/desktop", headers=auth()
+            )
+            assert r.status_code == 201, r.text
+            with client.websocket_connect("/v1/desktop") as sock:
+                sock.send_text(json.dumps({"type": "auth", "ticket": r.json()["ticket"]}))
+                assert json.loads(sock.receive_text())["type"] == "ready"
+                buf = b""
+
+                def need(n):
+                    nonlocal buf
+                    while len(buf) < n:
+                        buf += sock.receive_bytes()
+                    out, buf = buf[:n], buf[n:]
+                    return out
+
+                assert need(12) == b"RFB 003.008\n"
+                sock.send_bytes(b"RFB 003.008\n")
+                count = need(1)[0]
+                assert 1 in need(count)  # "None": the ticket is the authentication
+                sock.send_bytes(bytes([1]))
+                assert need(4) == b"\0\0\0\0"  # security handshake OK
+                sock.send_bytes(bytes([1]))  # ClientInit (shared)
+                width, height = int.from_bytes(need(2), "big"), int.from_bytes(need(2), "big")
+                assert (width, height) == (1280, 800)
+        # the desktop runs as the unprivileged user, and nothing listens on a TCP port
+        code, out = sh(name, "ps -o user= -C Xvfb,x11vnc,openbox | sort -u")
+        assert out == "cyberlab", out
+        code, out = sh(name, "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$4==\"0A\"'")
+        assert out == "", f"something is listening: {out}"
+    finally:
+        destroy_all(client, ws_id, [env])

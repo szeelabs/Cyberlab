@@ -54,3 +54,17 @@ describe("parseHosts", () => {
     expect(parseHosts("  ")).toEqual([]);
   });
 });
+
+describe("remote desktop in the form", () => {
+  it("adds access.desktop only when chosen", () => {
+    expect(toYaml(lab())).not.toContain("access:");
+    const e = { ...newEnvironment(0), baseImage: "ubuntu-24-04", size: "medium" as const, desktop: true };
+    expect(toYaml(lab({ environments: [e] }))).toContain("access: {desktop: true}");
+  });
+
+  it("asks for more memory than Small", () => {
+    const e = { ...newEnvironment(0), desktop: true };
+    expect(formProblems(lab({ environments: [e] })).join(" ")).toContain("Medium or Large");
+    expect(formProblems(lab({ environments: [{ ...e, size: "medium" }] }))).toEqual([]);
+  });
+});

@@ -85,8 +85,12 @@ def _cmd_image_dockerfile(args: argparse.Namespace) -> int:
         if (args.mirror and base.image.startswith("docker.io/"))
         else base.image
     )
+    if args.desktop and not base.supports_desktop:
+        raise RegistryError(f"{base.id} does not support the remote desktop")
     sr = base.source_rewrite
-    recipe = render(image, packs, base.family, (sr.replace, sr.with_) if sr else None)
+    recipe = render(
+        image, packs, base.family, (sr.replace, sr.with_) if sr else None, desktop=args.desktop
+    )
     sys.stdout.write(recipe.dockerfile)
     print(f"# tag: {recipe.tag}", file=sys.stderr)
     return 0
@@ -183,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--packs", default="", help="comma-separated tool pack ids")
         if name == "dockerfile":
             c.add_argument("--mirror", help="registry mirror for docker.io images")
+            c.add_argument("--desktop", action="store_true", help="include the remote desktop")
         c.set_defaults(func=func)
 
     mx = isub.add_parser("matrix", help="JSON CI build matrix of buildable packs")

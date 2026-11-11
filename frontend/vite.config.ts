@@ -6,7 +6,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   base: "/app/",
-  build: { outDir: "dist", sourcemap: false },
+  // es2022: noVNC (remote desktop) uses top-level await (Chrome/Edge 89+, Firefox 89+, Safari 15+).
+  build: { outDir: "dist", sourcemap: false, target: "es2022" },
   server: {
     proxy: {
       "/v1": { target: "http://127.0.0.1:8000", ws: true },

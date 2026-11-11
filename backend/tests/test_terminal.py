@@ -208,7 +208,9 @@ def test_session_limit_per_user(client, env):
             ws = stack.enter_context(open_terminal(client, ticket(client, env)))
             assert json.loads(ws.receive_text())["type"] == "ready"
         with open_terminal(client, ticket(client, env)) as third:
-            assert json.loads(third.receive_text())["message"] == "too many open terminals"
+            assert json.loads(third.receive_text())["message"] == (
+                "too many open terminal or desktop sessions"
+            )
     # once closed, a new terminal is allowed again
     with open_terminal(client, ticket(client, env)) as ws:
         assert json.loads(ws.receive_text())["type"] == "ready"
