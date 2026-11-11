@@ -123,5 +123,7 @@ over SSH and cost classes** (PR #11). Phase 4 is complete.
 **Phase 6 (Visual Universe):** chosen next by Claude (the user delegated the choice); step 1,
 the **web app** at `/app`, merged (PR #12); step 2, **beginner form + `./scripts/dev.sh`**
 (PR #13). Real sign-in is deferred until a provider account exists to test it.
-Next: Phase 5 (AI Lab Architect), needs the user's go-ahead.
+Parrot OS and BlackArch base systems added (PR #14).
+**Phase 5 (AI Lab Architect):** approved by the user; step 1, **drafts from plain words**
+(keyword planner by default, Claude opt-in and paid, untested with a real key) is built.
 Details: `docs/DEVELOPMENT_STATUS.md`.

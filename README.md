@@ -5,11 +5,13 @@ CyberLab aims to give every user a personal, browser-accessible virtual computer
 isolated lab networks, persistent workspaces and portable configurations. Your physical
 machine becomes just a window.
 
-> **Status: Phase 2 in progress.** The control plane, Universe Manifest, registry and
-> policy engine work (Phase 1). CyberLab can **start real, hardened Linux containers** on a
-> Docker host from an approved manifest, with **tool packs installed**, and you can **use them
-> from a browser terminal**, with internet access limited to approved sites when you choose
-> `restricted-egress` (Phase 2). There is no storage, AI or full web UI yet. See [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
+> **Status: Phases 1-4 and 6 (steps 1-2) are built; Phase 5 is in progress.** CyberLab starts
+> real, hardened Linux containers (Ubuntu, Debian, Kali, Parrot OS, BlackArch) with tool packs,
+> isolated lab networks, a browser terminal, files, encrypted snapshots, export/import,
+> quotas and idle/TTL cleanup, all from a web app at `/app`. **Describe your lab** drafts a
+> manifest from plain words (a free built-in planner by default; Claude is optional, paid, and
+> not yet tested with a real key). Real sign-in and remote desktop are not built yet. The
+> exact, tested status is in [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
 ## What works today
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of

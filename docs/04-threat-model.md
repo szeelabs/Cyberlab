@@ -33,7 +33,7 @@ attacker (tool images).
 | **Docker API exposure** | Control plane talks to a remote Docker Engine over the network | `ssh://` recommended (key-based, no open Docker port); plain `tcp://` refused in production; TLS client certificates supported; dedicated host user documented | ✅ enforced; SSH path tested in CI |
 | **Supply chain** | Poisoned tool image or package | Tools come only from the base distribution's signed package repositories; recipes are generated from validated registry data (package names checked against a strict pattern), built with no build context; CI builds and smoke-tests every pack. Still to do: pinned base digests, SBOM, scanning, signing | 🟨 partial |
 | **Secret leakage** | API keys committed or logged | No secrets in code; `.env` gitignored; `SecretStr`; audit details exclude manifests; GitHub secret scanning | ✅ |
-| **AI-driven misuse** | Prompt asks the AI to build an attack environment against a real target | AI only drafts manifests; same policy engine; mandatory human approval; no target fields in the manifest | ⏳ Phase 5 |
+| **AI-driven misuse** | Prompt asks the AI to build an attack environment against a real target | AI only drafts manifests (no save/approve/provision path); output re-validated against the registry and policy engine; mandatory human approval; no target fields in the manifest; attack words + public host/IP refused before any model call; drafts audited without prompt text; paid AI off unless allowed | ✅ Phase 5 step 1 (screening is a heuristic) |
 
 ## Design rules
 1. **Default deny on the network.** New environments get `lab` (private) networking.

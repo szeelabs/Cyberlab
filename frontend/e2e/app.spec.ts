@@ -101,6 +101,34 @@ test("beginner form builds a valid manifest", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("describe your lab: plain words to a saved manifest", async ({ page }) => {
+  const errors = watchConsole(page);
+  await createWorkspace(page, "e2e-describe");
+  await page.getByRole("button", { name: "Describe your lab" }).click();
+  const panel = page.getByRole("region", { name: "Describe your lab" });
+  await expect(panel).toContainText("built-in planner");
+
+  // Attacks on real systems are refused, before anything is drafted.
+  await panel.getByLabel("What do you want to practise?").fill("hack facebook.com");
+  await panel.getByRole("button", { name: "Draft my lab" }).click();
+  await expect(panel.getByRole("alert", { name: "Not drafted" })).toContainText("written permission");
+
+  await panel.getByRole("button", { name: /attacker and a target/ }).click(); // an example
+  await panel.getByRole("button", { name: "Draft my lab" }).click();
+  const draft = panel.getByRole("group", { name: "Draft" });
+  await expect(draft).toContainText("passes checks");
+  await expect(draft.getByLabel("Draft manifest")).toContainText("baseImage: parrot-core");
+  await expect(draft.getByLabel("Draft manifest")).toContainText("name: target");
+  await draft.getByRole("button", { name: "Use this draft" }).click();
+
+  // Only the editor is filled in; the user still saves it.
+  await expect(page.getByLabel("Manifest YAML")).toHaveValue(/web-appsec/);
+  await expect(page.getByRole("region", { name: "Check result" })).toContainText("valid");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Saved as revision 1.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test("full lab: environment, terminal, files, snapshot, destroy", async ({ page }) => {
   test.skip(process.env.E2E_DOCKER !== "1", "set E2E_DOCKER=1 to run against a real Docker Engine");
   const errors = watchConsole(page);

@@ -15,12 +15,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from cyberlab import __version__, migrations, reaper
+from cyberlab.api.architect import router as architect_router
 from cyberlab.api.bundles import router as bundles_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
 from cyberlab.api.routes import router
 from cyberlab.api.snapshots import router as snapshots_router
 from cyberlab.api.terminal import router as terminal_router
+from cyberlab.architect import build_model
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
 from cyberlab.execution import build_provider
@@ -87,6 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     elif migrations.current(app.state.db.engine) != migrations.head():
         raise RuntimeError("database schema is out of date: run `cyberlab db upgrade`")
     app.state.provider = build_provider(settings)
+    app.state.architect = build_model(settings, app.state.registry)
     app.state.terminal_sessions = {}
     app.state.active_terminals = {}
     app.state.rate_limiter = RateLimiter(settings.rate_limit_per_minute, settings.rate_limit_burst)
@@ -156,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(router)
+    app.include_router(architect_router)
     app.include_router(bundles_router)
     app.include_router(env_router)
     app.include_router(files_router)

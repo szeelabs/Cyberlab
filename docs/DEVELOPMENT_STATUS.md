@@ -146,6 +146,18 @@ against a real cloud provider account (none was created).
 | One-command start | `./scripts/dev.sh`: installs the backend if needed, builds the web app, detects Docker, keeps data in `./cyberlab-data`, and listens on 127.0.0.1 only (development mode has no sign-in) | `scripts/dev.sh` |
 | Codespaces | Dev container installs Python and Node, builds the web app, forwards port 8000; README has an "open in Codespace" link | `.devcontainer/devcontainer.json` |
 
+## Implemented (Phase 5, step 1 — AI Lab Architect: drafts)
+| Area | What works | Where |
+|---|---|---|
+| Draft from plain words | `POST /v1/architect/draft {prompt}` returns a draft manifest (YAML), a beginner explanation and the policy engine's findings. **It never saves, approves or provisions anything**; the user reviews, saves and approves as with any manifest. Audited (`architect.draft`, prompt length only, never the prompt text) | `backend/src/cyberlab/architect/`, `api/architect.py` |
+| Planners | `CYBERLAB_AI_PROVIDER=rules` (default): built-in keyword planner, free and offline, **no AI**. `anthropic`: Claude via the official SDK with structured outputs constrained to registry IDs, effort `medium`, server-side refusal fallback; needs `CYBERLAB_AI_API_KEY` **and** `CYBERLAB_ALLOW_PAID_PROVIDERS=true`. `off`: disabled. `GET /v1/system/ai` reports which one | `architect/rules.py`, `architect/anthropic_model.py`, `config.py` |
+| Safety | Requests that pair attack words with a public hostname or public IP are refused before any model is called (a heuristic; reserved names like `.lab`, `.test`, `example.com` and private addresses are allowed). The model is told to refuse attacks on real systems. Every draft is re-validated (unknown systems/packs, duplicate names, bad hosts rejected) and checked by the policy engine, so internet access still needs approval | `architect/core.py` |
+| Web app | "Describe your lab" on the Setup tab: examples, refusal message, draft with explanation, findings, resources and YAML; "Use this draft" only fills in the editor | `frontend/src/components/Architect.tsx` |
+| Tests | 55 backend tests (screening both ways, bad model output, policy integration, Anthropic request shape and every error path with a fake client, settings guards, API, audit) and a browser test | `backend/tests/test_architect.py`, `frontend/e2e/app.spec.ts` |
+
+**Not tested:** the real Anthropic API. No key was used; every Anthropic test uses a fake
+client. Treat the `anthropic` planner as untested until someone runs it with a real key.
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -156,7 +168,7 @@ against a real cloud provider account (none was created).
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
-| AI Lab Architect | 5 |
+| AI Lab Architect: troubleshooting assistant (reads environment status and logs), evaluation with a fixture prompt set, other model providers | 5 |
 | Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
 | Remote desktop (graphical environments) | 6 |
 | Claude Code Skill, release automation | 7 |
@@ -195,11 +207,17 @@ against a real cloud provider account (none was created).
    (the dashboard loads several panels at once) all tried to create the user, and all but one
    failed with a unique-constraint error. Regression test fails 5/5 without the fix.
 
+17. **Fixed (found by CI):** Parrot's `deb.parrot.sh/parrot` address redirects to a random
+   mirror, and one was unreachable, so builds failed. Parrot images now use
+   `deb.parrot.sh/direct/parrot` (`sourceRewrite` in the registry).
+18. The keyword planner is simple: it only knows the words in `architect/rules.py`, and the
+   real-target check is a heuristic, not a guarantee. The policy engine and human approval
+   remain the actual safety boundary.
+
 ## Next milestone
-1. Merge PR #13 (beginner form, one-command start).
-2. Next phase, needing the user's go-ahead: **Phase 5 — AI Lab Architect** (describe a lab in
-   plain English; the AI fills in the same form/manifest; the policy engine checks it; you
-   approve). The web app now gives it a natural home.
+1. Merge the Parrot OS / BlackArch PR and the AI Lab Architect PR.
+2. Try the `anthropic` planner with a real key (user decision: it costs money).
+3. Phase 5 step 2: troubleshooting assistant, and a fixture prompt set to evaluate drafts.
 
 ## Operating system wish list (requested by the user, not yet built unless marked)
 Everything runs on a remote host, so none of it uses laptop disk. The free hosts still have
