@@ -58,6 +58,13 @@ def load_registry(root: Path) -> Registry:
         for base in pack.compatible_bases:
             if base not in registry.base_images:
                 problems.append(f"{pack.id}: unknown compatible base {base!r}")
+            elif registry.base_images[base].family == "arch":
+                missing = [t.name for t in pack.tools if t.package and not t.arch_package]
+                if missing:
+                    problems.append(
+                        f"{pack.id}: compatible with {base}, so these tools need an "
+                        f"archPackage: {', '.join(missing)}"
+                    )
     if problems:
         raise RegistryError("; ".join(problems))
     return registry

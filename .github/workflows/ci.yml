@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - run: pip install -e './backend'
       - id: plan
-        run: echo "matrix=$(cyberlab --registry registry image matrix --bases ubuntu-24-04,debian-12)" >> "$GITHUB_OUTPUT"
+        run: echo "matrix=$(cyberlab --registry registry image matrix --bases ubuntu-24-04,debian-12,parrot-core,blackarch)" >> "$GITHUB_OUTPUT"
 
   toolpack-images:
     # Builds every installable tool pack and checks each tool's command runs as the

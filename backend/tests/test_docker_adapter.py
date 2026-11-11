@@ -305,3 +305,19 @@ def test_egress_proxy_startup_failures_are_reported():
     )
     with pytest.raises(ProviderError, match="did not become ready"):
         DockerAdapter(slow, egress_ready_timeout=0.3).configure_egress("ab12cd34ef56", {})
+
+
+def test_arch_family_reaches_the_image_build(registry):
+    request = ProvisionRequest(
+        workspace_key="ab12cd34ef56",
+        environment=env("lab"),
+        image="docker.io/blackarchlinux/blackarch:latest",
+        family="arch",
+        tool_packs=(registry.tool_packs["network-analysis"],),
+    )
+    runner = FakeRunner({"image inspect": RunResult(1, "", "No such image")})
+    DockerAdapter(runner, image_mirror="mirror.gcr.io").provision(request)
+    (dockerfile,) = runner.inputs
+    assert "FROM mirror.gcr.io/blackarchlinux/blackarch:latest" in dockerfile
+    assert "pacman -Syu" in dockerfile and "wireshark-cli" in dockerfile
+    assert "apt-get" not in dockerfile

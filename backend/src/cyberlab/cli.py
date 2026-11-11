@@ -85,7 +85,7 @@ def _cmd_image_dockerfile(args: argparse.Namespace) -> int:
         if (args.mirror and base.image.startswith("docker.io/"))
         else base.image
     )
-    recipe = render(image, packs)
+    recipe = render(image, packs, base.family)
     sys.stdout.write(recipe.dockerfile)
     print(f"# tag: {recipe.tag}", file=sys.stderr)
     return 0

@@ -5,9 +5,9 @@ category: vulnerability-assessment
 description: Find known vulnerabilities and misconfigurations in your own images, dependencies and hosts.
 status: buildable
 risk: low
-compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling, parrot-core, blackarch]
 minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 3}
 tools:
   - {name: Trivy, purpose: "Container image, filesystem and IaC scanning", homepage: "https://trivy.dev"}
   - {name: Grype, purpose: Software vulnerability scanning from SBOMs, homepage: "https://github.com/anchore/grype"}
-  - {name: Lynis, purpose: Host hardening audit, homepage: "https://cisofy.com/lynis/", package: lynis, command: lynis}
+  - {name: Lynis, purpose: Host hardening audit, homepage: "https://cisofy.com/lynis/", package: lynis, archPackage: lynis, command: lynis}

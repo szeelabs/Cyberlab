@@ -25,7 +25,7 @@ def test_registry_endpoints_are_public(client):
     assert [p["id"] for p in packs] == ["crypto"]
     assert client.get("/v1/registry/tool-packs/crypto").json()["compatibleBases"]
     assert client.get("/v1/registry/tool-packs/nope").status_code == 404
-    assert len(client.get("/v1/registry/base-images").json()) == 3
+    assert len(client.get("/v1/registry/base-images").json()) == 5
 
 
 def test_validate_requires_auth(client):

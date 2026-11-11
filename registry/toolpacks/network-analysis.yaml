@@ -5,9 +5,9 @@ category: network-security
 description: Capture and inspect traffic and map hosts inside your own lab network.
 status: buildable
 risk: medium
-compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling, parrot-core, blackarch]
 minResources: {cpu: 0.5, memoryMiB: 512, storageGiB: 1}
 tools:
-  - {name: tshark, purpose: Command-line packet capture and protocol dissection, homepage: "https://www.wireshark.org", package: tshark, command: tshark}
-  - {name: tcpdump, purpose: Lightweight packet capture, homepage: "https://www.tcpdump.org", package: tcpdump, command: tcpdump}
-  - {name: nmap, purpose: Host and service discovery on authorized networks, homepage: "https://nmap.org", package: nmap, command: nmap}
+  - {name: tshark, purpose: Command-line packet capture and protocol dissection, homepage: "https://www.wireshark.org", package: tshark, archPackage: wireshark-cli, command: tshark}
+  - {name: tcpdump, purpose: Lightweight packet capture, homepage: "https://www.tcpdump.org", package: tcpdump, archPackage: tcpdump, command: tcpdump}
+  - {name: nmap, purpose: Host and service discovery on authorized networks, homepage: "https://nmap.org", package: nmap, archPackage: nmap, command: nmap}

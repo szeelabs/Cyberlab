@@ -26,7 +26,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Area | What works | Where |
 |---|---|---|
 | Universe Manifest v1alpha1 | YAML/JSON models, strict validation, generated JSON Schema, 3 examples | `backend/src/cyberlab/manifest/`, `spec/`, `examples/` |
-| Registry | 10 categories, 3 base images, 7 tool packs (metadata only), cross-checks | `registry/`, `backend/src/cyberlab/registry/` |
+| Registry | 10 categories, 5 base images (Ubuntu, Debian, Kali, Parrot OS core, BlackArch), 7 tool packs, cross-checks (Arch bases need `archPackage` names) | `registry/`, `backend/src/cyberlab/registry/` |
 | Policy engine | registry/compatibility checks, minimum resources, quotas, network rules, approval findings, resource estimate | `manifest/policy.py` |
 | Control-plane API | health/ready, public registry, manifest validation, owner-scoped workspaces, manifest import/export with revisions, audit log, `/v1/me` | `api/routes.py` |
 | Security foundations | JWT verification, production config guards, hardened YAML loading, size limits, security headers, request IDs | `auth.py`, `config.py`, `yaml_safe.py`, `main.py` |
@@ -208,8 +208,8 @@ real limits (for example Codespaces: about 32 GB disk and a monthly free-hours a
 | Wish | Status | How it would work / why not |
 |---|---|---|
 | Kali Linux | **Implemented** (`kali-rolling` base image) | container, browser terminal |
-| Parrot OS | Planned, feasible | official `parrotsec/core` container image, apt-based like our packs |
-| BlackArch | Planned, feasible with work | official container image; Arch uses `pacman`, so the image recipes need a pacman path |
+| Parrot OS | **Implemented** (`parrot-core` base image) | official `parrotsec/core` image (Parrot Security 7, Debian-based); boot and safe user tested locally, tool-pack builds tested in CI |
+| BlackArch | **Implemented** (`blackarch` base image) | official `blackarchlinux/blackarch` image; recipes use `pacman` (`family: arch`, per-tool `archPackage`); boot and safe user tested locally, tool-pack builds tested in CI |
 | Predator-OS | Unverified | no official container image found yet; would need checking |
 | Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
 | Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it; needs the remote desktop (not built yet) |

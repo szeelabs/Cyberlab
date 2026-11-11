@@ -135,3 +135,42 @@ def test_package_installs_cannot_hang_forever(registry):
     assert 'Acquire::http::Timeout \\"30\\"' not in df  # rendered for the shell, not escaped
     assert "Acquire::Retries" in df and "Acquire::http::Timeout" in df
     assert df.index("80cyberlab-network") < df.index("apt-get update")
+
+
+ARCH_BASE = "docker.io/blackarchlinux/blackarch:latest"
+
+
+def test_arch_recipe_uses_pacman_and_arch_names(registry):
+    rec = render(ARCH_BASE, [registry.tool_packs["network-analysis"]], "arch")
+    df = rec.dockerfile
+    assert "pacman -Syu --noconfirm --needed" in df  # full upgrade, no partial upgrades
+    assert "wireshark-cli" in rec.packages and "tshark" not in rec.packages
+    assert "apt-get" not in df and "DEBIAN_FRONTEND" not in df
+    assert "pacman -Scc" in df and "useradd -u 1000" in df
+    # same packs, other package system: a different image
+    assert rec.tag != render(ARCH_BASE, [registry.tool_packs["network-analysis"]]).tag
+
+
+def test_arch_no_packs_means_no_pacman():
+    df = render(ARCH_BASE, [], "arch").dockerfile
+    assert "pacman" not in df and "useradd" in df
+
+
+def test_unknown_package_family_rejected(registry):
+    with pytest.raises(ImageRecipeError, match="package family"):
+        render(BASE, [], "rpm")
+
+
+def test_new_security_systems_in_registry(registry):
+    parrot, blackarch = registry.base_images["parrot-core"], registry.base_images["blackarch"]
+    assert parrot.family == "debian" and parrot.image == "docker.io/parrotsec/core:latest"
+    assert blackarch.family == "arch"
+    assert "blackarch" in registry.tool_packs["web-appsec"].compatible_bases
+    # Suricata has not been verified on either, so detection-engineering stays Ubuntu-only
+    assert "blackarch" not in registry.tool_packs["detection-engineering"].compatible_bases
+
+
+def test_cli_dockerfile_for_blackarch(capsys):
+    assert main(["image", "dockerfile", "--base", "blackarch", "--packs", "osint-dns"]) == 0
+    out = capsys.readouterr().out
+    assert "FROM docker.io/blackarchlinux/blackarch:latest" in out and "      bind \\" in out

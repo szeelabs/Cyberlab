@@ -338,6 +338,7 @@ def provision_environments(
                     workspace_key=_workspace_key(ws),
                     environment=env,
                     image=reg.base_images[env.base_image].image,
+                    family=reg.base_images[env.base_image].family,
                     tool_packs=tuple(reg.tool_packs[p] for p in env.tool_packs),
                     internet_approved=env.network.mode == NetworkMode.internet
                     and "security.internet-egress" in needed,

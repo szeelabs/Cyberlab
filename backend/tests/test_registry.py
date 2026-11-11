@@ -37,3 +37,24 @@ def test_registry_rejects_id_filename_mismatch(tmp_path):
     (root / "toolpacks" / "crypto.yaml").rename(root / "toolpacks" / "renamed.yaml")
     with pytest.raises(RegistryError, match="must match the file name"):
         load_registry(root)
+
+
+def test_registry_rejects_arch_base_without_arch_package(tmp_path):
+    root = tmp_path / "registry"
+    shutil.copytree(REPO / "registry", root)
+    (root / "toolpacks" / "bad.yaml").write_text(
+        "id: bad\nname: Bad\nversion: 0.1.0\ncategory: digital-forensics\ndescription: x\n"
+        "status: buildable\ncompatibleBases: [debian-12, blackarch]\n"
+        "tools: [{name: t, purpose: p, package: tshark, command: tshark}]\n"
+    )
+    with pytest.raises(RegistryError, match="need an archPackage: t"):
+        load_registry(root)
+
+
+def test_registry_rejects_unknown_package_family(tmp_path):
+    root = tmp_path / "registry"
+    shutil.copytree(REPO / "registry", root)
+    with (root / "base-images.yaml").open("a") as f:
+        f.write("- {id: fedora, name: Fedora, family: rpm, image: docker.io/library/fedora:41}\n")
+    with pytest.raises(RegistryError):
+        load_registry(root)

@@ -429,7 +429,7 @@ class DockerAdapter:
             raise ProviderError(f"unsupported network mode {mode}")
 
         try:
-            recipe = render(self.resolve_image(request.image), request.tool_packs)
+            recipe = render(self.resolve_image(request.image), request.tool_packs, request.family)
         except ImageRecipeError as exc:
             raise ProviderError(str(exc)) from exc
         image = self.ensure_image(recipe)

@@ -43,6 +43,19 @@ binary, no Python API in the standard tooling), server-side S3 encryption (the p
 the key, which defeats the point). S3 storage is tested against moto's S3 server because
 MinIO's community images were not reachable from the build environment.
 
+## Parrot OS and BlackArch: official container images, two package systems
+*Status: implemented.* The user asked for these by name. Both publish official container
+images (`parrotsec/core`, `blackarchlinux/blackarch`), so they run the same way as Kali: a
+hardened container with the `cyberlab` user, reached from the browser terminal, using no
+laptop disk. Parrot is Debian-based (apt). BlackArch is Arch-based, so base images now carry a
+`family` (`debian` or `arch`) and the recipe uses `pacman -Syu --needed` for Arch (Arch does
+not support partial upgrades). Package names differ (`tshark` is `wireshark-cli` on Arch),
+so each tool lists an explicit `archPackage`; the registry refuses an Arch-compatible pack
+that leaves one out, so a wrong guess fails loudly instead of silently. Parrot's minimal
+`core` image was chosen over the full security image to keep downloads small: users add
+only the tool packs they need. VMware is not offered: a hypervisor cannot run inside a
+container, and CyberLab's own machines and lab networks already fill that role.
+
 ## Rejected / deferred
 * **Kubernetes now:** too heavy for the free-first target and impossible locally on this
   machine. A Kubernetes adapter can come later behind `ProviderAdapter`.

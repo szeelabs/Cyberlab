@@ -5,9 +5,9 @@ category: digital-forensics
 description: File-system, memory-image and firmware evidence analysis.
 status: buildable
 risk: low
-compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling, parrot-core, blackarch]
 minResources: {cpu: 1, memoryMiB: 2048, storageGiB: 4}
 tools:
-  - {name: The Sleuth Kit, purpose: Disk image and file-system analysis, homepage: "https://www.sleuthkit.org", package: sleuthkit, command: fls}
+  - {name: The Sleuth Kit, purpose: Disk image and file-system analysis, homepage: "https://www.sleuthkit.org", package: sleuthkit, archPackage: sleuthkit, command: fls}
   - {name: Volatility 3, purpose: Memory image analysis, homepage: "https://github.com/volatilityfoundation/volatility3"}
-  - {name: binwalk, purpose: Firmware image inspection, homepage: "https://github.com/ReFirmLabs/binwalk", package: binwalk, command: binwalk}
+  - {name: binwalk, purpose: Firmware image inspection, homepage: "https://github.com/ReFirmLabs/binwalk", package: binwalk, archPackage: binwalk, command: binwalk}

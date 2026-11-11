@@ -17,6 +17,9 @@ CyberLab principal engineer**. Two goals run together:
 * **Budget:** none for infrastructure. Free-first, open-source, browser-based workflows.
 * **Interests:** cybersecurity + AI + Linux + automation + cloud (later robotics).
 * **Wants to understand deeply,** not memorise commands.
+* **Product goal (user, 2026-11):** CyberLab must be *outstanding and very convenient*,
+  so people actually want to use it: few steps, clear words, sensible defaults, helpful
+  errors. Weigh every feature against "would a beginner find this easy?".
 * **Wish list (asked to remember, 2026-11):** run VMware-style labs, Kali, Parrot OS,
   Predator-OS, BlackArch, Android and Cisco Packet Tracer smoothly, using **no laptop
   storage**. Honest status per item is in `docs/DEVELOPMENT_STATUS.md` ("Operating system

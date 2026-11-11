@@ -18,7 +18,8 @@ from cyberlab.registry.models import ToolPack
 _PACKAGE = re.compile(r"^[a-z0-9][a-z0-9+.-]{0,63}$")
 _IMAGE = re.compile(r"^[a-z0-9][a-z0-9._/:@-]{0,254}$")
 IMAGE_REPOSITORY = "cyberlab-env"
-RECIPE_VERSION = "1"  # bump to rebuild every image after changing the template
+RECIPE_VERSION = "1"
+FAMILIES = ("debian", "arch")  # bump to rebuild every image after changing the template
 
 USER_SETUP = (
     "RUN set -eu; \\\n"
@@ -45,20 +46,25 @@ class ImageRecipe:
     tool_packs: tuple[str, ...]
 
 
-def collect_packages(packs: Iterable[ToolPack]) -> tuple[str, ...]:
-    pkgs = sorted({p for pack in packs for p in pack.packages})
+def collect_packages(packs: Iterable[ToolPack], family: str = "debian") -> tuple[str, ...]:
+    pkgs = sorted({p for pack in packs for p in pack.packages_for(family)})
     for p in pkgs:
         if not _PACKAGE.match(p):
             raise ImageRecipeError(f"invalid package name {p!r}")
     return tuple(pkgs)
 
 
-def render(base_image: str, packs: Iterable[ToolPack]) -> ImageRecipe:
-    """Render the Dockerfile for an environment. Pure function, no Docker needed."""
+def render(base_image: str, packs: Iterable[ToolPack], family: str = "debian") -> ImageRecipe:
+    """Render the Dockerfile for an environment. Pure function, no Docker needed.
+
+    ``family`` picks the package system: ``debian`` (apt) or ``arch`` (pacman).
+    """
     packs = sorted(packs, key=lambda p: p.id)
     if not _IMAGE.match(base_image):
         raise ImageRecipeError(f"invalid base image {base_image!r}")
-    packages = collect_packages(packs)
+    if family not in FAMILIES:
+        raise ImageRecipeError(f"unsupported package family {family!r}")
+    packages = collect_packages(packs, family)
     pack_refs = tuple(f"{p.id}@{p.version}" for p in packs)
 
     lines = [
@@ -67,9 +73,18 @@ def render(base_image: str, packs: Iterable[ToolPack]) -> ImageRecipe:
         f"FROM {base_image}",
         'LABEL dev.cyberlab.managed="true" \\',
         f'      dev.cyberlab.toolpacks="{",".join(pack_refs)}"',
-        "ENV DEBIAN_FRONTEND=noninteractive",
     ]
-    if packages:
+    if family == "debian":
+        lines.append("ENV DEBIAN_FRONTEND=noninteractive")
+    if packages and family == "arch":
+        lines += [
+            # A full upgrade with the install: Arch does not support partial upgrades.
+            "RUN pacman -Syu --noconfirm --needed \\",
+            *[f"      {p} \\" for p in packages],
+            " && pacman -Scc --noconfirm \\",
+            " && rm -rf /var/cache/pacman/pkg/*",
+        ]
+    elif packages:
         lines += [
             # Fail over and retry instead of hanging forever on a stalled mirror connection.
             'RUN printf \'Acquire::Retries "3";\\nAcquire::http::Timeout "30";\\n'
