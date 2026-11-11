@@ -133,7 +133,7 @@ class RulesModel:
 
         if _has(text, ("no network", "offline", "isolated", "air-gapped", "air gapped")):
             network = "isolated"
-        elif _has(text, ("internet", "online")):
+        elif _has(topic_text, ("internet", "online")):  # "no internet" is not a request for it
             network = "internet"
         else:
             network = "lab"

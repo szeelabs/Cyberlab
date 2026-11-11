@@ -428,3 +428,13 @@ def test_draft_endpoint_service_down(client):
     )
     r = client.post("/v1/architect/draft", json={"prompt": "a lab"}, headers=auth())
     assert r.status_code == 503 and "could not reach" in r.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "prompt", ["Packet analysis on Kali with no internet", "web lab without internet access"]
+)
+def test_rules_planner_no_internet_means_no_internet(registry, prompt):
+    # Regression: "no internet" used to switch on full internet access.
+    r = rules(registry, prompt)
+    assert r.manifest["spec"]["environments"][0]["network"] == {"mode": "lab"}
+    assert not r.plan["requires_approval"]
