@@ -174,3 +174,40 @@ def test_cli_dockerfile_for_blackarch(capsys):
     assert main(["image", "dockerfile", "--base", "blackarch", "--packs", "osint-dns"]) == 0
     out = capsys.readouterr().out
     assert "FROM docker.io/blackarchlinux/blackarch:latest" in out and "      bind \\" in out
+
+
+def test_parrot_uses_its_direct_server(capsys, registry):
+    # Found in CI: Parrot's redirector picked an unreachable mirror and the build failed.
+    assert main(["image", "dockerfile", "--base", "parrot-core", "--packs", "crypto"]) == 0
+    out = capsys.readouterr().out
+    rewrite = "s#https://deb.parrot.sh/parrot#https://deb.parrot.sh/direct/parrot#g"
+    assert rewrite in out and out.index(rewrite) < out.index("apt-get update")
+    assert "sed -i" not in render(BASE, [registry.tool_packs["crypto"]]).dockerfile
+
+
+@pytest.mark.parametrize(
+    "rewrite, family",
+    [
+        (("https://a.example/x", "http://plain.example/x"), "debian"),  # not https
+        (("https://a.example/x", "https://b.example/x#;rm -rf /"), "debian"),  # injection
+        (("https://a.example/x", "https://b.example/x"), "arch"),  # apt only
+    ],
+)
+def test_bad_source_rewrites_rejected(registry, rewrite, family):
+    with pytest.raises(ImageRecipeError, match="source_rewrite"):
+        render(BASE, [registry.tool_packs["crypto"]], family, rewrite)
+
+
+def test_registry_rejects_unsafe_source_rewrite():
+    from cyberlab.registry.models import BaseImage
+
+    with pytest.raises(ValidationError):
+        BaseImage.model_validate(
+            {
+                "id": "x",
+                "name": "X",
+                "family": "debian",
+                "image": "docker.io/library/debian:12",
+                "sourceRewrite": {"replace": "https://a.example", "with": "https://b'; id #"},
+            }
+        )

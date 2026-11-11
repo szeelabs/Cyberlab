@@ -37,6 +37,18 @@ class MinResources(BaseModel):
     storage_gib: int = Field(default=1, ge=0, alias="storageGiB")
 
 
+APT_URL = r"^https://[a-z0-9.-]+(/[A-Za-z0-9._~-]+)*/?$"
+
+
+class SourceRewrite(BaseModel):
+    """Point the image's package sources at a different (more reliable) address."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    replace: str = Field(pattern=APT_URL)
+    with_: str = Field(alias="with", pattern=APT_URL)
+
+
 class BaseImage(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -49,6 +61,11 @@ class BaseImage(BaseModel):
     description: str = ""
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     supports_desktop: bool = Field(default=False, alias="supportsDesktop")
+    source_rewrite: SourceRewrite | None = Field(
+        default=None,
+        alias="sourceRewrite",
+        description="apt only: rewrite this URL prefix in the image's package sources",
+    )
 
 
 APT_PACKAGE = r"^[a-z0-9][a-z0-9+.-]{0,63}$"

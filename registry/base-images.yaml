@@ -27,6 +27,8 @@
   description: Parrot Security's minimal Debian-based system; add tool packs for what you need.
   minResources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
   supportsDesktop: false
+  # deb.parrot.sh/parrot redirects to a random mirror, and some are unreachable (seen in CI).
+  sourceRewrite: {replace: "https://deb.parrot.sh/parrot", with: "https://deb.parrot.sh/direct/parrot"}
 - id: blackarch
   name: BlackArch Linux
   family: arch

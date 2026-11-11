@@ -54,7 +54,15 @@ def collect_packages(packs: Iterable[ToolPack], family: str = "debian") -> tuple
     return tuple(pkgs)
 
 
-def render(base_image: str, packs: Iterable[ToolPack], family: str = "debian") -> ImageRecipe:
+_URL = re.compile(r"^https://[a-z0-9.-]+(/[A-Za-z0-9._~-]+)*/?$")
+
+
+def render(
+    base_image: str,
+    packs: Iterable[ToolPack],
+    family: str = "debian",
+    source_rewrite: tuple[str, str] | None = None,
+) -> ImageRecipe:
     """Render the Dockerfile for an environment. Pure function, no Docker needed.
 
     ``family`` picks the package system: ``debian`` (apt) or ``arch`` (pacman).
@@ -64,6 +72,8 @@ def render(base_image: str, packs: Iterable[ToolPack], family: str = "debian") -
         raise ImageRecipeError(f"invalid base image {base_image!r}")
     if family not in FAMILIES:
         raise ImageRecipeError(f"unsupported package family {family!r}")
+    if source_rewrite and (family != "debian" or not all(_URL.match(u) for u in source_rewrite)):
+        raise ImageRecipeError("source_rewrite needs two https URLs and an apt-based image")
     packages = collect_packages(packs, family)
     pack_refs = tuple(f"{p.id}@{p.version}" for p in packs)
 
@@ -85,6 +95,13 @@ def render(base_image: str, packs: Iterable[ToolPack], family: str = "debian") -
             " && rm -rf /var/cache/pacman/pkg/*",
         ]
     elif packages:
+        if source_rewrite:
+            old, new = source_rewrite
+            lines.append(
+                # A pinned address instead of a redirector that may pick an unreachable mirror.
+                f"RUN sed -i 's#{old}#{new}#g' /etc/apt/sources.list "
+                "/etc/apt/sources.list.d/*.list 2>/dev/null || true"
+            )
         lines += [
             # Fail over and retry instead of hanging forever on a stalled mirror connection.
             'RUN printf \'Acquire::Retries "3";\\nAcquire::http::Timeout "30";\\n'

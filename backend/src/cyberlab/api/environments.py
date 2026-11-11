@@ -106,6 +106,13 @@ def _env_owned(db: Session, ws: Workspace, env_id: str) -> EnvironmentRecord:
 
 
 # ---------------------------------------------------------------- provider status
+
+
+def _rewrite(base) -> tuple[str, str] | None:
+    sr = base.source_rewrite
+    return (sr.replace, sr.with_) if sr else None
+
+
 @router.get("/v1/me/usage")
 def my_usage(
     user: User = Depends(current_user),
@@ -339,6 +346,7 @@ def provision_environments(
                     environment=env,
                     image=reg.base_images[env.base_image].image,
                     family=reg.base_images[env.base_image].family,
+                    source_rewrite=_rewrite(reg.base_images[env.base_image]),
                     tool_packs=tuple(reg.tool_packs[p] for p in env.tool_packs),
                     internet_approved=env.network.mode == NetworkMode.internet
                     and "security.internet-egress" in needed,
