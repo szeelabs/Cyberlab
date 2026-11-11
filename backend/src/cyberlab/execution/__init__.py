@@ -7,7 +7,7 @@ from cyberlab.execution.base import (
     ProvisionRequest,
     ProvisionResult,
 )
-from cyberlab.execution.shell import ShellSession
+from cyberlab.execution.shell import ShellSession, StreamSession
 
 __all__ = [
     "CostClass",
@@ -18,6 +18,7 @@ __all__ = [
     "ProvisionRequest",
     "ProvisionResult",
     "ShellSession",
+    "StreamSession",
     "build_provider",
 ]
 

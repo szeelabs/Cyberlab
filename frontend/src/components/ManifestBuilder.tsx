@@ -79,7 +79,8 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
                     const base = e.target.value;
                     // keep only the tool packs that work on the new system
                     const ok = new Set(packs.filter((p) => p.compatibleBases.includes(base)).map((p) => p.id));
-                    update(i, { baseImage: base, toolPacks: env.toolPacks.filter((t) => ok.has(t)) });
+                    const desktopOk = bases.find((b) => b.id === base)?.supportsDesktop ?? false;
+                    update(i, { baseImage: base, toolPacks: env.toolPacks.filter((t) => ok.has(t)), desktop: env.desktop && desktopOk });
                   }}
                 >
                   {bases.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -152,6 +153,18 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
                 <input type="checkbox" checked={env.ephemeral} onChange={(e) => update(i, { ephemeral: e.target.checked })} />
                 Throwaway (delete its files too)
               </label>
+              {bases.find((b) => b.id === env.baseImage)?.supportsDesktop ? (
+                <label className="row">
+                  <input
+                    type="checkbox"
+                    checked={env.desktop}
+                    onChange={(e) => update(i, { desktop: e.target.checked, size: e.target.checked && env.size === "small" ? "medium" : env.size })}
+                  />
+                  Remote desktop (a graphical screen in your browser)
+                </label>
+              ) : (
+                <span className="muted">No remote desktop on this system yet.</span>
+              )}
             </div>
           </div>
         );

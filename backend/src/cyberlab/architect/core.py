@@ -59,6 +59,7 @@ class DraftMachine(_Strict):
     allowed_egress: list[str] = Field(default_factory=list, alias="allowedEgress", max_length=20)
     idle_timeout_minutes: int = Field(default=60, alias="idleTimeoutMinutes", ge=5, le=1440)
     ephemeral: bool = False
+    desktop: bool = False
 
 
 class DraftPlan(_Strict):
@@ -94,6 +95,7 @@ def draft_schema(registry: Registry) -> dict:
             "allowedEgress": {"type": "array", "items": {"type": "string"}},
             "idleTimeoutMinutes": {"type": "integer"},
             "ephemeral": {"type": "boolean"},
+            "desktop": {"type": "boolean"},
         },
         "required": [
             "name",
@@ -104,6 +106,7 @@ def draft_schema(registry: Registry) -> dict:
             "allowedEgress",
             "idleTimeoutMinutes",
             "ephemeral",
+            "desktop",
         ],
         "additionalProperties": False,
     }
@@ -132,7 +135,8 @@ def draft_schema(registry: Registry) -> dict:
 def system_prompt(registry: Registry) -> str:
     bases = "\n".join(
         f"- {b.id}: {b.name} ({b.family}); minimum {b.min_resources.cpu} CPU, "
-        f"{b.min_resources.memory_mib} MiB RAM. {b.description}"
+        f"{b.min_resources.memory_mib} MiB RAM; remote desktop: "
+        f"{'yes' if b.supports_desktop else 'no'}. {b.description}"
         for b in sorted(registry.base_images.values(), key=lambda b: b.id)
     )
     packs = "\n".join(
@@ -176,6 +180,9 @@ Rules:
 - Keep labs small: at most 4 machines unless the user asks for more (never more than 6).
 - explanation: 2 to 5 short, simple sentences for a beginner saying what each machine is
   for and why you chose its network. No marketing language.
+- desktop=true gives the machine a graphical screen in the browser. Use it only when the
+  user wants a desktop or graphical tools, only on systems with remote desktop: yes, and
+  pick medium or large (the desktop needs about 1 GiB of extra memory).
 - Set refusalReason to "" when not refused. Set idleTimeoutMinutes to 60 unless asked."""
 
 
@@ -285,6 +292,8 @@ def plan_to_manifest(plan: DraftPlan, registry: Registry) -> dict:
                 },
             }
         )
+        if m.desktop:
+            envs[-1]["access"] = {"desktop": True}
     metadata = {"name": plan.name}
     if plan.description.strip():
         metadata["description"] = plan.description.strip()

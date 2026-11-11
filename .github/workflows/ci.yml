@@ -129,6 +129,62 @@ jobs:
       - name: Image size
         run: docker image ls pack-test --format '{{.Size}}'
 
+  desktop-images:
+    # Builds the remote desktop on each system that offers it, then completes a VNC
+    # handshake through `docker exec` in a hardened, network-less container.
+    name: desktop (${{ matrix.base }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # fail fast instead of hanging for hours
+    needs: backend
+    strategy:
+      fail-fast: false
+      matrix:
+        base: [ubuntu-24-04, parrot-core, blackarch]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e './backend'
+      - name: Build
+        run: |
+          cyberlab --registry registry image dockerfile --base "${{ matrix.base }}" --desktop \
+            --mirror mirror.gcr.io > Dockerfile
+          docker build --tag desktop-test - < Dockerfile && exit 0
+          echo "::warning::build via mirror failed; retrying from Docker Hub"
+          cyberlab --registry registry image dockerfile --base "${{ matrix.base }}" --desktop \
+            > Dockerfile.direct
+          docker build --tag desktop-test - < Dockerfile.direct
+      - name: VNC handshake in a hardened container
+        run: |
+          docker run -d --name desk --init --user 1000:1000 --cap-drop ALL \
+            --security-opt no-new-privileges --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m --network none \
+            --tmpfs /workspace:rw,uid=1000,gid=1000 -e HOME=/workspace \
+            desktop-test sleep infinity
+          python3 - <<'PY'
+          import subprocess
+          for attempt in (1, 2):  # the second connection reuses the running desktop
+              p = subprocess.Popen(["docker", "exec", "-i", "desk", "/usr/local/bin/cyberlab-desktop"],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+              assert p.stdout.read(12) == b"RFB 003.008\n"
+              p.stdin.write(b"RFB 003.008\n"); p.stdin.flush()
+              n = p.stdout.read(1)[0]
+              assert 1 in p.stdout.read(n)
+              p.stdin.write(b"\x01"); p.stdin.flush()
+              assert p.stdout.read(4) == b"\0\0\0\0"
+              p.stdin.write(b"\x01"); p.stdin.flush()
+              w, h = int.from_bytes(p.stdout.read(2), "big"), int.from_bytes(p.stdout.read(2), "big")
+              assert (w, h) == (1280, 800), (w, h)
+              print(f"connection {attempt}: VNC OK, screen {w}x{h}")
+              p.kill()
+          PY
+      - name: Image size
+        if: always()
+        run: docker image ls desktop-test --format '{{.Size}}'
+
   postgres:
     # Migrations and core API flows against a real PostgreSQL server.
     runs-on: ubuntu-latest

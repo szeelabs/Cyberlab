@@ -8,10 +8,12 @@ and reused, and any change to the recipe produces a new tag.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from importlib import resources
 
 from cyberlab.registry.models import ToolPack
 
@@ -54,6 +56,19 @@ def collect_packages(packs: Iterable[ToolPack], family: str = "debian") -> tuple
     return tuple(pkgs)
 
 
+# Remote desktop: a virtual screen (Xvfb), a light window manager (Openbox), a terminal, and
+# x11vnc speaking VNC over stdin/stdout (through socat), started by DESKTOP_COMMAND.
+DESKTOP_PACKAGES = {
+    "debian": ("openbox", "socat", "x11vnc", "xfonts-base", "xterm", "xvfb"),
+    "arch": ("openbox", "socat", "x11vnc", "xorg-fonts-misc", "xorg-server-xvfb", "xterm"),
+}
+DESKTOP_COMMAND = "/usr/local/bin/cyberlab-desktop"
+
+
+def desktop_script() -> str:
+    return resources.files("cyberlab.execution").joinpath("desktop.sh").read_text("utf-8")
+
+
 _URL = re.compile(r"^https://[a-z0-9.-]+(/[A-Za-z0-9._~-]+)*/?$")
 
 
@@ -62,6 +77,7 @@ def render(
     packs: Iterable[ToolPack],
     family: str = "debian",
     source_rewrite: tuple[str, str] | None = None,
+    desktop: bool = False,
 ) -> ImageRecipe:
     """Render the Dockerfile for an environment. Pure function, no Docker needed.
 
@@ -75,6 +91,8 @@ def render(
     if source_rewrite and (family != "debian" or not all(_URL.match(u) for u in source_rewrite)):
         raise ImageRecipeError("source_rewrite needs two https URLs and an apt-based image")
     packages = collect_packages(packs, family)
+    if desktop:
+        packages = tuple(sorted(set(packages) | set(DESKTOP_PACKAGES[family])))
     pack_refs = tuple(f"{p.id}@{p.version}" for p in packs)
 
     lines = [
@@ -112,6 +130,12 @@ def render(
             " && apt-get clean \\",
             " && rm -rf /var/lib/apt/lists/*",
         ]
+    if desktop:
+        # base64 keeps the script's quotes and newlines intact inside one RUN line.
+        encoded = base64.b64encode(desktop_script().encode()).decode()
+        lines.append(
+            f"RUN echo {encoded} | base64 -d > {DESKTOP_COMMAND} && chmod 755 {DESKTOP_COMMAND}"
+        )
     dockerfile = "\n".join(lines) + "\n" + USER_SETUP + "USER 1000:1000\nWORKDIR /workspace\n"
     digest = hashlib.sha256(dockerfile.encode()).hexdigest()[:16]
     return ImageRecipe(

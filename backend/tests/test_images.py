@@ -211,3 +211,34 @@ def test_registry_rejects_unsafe_source_rewrite():
                 "sourceRewrite": {"replace": "https://a.example", "with": "https://b'; id #"},
             }
         )
+
+
+def test_desktop_recipe_installs_desktop_and_launcher(registry):
+    import base64
+
+    from cyberlab.execution.images import DESKTOP_COMMAND, desktop_script
+
+    plain = render("docker.io/library/ubuntu:24.04", [])
+    rec = render("docker.io/library/ubuntu:24.04", [], desktop=True)
+    assert rec.tag != plain.tag
+    for pkg in ("xvfb", "x11vnc", "openbox", "xterm", "socat"):
+        assert pkg in rec.packages
+    (line,) = [x for x in rec.dockerfile.splitlines() if DESKTOP_COMMAND in x]
+    encoded = line.split()[2]
+    assert base64.b64decode(encoded).decode() == desktop_script()
+    assert "x11vnc -inetd" in desktop_script() and "-nolisten tcp" in desktop_script()
+    assert rec.dockerfile.index(DESKTOP_COMMAND) < rec.dockerfile.index("USER 1000:1000")
+
+
+def test_desktop_recipe_on_arch_uses_arch_names():
+    rec = render("docker.io/blackarchlinux/blackarch:latest", [], "arch", desktop=True)
+    assert "xorg-server-xvfb" in rec.packages and "xvfb" not in rec.packages
+    assert "pacman -Syu" in rec.dockerfile
+
+
+def test_desktop_script_opens_no_network_port():
+    from cyberlab.execution.images import desktop_script
+
+    script = desktop_script()
+    assert "-rfbport" not in script and "-listen" not in script
+    assert "-nolisten tcp" in script  # the X server itself is not reachable over the network
