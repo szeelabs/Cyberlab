@@ -8,6 +8,7 @@ environments. Building OCI images from packs is Phase 2.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -36,16 +37,35 @@ class MinResources(BaseModel):
     storage_gib: int = Field(default=1, ge=0, alias="storageGiB")
 
 
+APT_URL = r"^https://[a-z0-9.-]+(/[A-Za-z0-9._~-]+)*/?$"
+
+
+class SourceRewrite(BaseModel):
+    """Point the image's package sources at a different (more reliable) address."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    replace: str = Field(pattern=APT_URL)
+    with_: str = Field(alias="with", pattern=APT_URL)
+
+
 class BaseImage(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     id: str = Field(pattern=SLUG)
     name: str
-    family: str
+    family: Literal["debian", "arch"] = Field(
+        description="Package system: debian (apt) or arch (pacman)"
+    )
     image: str = Field(description="Upstream OCI image reference")
     description: str = ""
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     supports_desktop: bool = Field(default=False, alias="supportsDesktop")
+    source_rewrite: SourceRewrite | None = Field(
+        default=None,
+        alias="sourceRewrite",
+        description="apt only: rewrite this URL prefix in the image's package sources",
+    )
 
 
 APT_PACKAGE = r"^[a-z0-9][a-z0-9+.-]{0,63}$"
@@ -53,13 +73,19 @@ COMMAND = r"^[a-zA-Z0-9][a-zA-Z0-9_.+-]{0,63}$"
 
 
 class ToolInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str
     purpose: str
     homepage: str | None = None
     package: str | None = Field(
         default=None, pattern=APT_PACKAGE, description="Debian/Ubuntu package that installs it"
+    )
+    arch_package: str | None = Field(
+        default=None,
+        alias="archPackage",
+        pattern=APT_PACKAGE,
+        description="Arch/BlackArch package name, when it differs from (or replaces) `package`",
     )
     command: str | None = Field(
         default=None, pattern=COMMAND, description="Executable used to smoke-test the install"
@@ -95,6 +121,12 @@ class ToolPack(BaseModel):
     def packages(self) -> list[str]:
         """Distribution packages to install, in a stable order without duplicates."""
         return sorted({t.package for t in self.tools if t.package})
+
+    def packages_for(self, family: str) -> list[str]:
+        """Packages for a package system ("debian" or "arch")."""
+        if family == "arch":
+            return sorted({t.arch_package or t.package for t in self.tools if t.package})
+        return self.packages
 
     @model_validator(mode="after")
     def _status_matches_packages(self) -> ToolPack:

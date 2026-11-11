@@ -48,6 +48,8 @@ class ProvisionRequest:
     workspace_key: str  # short, slug-safe identifier of the workspace
     environment: Environment
     image: str  # base OCI image reference resolved from the registry
+    family: str = "debian"  # base image package system: debian (apt) or arch (pacman)
+    source_rewrite: tuple[str, str] | None = None  # apt sources: (replace, with)
     tool_packs: tuple[ToolPack, ...] = ()
     # restricted-egress only: proxy URL with this environment's credentials
     egress_proxy_url: str | None = None

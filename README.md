@@ -15,7 +15,7 @@ machine becomes just a window.
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of
   environments, tool packs, resources, networking, workspace and preferences, with a
   generated [JSON Schema](spec/universe-manifest.schema.json).
-* **Tool registry**: 10 categories, 3 base images, 7 tool packs (metadata only, no images published yet).
+* **Tool registry**: 10 categories, 5 operating systems (Ubuntu, Debian, Kali, Parrot OS, BlackArch), 7 tool packs built into images on demand (none published to a registry yet).
 * **Policy engine**: registry compatibility, minimum resources, quotas, network isolation
   rules, approval requirements (internet egress, high-risk packs) and a resource estimate.
 * **API**: workspaces, manifest import/export with revisions, audit log, JWT auth.

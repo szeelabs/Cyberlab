@@ -20,3 +20,19 @@
   description: Security-focused distribution with most tools available as packages.
   minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
   supportsDesktop: true
+- id: parrot-core
+  name: Parrot OS (core)
+  family: debian
+  image: docker.io/parrotsec/core:latest
+  description: Parrot Security's minimal Debian-based system; add tool packs for what you need.
+  minResources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+  supportsDesktop: false
+  # deb.parrot.sh/parrot redirects to a random mirror, and some are unreachable (seen in CI).
+  sourceRewrite: {replace: "https://deb.parrot.sh/parrot", with: "https://deb.parrot.sh/direct/parrot"}
+- id: blackarch
+  name: BlackArch Linux
+  family: arch
+  image: docker.io/blackarchlinux/blackarch:latest
+  description: Arch-based penetration testing system with the BlackArch tool repository.
+  minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
+  supportsDesktop: false

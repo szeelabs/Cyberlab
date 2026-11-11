@@ -26,7 +26,7 @@ installs verified on Ubuntu 24.04 locally; every pack on Ubuntu and Debian is bu
 | Area | What works | Where |
 |---|---|---|
 | Universe Manifest v1alpha1 | YAML/JSON models, strict validation, generated JSON Schema, 3 examples | `backend/src/cyberlab/manifest/`, `spec/`, `examples/` |
-| Registry | 10 categories, 3 base images, 7 tool packs (metadata only), cross-checks | `registry/`, `backend/src/cyberlab/registry/` |
+| Registry | 10 categories, 5 base images (Ubuntu, Debian, Kali, Parrot OS core, BlackArch), 7 tool packs, cross-checks (Arch bases need `archPackage` names) | `registry/`, `backend/src/cyberlab/registry/` |
 | Policy engine | registry/compatibility checks, minimum resources, quotas, network rules, approval findings, resource estimate | `manifest/policy.py` |
 | Control-plane API | health/ready, public registry, manifest validation, owner-scoped workspaces, manifest import/export with revisions, audit log, `/v1/me` | `api/routes.py` |
 | Security foundations | JWT verification, production config guards, hardened YAML loading, size limits, security headers, request IDs | `auth.py`, `config.py`, `yaml_safe.py`, `main.py` |
@@ -200,3 +200,17 @@ against a real cloud provider account (none was created).
 2. Next phase, needing the user's go-ahead: **Phase 5 — AI Lab Architect** (describe a lab in
    plain English; the AI fills in the same form/manifest; the policy engine checks it; you
    approve). The web app now gives it a natural home.
+
+## Operating system wish list (requested by the user, not yet built unless marked)
+Everything runs on a remote host, so none of it uses laptop disk. The free hosts still have
+real limits (for example Codespaces: about 32 GB disk and a monthly free-hours allowance).
+
+| Wish | Status | How it would work / why not |
+|---|---|---|
+| Kali Linux | **Implemented** (`kali-rolling` base image) | container, browser terminal |
+| Parrot OS | **Implemented** (`parrot-core` base image) | official `parrotsec/core` image (Parrot Security 7, Debian-based); boot and safe user tested locally, tool-pack builds tested in CI |
+| BlackArch | **Implemented** (`blackarch` base image) | official `blackarchlinux/blackarch` image; recipes use `pacman` (`family: arch`, per-tool `archPackage`); boot and safe user tested locally, tool-pack builds tested in CI |
+| Predator-OS | Unverified | no official container image found yet; would need checking |
+| Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
+| Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it; needs the remote desktop (not built yet) |
+| VMware | Not planned | it is a commercial hypervisor and cannot run inside a container; CyberLab itself plays VMware's role (machines + lab networks) |

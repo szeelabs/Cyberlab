@@ -5,8 +5,8 @@ category: osint
 description: Public DNS and domain registration lookups. Needs outbound access to resolvers and registries.
 status: buildable
 risk: low
-compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling, parrot-core, blackarch]
 minResources: {cpu: 0.25, memoryMiB: 256, storageGiB: 1}
 tools:
-  - {name: dig, purpose: DNS queries, homepage: "https://www.isc.org/bind/", package: dnsutils, command: dig}
-  - {name: whois, purpose: Domain registration lookups, package: whois, command: whois}
+  - {name: dig, purpose: DNS queries, homepage: "https://www.isc.org/bind/", package: dnsutils, archPackage: bind, command: dig}
+  - {name: whois, purpose: Domain registration lookups, package: whois, archPackage: whois, command: whois}

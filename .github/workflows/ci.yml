@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - run: pip install -e './backend'
       - id: plan
-        run: echo "matrix=$(cyberlab --registry registry image matrix --bases ubuntu-24-04,debian-12)" >> "$GITHUB_OUTPUT"
+        run: echo "matrix=$(cyberlab --registry registry image matrix --bases ubuntu-24-04,debian-12,parrot-core,blackarch)" >> "$GITHUB_OUTPUT"
 
   toolpack-images:
     # Builds every installable tool pack and checks each tool's command runs as the
@@ -109,7 +109,15 @@ jobs:
             --packs "${{ matrix.pack }}" --mirror mirror.gcr.io > Dockerfile
           cat Dockerfile
       - name: Build
-        run: docker build --tag pack-test - < Dockerfile
+        # The mirror rate-limits images it does not cache (e.g. BlackArch when several jobs
+        # start at once). On failure, build once more straight from Docker Hub; a real
+        # package error fails both attempts.
+        run: |
+          docker build --tag pack-test - < Dockerfile && exit 0
+          echo "::warning::build via mirror failed; retrying from Docker Hub"
+          cyberlab --registry registry image dockerfile --base "${{ matrix.base }}" \
+            --packs "${{ matrix.pack }}" > Dockerfile.direct
+          docker build --tag pack-test - < Dockerfile.direct
       - name: Smoke test
         run: |
           CMDS="$(cyberlab --registry registry image commands --base "${{ matrix.base }}" --packs "${{ matrix.pack }}")"

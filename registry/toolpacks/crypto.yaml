@@ -5,9 +5,9 @@ category: cryptography
 description: Encryption, signing, certificate and encoding utilities.
 status: buildable
 risk: low
-compatibleBases: [ubuntu-24-04, debian-12, kali-rolling]
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling, parrot-core, blackarch]
 minResources: {cpu: 0.25, memoryMiB: 256, storageGiB: 1}
 tools:
-  - {name: OpenSSL, purpose: "TLS, certificates and primitives", homepage: "https://www.openssl.org", package: openssl, command: openssl}
-  - {name: GnuPG, purpose: OpenPGP encryption and signing, homepage: "https://gnupg.org", package: gnupg, command: gpg}
-  - {name: age, purpose: Simple modern file encryption, homepage: "https://age-encryption.org", package: age, command: age}
+  - {name: OpenSSL, purpose: "TLS, certificates and primitives", homepage: "https://www.openssl.org", package: openssl, archPackage: openssl, command: openssl}
+  - {name: GnuPG, purpose: OpenPGP encryption and signing, homepage: "https://gnupg.org", package: gnupg, archPackage: gnupg, command: gpg}
+  - {name: age, purpose: Simple modern file encryption, homepage: "https://age-encryption.org", package: age, archPackage: age, command: age}
