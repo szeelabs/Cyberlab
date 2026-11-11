@@ -232,3 +232,12 @@ real limits (for example Codespaces: about 32 GB disk and a monthly free-hours a
 | Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
 | Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it; needs the remote desktop (not built yet) |
 | VMware | Not planned | it is a commercial hypervisor and cannot run inside a container; CyberLab itself plays VMware's role (machines + lab networks) |
+19. **Fixed (2026-11):** `npm audit` in `frontend/` reported 3 advisories in the test
+   toolchain only (never in the built app at `/app`): `@vitest/mocker` (moderate; path
+   traversal and mock-registration code injection) and `tinypool` (2 critical; prototype
+   pollution to remote code execution), both from `vitest` 3.2.7. Upgraded to `vitest`
+   4.1.12, the first 4.x release past both advisories; it no longer uses `tinypool` and still
+   supports `vite` 6, so `vite`, `@vitejs/plugin-react` and `vite.config.ts` are unchanged.
+   `npm audit` is now clean. (`npm audit fix --force` would have jumped to vitest 5.x.) Note:
+   npm 10 crashes (`reading 'edgesOut'`) when re-resolving vitest's optional peer
+   dependencies; the lockfile was regenerated with npm 11.6.2, and `npm ci` with npm 10 works.
