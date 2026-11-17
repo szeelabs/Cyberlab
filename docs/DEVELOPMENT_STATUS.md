@@ -163,7 +163,7 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 |---|---|---|
 | Desktop in the machine | `access.desktop: true` adds a light desktop to the image: Xvfb (virtual screen, 1280x800), Openbox (window manager, right-click menu), xterm, and x11vnc. A launcher starts it on first use and reuses it after. Machines with a desktop get `--init` and `DISPLAY=:1`, so graphical programs started from the terminal show on the desktop | `execution/desktop.sh`, `execution/images.py`, `execution/docker.py` |
 | Connection | `POST .../desktop` gives a single-use desktop ticket; `/v1/desktop` carries VNC over the WebSocket, through `docker exec` to `x11vnc -inetd` (via socat). **No network port is opened**, so it also works on your own server over SSH. Tickets now have a purpose (migration 0003): terminal and desktop tickets are not interchangeable. Desktop sessions count toward the same per-user session limit and keep the machine "in use" for the reaper | `api/desktop.py`, `api/terminal.py`, `migrations/versions/0003_*` |
-| Web app | "Desktop" button for machines with a desktop; noVNC viewer (loaded only when opened), full screen; "Remote desktop" checkbox in the beginner form (only on systems that support it, and it asks for Medium or larger); "Describe your lab" understands "desktop"/"graphical" | `components/Desktop.tsx`, `desktopChannel.ts`, `components/ManifestBuilder.tsx`, `architect/rules.py` |
+| Web app | "Desktop" button for machines with a desktop; noVNC viewer (loaded only when opened), full screen; **copy and paste** both ways through a Clipboard box (send text to the desktop, paste there with middle-click or Shift+Insert; text copied on the desktop appears in the box, with "Copy to my computer"); "Remote desktop" checkbox in the beginner form (only on systems that support it, and it asks for Medium or larger); "Describe your lab" understands "desktop"/"graphical" | `components/Desktop.tsx`, `desktopChannel.ts`, `components/ManifestBuilder.tsx`, `architect/rules.py` |
 | Systems | Ubuntu 24.04, Kali, Parrot OS and BlackArch (desktop builds and a VNC handshake in a hardened container, in CI job `desktop-images`) | `registry/base-images.yaml`, `.github/workflows/ci.yml` |
 | Tests | Backend: desktop API (binary bridge, audit, ticket purpose swap refused, single use, owner only, origin, session limit, open failure, policy), recipe and run args; real Docker: API → WebSocket → VNC handshake twice, desktop runs as `cyberlab`, nothing listens on a TCP port; real browser: open the desktop, check the screen is drawn, type into its terminal and find the created file in Files | `tests/test_desktop.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
 
@@ -193,7 +193,7 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
 | Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
-| Remote desktop extras: copy/paste between your computer and the desktop, resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
+| Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io); a project website | 7 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
@@ -237,9 +237,9 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
    real-target check is a heuristic, not a guarantee. The policy engine and human approval
    remain the actual safety boundary.
 
-19. Remote desktop limits: the screen is a fixed 1280x800 (scaled to the browser); no copy/
-   paste with your own computer yet; the desktop keeps running (and using memory) until the
-   machine is stopped, even after the browser tab closes.
+19. Remote desktop limits: the screen is a fixed 1280x800 (scaled to the browser); the
+   desktop keeps running (and using memory) until the machine is stopped, even after the
+   browser tab closes. Copy/paste is plain text only (the basic VNC clipboard, Latin-1).
 20. Found while building the desktop: noVNC 1.6 cannot be bundled (top-level `await` in its
    CommonJS build); 1.7.0 is used, and the web app now targets ES2022 browsers
    (Chrome/Edge 89+, Firefox 89+, Safari 15+).

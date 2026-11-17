@@ -195,7 +195,7 @@ test("remote desktop: see the screen and type into it", async ({ page }) => {
   test.skip(process.env.E2E_DOCKER !== "1", "set E2E_DOCKER=1 to run against a real Docker Engine");
   test.setTimeout(600_000); // the first desktop image build downloads packages
   const errors = watchConsole(page);
-  await createWorkspace(page, "e2e-desktop");
+  await createWorkspace(page, `e2e-desktop-${Date.now() % 100000}`); // unique: safe to repeat
   await saveManifest(page, DESKTOP);
   await expect(page.getByText("Saved as revision 1.")).toBeVisible();
 
@@ -226,9 +226,34 @@ test("remote desktop: see the screen and type into it", async ({ page }) => {
   await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.2);
   await page.keyboard.type("echo typed-on-desktop > /workspace/from-desktop.txt\n", { delay: 20 });
 
+  // Clipboard, browser -> desktop: send a command, paste it into the terminal with a middle-click.
+  await desk.getByLabel("Clipboard").fill("echo pasted-from-browser > /workspace/from-clipboard.txt\n");
+  await desk.getByRole("button", { name: "Send to desktop" }).click();
+  await expect(desk.getByRole("status")).toContainText("Sent");
+  const b1 = (await canvas.boundingBox())!; // measure again: the page may have scrolled
+  await page.mouse.click(b1.x + b1.width * 0.2, b1.y + b1.height * 0.2, { button: "middle" });
+
+  // Clipboard, desktop -> browser: print a line, select it with a triple-click (xterm copies
+  // selections), and it appears in the clipboard box.
+  // The paste arrives a moment later (the terminal asks the VNC server for the text); a
+  // person never types that fast, but a test does, so let it finish first.
+  await page.waitForTimeout(1500);
+  // A middle-click doesn't move keyboard focus to the desktop; a left-click does.
+  await page.mouse.click(b1.x + b1.width * 0.2, b1.y + b1.height * 0.2);
+  await page.keyboard.type("clear; echo ZZ-COPY-ME-42\n", { delay: 20 });
+  // The screen redraws a moment later, so retry until the selected line is the new one.
+  await expect(async () => {
+    const b2 = (await canvas.boundingBox())!;
+    // framebuffer point (80, 68): the first text line of the xterm window at +40+40
+    await page.mouse.click(b2.x + (b2.width * 80) / 1280, b2.y + (b2.height * 68) / 800, { clickCount: 3 });
+    await expect(desk.getByLabel("Clipboard")).toHaveValue(/ZZ-COPY-ME-42/, { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
+
   await desk.getByRole("button", { name: "Close desktop" }).click();
   await page.getByRole("button", { name: "Files" }).click();
-  await expect(page.getByRole("region", { name: "Files" }).getByText("from-desktop.txt")).toBeVisible({ timeout: 15_000 });
+  const files = page.getByRole("region", { name: "Files" });
+  await expect(files.getByText("from-desktop.txt")).toBeVisible({ timeout: 15_000 });
+  await expect(files.getByText("from-clipboard.txt")).toBeVisible();
 
   await page.getByRole("button", { name: "Environments" }).click();
   await envs.getByLabel(/keep files/).uncheck(); // leave nothing behind

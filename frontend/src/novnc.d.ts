@@ -10,5 +10,6 @@ declare module "@novnc/novnc" {
     disconnect(): void;
     focus(): void;
     sendCtrlAltDel(): void;
+    clipboardPasteFrom(text: string): void;
   }
 }
