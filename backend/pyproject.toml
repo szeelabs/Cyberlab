@@ -36,7 +36,9 @@ cyberlab = "cyberlab.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cyberlab = ["static/*", "static/vendor/xterm/*", "migrations/script.py.mako"]
+cyberlab = [
+  "static/*", "static/vendor/xterm/*", "migrations/script.py.mako", "execution/desktop.sh",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

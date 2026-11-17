@@ -172,3 +172,62 @@ test("full lab: environment, terminal, files, snapshot, destroy", async ({ page 
 
   expect(errors).toEqual([]);
 });
+
+const DESKTOP = `apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: e2e-desktop}
+spec:
+  environments:
+    - name: gui
+      baseImage: ubuntu-24-04
+      resources: {cpu: 1, memoryMiB: 2048, storageGiB: 4}
+      network: {mode: isolated}
+      access: {desktop: true}
+`;
+
+test("remote desktop: see the screen and type into it", async ({ page }) => {
+  test.skip(process.env.E2E_DOCKER !== "1", "set E2E_DOCKER=1 to run against a real Docker Engine");
+  test.setTimeout(600_000); // the first desktop image build downloads packages
+  const errors = watchConsole(page);
+  await createWorkspace(page, "e2e-desktop");
+  await saveManifest(page, DESKTOP);
+  await expect(page.getByText("Saved as revision 1.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Environments" }).click();
+  await page.getByRole("button", { name: "Create environments" }).click();
+  const envs = page.getByRole("region", { name: "Environments" });
+  await expect(envs.getByText("running")).toBeVisible({ timeout: 540_000 });
+
+  await envs.getByRole("button", { name: "Desktop" }).click();
+  const desk = page.getByRole("region", { name: "Desktop: gui" });
+  await expect(desk.getByText("connected")).toBeVisible({ timeout: 30_000 });
+  const canvas = page.getByTestId("desktop").locator("canvas");
+  await expect(canvas).toBeVisible();
+
+  // Something is drawn: the xterm window on the dark background, not one flat colour.
+  await expect
+    .poll(async () =>
+      canvas.evaluate((c: HTMLCanvasElement) => {
+        const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+        const seen = new Set<number>();
+        for (let i = 0; i < d.length; i += 4 * 97) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+        return seen.size;
+      }), { timeout: 20_000 })
+    .toBeGreaterThan(2);
+
+  // Type into the desktop's terminal window (xterm opens at the top left, 100x30 characters).
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.2);
+  await page.keyboard.type("echo typed-on-desktop > /workspace/from-desktop.txt\n", { delay: 20 });
+
+  await desk.getByRole("button", { name: "Close desktop" }).click();
+  await page.getByRole("button", { name: "Files" }).click();
+  await expect(page.getByRole("region", { name: "Files" }).getByText("from-desktop.txt")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("button", { name: "Environments" }).click();
+  await envs.getByLabel(/keep files/).uncheck(); // leave nothing behind
+  await envs.getByRole("button", { name: "Destroy" }).click();
+  await envs.getByRole("button", { name: "Confirm destroy" }).click();
+  await expect(envs.getByText("No environments.")).toBeVisible();
+  expect(errors).toEqual([]);
+});

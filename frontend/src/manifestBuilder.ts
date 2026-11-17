@@ -14,6 +14,7 @@ export type EnvDraft = {
   idleTimeoutMinutes: number | null;
   ttlHours: number | null;
   ephemeral: boolean;
+  desktop: boolean;
 };
 
 export type LabDraft = { name: string; description: string; environments: EnvDraft[] };
@@ -44,6 +45,7 @@ export function newEnvironment(index: number): EnvDraft {
     idleTimeoutMinutes: 60,
     ttlHours: null,
     ephemeral: false,
+    desktop: false,
   };
 }
 
@@ -58,6 +60,8 @@ export function formProblems(lab: LabDraft): string[] {
     if (!SLUG.test(e.name)) out.push(`${label}: name must be lowercase letters, digits and dashes.`);
     if (seen.has(e.name)) out.push(`${label}: another machine is already called "${e.name}".`);
     seen.add(e.name);
+    if (e.desktop && e.size === "small")
+      out.push(`${label}: the remote desktop needs about 1 GiB more memory; choose Medium or Large.`);
     if (e.network === "restricted-egress" && e.allowedEgress.length === 0)
       out.push(`${label}: list at least one website, or choose another network option.`);
   });
@@ -92,6 +96,7 @@ export function toYaml(lab: LabDraft): string {
     if (e.ttlHours) lc.push(`ttlHours: ${e.ttlHours}`);
     if (e.ephemeral) lc.push("ephemeral: true");
     lines.push(`      lifecycle: {${lc.join(", ")}}`);
+    if (e.desktop) lines.push("      access: {desktop: true}");
   }
   return lines.join("\n") + "\n";
 }

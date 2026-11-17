@@ -5,15 +5,17 @@ CyberLab aims to give every user a personal, browser-accessible virtual computer
 isolated lab networks, persistent workspaces and portable configurations. Your physical
 machine becomes just a window.
 
-> **Status: Phases 1-4 and 6 (steps 1-2) are built; Phase 5 is in progress.** CyberLab starts
+> **Status: Phases 1-4 and 6 (steps 1-3) are built; Phase 5 is in progress.** CyberLab starts
 > real, hardened Linux containers (Ubuntu, Debian, Kali, Parrot OS, BlackArch) with tool packs,
-> isolated lab networks, a browser terminal, files, encrypted snapshots, export/import,
-> quotas and idle/TTL cleanup, all from a web app at `/app`. **Describe your lab** drafts a
-> manifest from plain words (a free built-in planner by default; Claude is optional, paid, and
-> not yet tested with a real key). Real sign-in and remote desktop are not built yet. The
+> isolated lab networks, a browser terminal, a **remote desktop**, files, encrypted snapshots,
+> export/import, quotas and idle/TTL cleanup, all from a web app at `/app`. **Describe your
+> lab** drafts a manifest from plain words (a free built-in planner by default; Claude is
+> optional, paid, and not yet tested with a real key). Real sign-in is not built yet. The
 > exact, tested status is in [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
 ![Describe your lab: plain words in, a checked lab plan out](docs/images/describe-your-lab.png)
+
+![Remote desktop: a remote machine's screen in the browser](docs/images/remote-desktop.png)
 
 ## What works today
 * **Universe Manifest** (`cyberlab.dev/v1alpha1`): a portable YAML/JSON description of

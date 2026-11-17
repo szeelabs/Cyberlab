@@ -30,6 +30,7 @@ export type Environment = {
   lastError: string | null;
   toolPacks: string[];
   toolPacksInstalled: boolean;
+  desktop: boolean;
   image: string | null;
   lastActivityAt: string | null;
   expiresAt: string | null;
@@ -151,7 +152,7 @@ export const api = {
 
   categories: () => request<Category[]>("/v1/registry/categories"),
   toolPacks: () => request<ToolPack[]>("/v1/registry/tool-packs"),
-  baseImages: () => request<{ id: string; name: string }[]>("/v1/registry/base-images"),
+  baseImages: () => request<{ id: string; name: string; supportsDesktop: boolean }[]>("/v1/registry/base-images"),
 
   workspaces: () => request<Workspace[]>("/v1/workspaces"),
   createWorkspace: (name: string, description = "") => request<Workspace>("/v1/workspaces", json("POST", { name, description })),
@@ -175,6 +176,8 @@ export const api = {
     request<Environment>(`${env(id, e)}?keep_workspace=${keepData}`, { method: "DELETE" }),
   terminalTicket: (id: string, e: string) =>
     request<{ ticket: string; websocketPath: string }>(`${env(id, e)}/terminal`, { method: "POST" }),
+  desktopTicket: (id: string, e: string) =>
+    request<{ ticket: string; websocketPath: string }>(`${env(id, e)}/desktop`, { method: "POST" }),
 
   files: (id: string, e: string, path: string) =>
     request<{ path: string; entries: FileEntry[] }>(`${env(id, e)}/files?path=${enc(path)}`),

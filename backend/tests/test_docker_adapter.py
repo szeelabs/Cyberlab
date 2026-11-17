@@ -321,3 +321,35 @@ def test_arch_family_reaches_the_image_build(registry):
     assert "FROM mirror.gcr.io/blackarchlinux/blackarch:latest" in dockerfile
     assert "pacman -Syu" in dockerfile and "wireshark-cli" in dockerfile
     assert "apt-get" not in dockerfile
+
+
+def test_desktop_environment_gets_init_display_and_desktop_image(registry):
+    desk = Environment.model_validate(
+        {
+            "name": "gui",
+            "baseImage": "ubuntu-24-04",
+            "resources": {"cpu": 1, "memoryMiB": 2048, "storageGiB": 4},
+            "access": {"desktop": True},
+        }
+    )
+    runner = FakeRunner({"image inspect": RunResult(1, "", "No such image")})
+    DockerAdapter(runner).provision(
+        ProvisionRequest(
+            workspace_key="ab12cd34ef56", environment=desk, image="docker.io/library/ubuntu:24.04"
+        )
+    )
+    args = run_args(runner)
+    assert args[1:4] == ["run", "--detach", "--init"] and "DISPLAY=:1" in args
+    (dockerfile,) = runner.inputs
+    assert "x11vnc" in dockerfile and "/usr/local/bin/cyberlab-desktop" in dockerfile
+    # a machine without a desktop is unchanged
+    runner = FakeRunner()
+    DockerAdapter(runner).provision(req())
+    assert "--init" not in run_args(runner) and "DISPLAY=:1" not in run_args(runner)
+
+
+def test_desktop_argv_is_a_plain_exec():
+    argv = DockerAdapter(FakeRunner()).desktop_argv("abc123def456")
+    assert argv[1:] == ["exec", "--interactive", "abc123def456", "/usr/local/bin/cyberlab-desktop"]
+    with pytest.raises(ProviderError):
+        DockerAdapter(FakeRunner()).desktop_argv("--privileged")

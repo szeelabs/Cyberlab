@@ -68,6 +68,17 @@ security topics can trip safety classifiers. Using it needs a key **and**
 returns drafts: there is deliberately no code path from a draft to saving, approving or
 provisioning.
 
+## Remote desktop: x11vnc over `docker exec`, noVNC in the browser
+*Status: implemented.* Guacamole needs its own server (`guacd`) and a database; a VNC port
+per machine would need network routes from the control plane into isolated lab networks
+(and through SSH for your own server). Instead, the machine runs `x11vnc -inetd`, which
+speaks VNC on stdin/stdout, and CyberLab connects to it with `docker exec`, exactly like the
+terminal: nothing listens on the network, isolated machines keep `--network none`, the
+same single-use tickets protect it, and it works unchanged over SSH. `x11vnc -inetd` expects
+one two-way socket, so `socat` joins `docker exec`'s two pipes (found by testing: without it
+the handshake hangs). Openbox and xterm keep the image small; a fuller desktop can be a tool
+pack later. noVNC 1.7.0 is used because 1.6 cannot be bundled.
+
 ## Rejected / deferred
 * **Kubernetes now:** too heavy for the free-first target and impossible locally on this
   machine. A Kubernetes adapter can come later behind `ProviderAdapter`.

@@ -21,7 +21,7 @@ import hashlib
 import json
 import secrets
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from importlib import resources
 from urllib.parse import urlparse
@@ -77,8 +77,22 @@ def create_ticket(
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
 ) -> dict:
-    ws = _owned(db, user, ws_id)
-    rec = _env_owned(db, ws, env_id)
+    rec = _env_owned(db, _owned(db, user, ws_id), env_id)
+    token = issue_ticket(db, rec, user, request, settings, provider, "terminal")
+    ttl = settings.terminal_ticket_ttl_seconds
+    return {"ticket": token, "expiresIn": ttl, "websocketPath": "/v1/terminal"}
+
+
+def issue_ticket(
+    db: Session,
+    rec: EnvironmentRecord,
+    user: User,
+    request: Request,
+    settings: Settings,
+    provider: ProviderAdapter | None,
+    purpose: str,
+) -> str:
+    """Check the environment is running and return a new single-use ticket for it."""
     adapter = _require_provider(provider)
     if rec.provider_ref is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "environment was never created")
@@ -97,27 +111,34 @@ def create_ticket(
             token_hash=_hash(token),
             environment_id=rec.id,
             user_subject=user.subject,
+            purpose=purpose,
             expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
         )
     )
     record_audit(
         db,
         actor=user.subject,
-        action="terminal.ticket",
+        action=f"{purpose}.ticket",
         target_type="environment",
         target_id=rec.id,
         detail={"name": rec.name},
         request_id=request_id(request),
     )
     db.commit()
-    return {"ticket": token, "expiresIn": ttl, "websocketPath": "/v1/terminal"}
+    return token
 
 
-def redeem_ticket(db: Session, token: str) -> tuple[TerminalTicket, EnvironmentRecord] | None:
-    """Atomically mark a ticket used. Returns None if it is unknown, used or expired."""
+def redeem_ticket(
+    db: Session, token: str, purpose: str = "terminal"
+) -> tuple[TerminalTicket, EnvironmentRecord] | None:
+    """Atomically mark a ticket used. None if it is unknown, used, expired or for another use."""
     if not isinstance(token, str) or not 20 <= len(token) <= 100:
         return None
-    ticket = db.query(TerminalTicket).filter(TerminalTicket.token_hash == _hash(token)).first()
+    ticket = (
+        db.query(TerminalTicket)
+        .filter(TerminalTicket.token_hash == _hash(token), TerminalTicket.purpose == purpose)
+        .first()
+    )
     now = datetime.now(UTC)
     if ticket is None or ticket.used_at is not None or _utc(ticket.expires_at) < now:
         return None
@@ -146,6 +167,15 @@ def _origin_allowed(ws: WebSocket, settings: Settings) -> bool:
 
 @router.websocket("/v1/terminal")
 async def terminal_socket(websocket: WebSocket) -> None:
+    await serve_ticketed(websocket, "terminal", _run_session)
+
+
+SessionRunner = Callable[..., Awaitable[None]]
+
+
+async def serve_ticketed(websocket: WebSocket, purpose: str, run: SessionRunner) -> None:
+    """Accept a WebSocket, authenticate it with a ``purpose`` ticket, enforce per-user session
+    limits, keep the environment marked active, then hand over to ``run``."""
     app = websocket.app
     settings: Settings = app.state.settings
     if not _origin_allowed(websocket, settings):
@@ -170,7 +200,7 @@ async def terminal_socket(websocket: WebSocket) -> None:
 
     db: Session = app.state.db.new_session()
     try:
-        redeemed = redeem_ticket(db, token)
+        redeemed = redeem_ticket(db, token, purpose)
         if redeemed is None:
             await fail(CLOSE_AUTH_FAILED, "invalid or expired ticket")
             return
@@ -183,7 +213,7 @@ async def terminal_socket(websocket: WebSocket) -> None:
 
         counts: dict[str, int] = app.state.terminal_sessions
         if counts.get(subject, 0) >= settings.terminal_max_sessions_per_user:
-            await fail(CLOSE_LIMIT, "too many open terminals")
+            await fail(CLOSE_LIMIT, "too many open terminal or desktop sessions")
             return
         counts[subject] = counts.get(subject, 0) + 1
         active: dict[str, int] = app.state.active_terminals
@@ -204,7 +234,7 @@ async def terminal_socket(websocket: WebSocket) -> None:
                 db.commit()
 
         try:
-            await _run_session(websocket, db, provider, env, subject, settings, release)
+            await run(websocket, db, provider, env, subject, settings, release)
         finally:
             release()
     finally:

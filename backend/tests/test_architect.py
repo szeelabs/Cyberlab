@@ -438,3 +438,38 @@ def test_rules_planner_no_internet_means_no_internet(registry, prompt):
     r = rules(registry, prompt)
     assert r.manifest["spec"]["environments"][0]["network"] == {"mode": "lab"}
     assert not r.plan["requires_approval"]
+
+
+def test_rules_planner_desktop_on_a_system_that_has_one(registry):
+    r = rules(registry, "Kali with a desktop for wireshark practice")
+    (env,) = r.manifest["spec"]["environments"]
+    assert env["baseImage"] == "kali-rolling" and env["access"] == {"desktop": True}
+    assert env["resources"]["memoryMiB"] >= 2048 and r.plan["valid"]  # room for the desktop
+    assert "remote desktop" in r.explanation
+
+
+def test_rules_planner_picks_a_desktop_system_when_none_named(registry):
+    r = rules(registry, "a graphical lab for forensics")
+    (env,) = r.manifest["spec"]["environments"]
+    assert registry.base_images[env["baseImage"]].supports_desktop
+    assert env["access"] == {"desktop": True} and r.plan["valid"]
+
+
+def test_rules_planner_explains_when_the_system_has_no_desktop(registry):
+    r = rules(registry, "debian desktop")
+    (env,) = r.manifest["spec"]["environments"]
+    assert env["baseImage"] == "debian-12" and "access" not in env
+    assert "no remote desktop yet" in r.explanation and r.plan["valid"]
+
+
+def test_desktop_in_schema_and_prompt(registry):
+    m = draft_schema(registry)["properties"]["environments"]["items"]
+    assert m["properties"]["desktop"] == {"type": "boolean"} and "desktop" in m["required"]
+    assert "remote desktop: no" in system_prompt(registry)  # debian-12
+
+
+def test_model_desktop_on_unsupported_system_is_caught_by_policy(registry):
+    model = ScriptedModel(answer(machine(baseImage="debian-12", toolPacks=[], desktop=True)))
+    r = draft_lab("debian desktop", registry, QuotaSettings(), model)
+    assert not r.plan["valid"]
+    assert any(f["code"] == "access.desktop" for f in r.plan["findings"])

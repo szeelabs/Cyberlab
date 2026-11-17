@@ -32,8 +32,8 @@ from cyberlab.execution.base import (
     ProvisionRequest,
     ProvisionResult,
 )
-from cyberlab.execution.images import ImageRecipe, ImageRecipeError, render
-from cyberlab.execution.shell import PtyShellSession, ShellSession
+from cyberlab.execution.images import DESKTOP_COMMAND, ImageRecipe, ImageRecipeError, render
+from cyberlab.execution.shell import PipeSession, PtyShellSession, ShellSession, StreamSession
 from cyberlab.manifest.models import NetworkMode
 
 _SAFE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -385,6 +385,11 @@ class DockerAdapter:
             "--restart",
             "no",
         ]
+        if env.access.desktop:
+            # --init reaps the desktop's background processes; DISPLAY lets programs started
+            # from the terminal (e.g. `wireshark &`) open on the remote desktop.
+            args[2:2] = ["--init"]
+            args += ["--env", "DISPLAY=:1"]
         for k, v in labels.items():
             args += ["--label", f"{k}={v}"]
         args += [_check("image", image, _IMAGE), "sleep", "infinity"]
@@ -434,6 +439,7 @@ class DockerAdapter:
                 request.tool_packs,
                 request.family,
                 request.source_rewrite,
+                desktop=request.environment.access.desktop,
             )
         except ImageRecipeError as exc:
             raise ProviderError(str(exc)) from exc
@@ -619,6 +625,15 @@ class DockerAdapter:
     async def open_shell(self, provider_ref: str) -> ShellSession:
         env = self._env if self._env is not None else docker_env(self._docker_host)
         return PtyShellSession(self.shell_argv(provider_ref), env=env)
+
+    def desktop_argv(self, provider_ref: str) -> list[str]:
+        _check("container id", provider_ref, _REF)
+        return [self._bin, "exec", "--interactive", provider_ref, DESKTOP_COMMAND]
+
+    async def open_desktop(self, provider_ref: str) -> StreamSession:
+        """A raw VNC byte stream to the environment's desktop (no network port involved)."""
+        env = self._env if self._env is not None else docker_env(self._docker_host)
+        return await PipeSession.start(self.desktop_argv(provider_ref), env=env)
 
     # ------------------------------------------------------------------ files
     # Every operation runs *inside* the environment as its own unprivileged user, with the
