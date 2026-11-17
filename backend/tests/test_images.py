@@ -126,7 +126,7 @@ def test_cli_matrix(capsys):
 
 def test_detection_engineering_not_offered_on_debian(registry):
     # Found by CI: Suricata has no installation candidate in Debian 12 (bookworm) main.
-    assert registry.tool_packs["detection-engineering"].compatible_bases == ["ubuntu-24-04"]
+    assert "debian-12" not in registry.tool_packs["detection-engineering"].compatible_bases
 
 
 def test_package_installs_cannot_hang_forever(registry):

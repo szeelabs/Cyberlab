@@ -164,7 +164,7 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Desktop in the machine | `access.desktop: true` adds a light desktop to the image: Xvfb (virtual screen, 1280x800), Openbox (window manager, right-click menu), xterm, and x11vnc. A launcher starts it on first use and reuses it after. Machines with a desktop get `--init` and `DISPLAY=:1`, so graphical programs started from the terminal show on the desktop | `execution/desktop.sh`, `execution/images.py`, `execution/docker.py` |
 | Connection | `POST .../desktop` gives a single-use desktop ticket; `/v1/desktop` carries VNC over the WebSocket, through `docker exec` to `x11vnc -inetd` (via socat). **No network port is opened**, so it also works on your own server over SSH. Tickets now have a purpose (migration 0003): terminal and desktop tickets are not interchangeable. Desktop sessions count toward the same per-user session limit and keep the machine "in use" for the reaper | `api/desktop.py`, `api/terminal.py`, `migrations/versions/0003_*` |
 | Web app | "Desktop" button for machines with a desktop; noVNC viewer (loaded only when opened), full screen; "Remote desktop" checkbox in the beginner form (only on systems that support it, and it asks for Medium or larger); "Describe your lab" understands "desktop"/"graphical" | `components/Desktop.tsx`, `desktopChannel.ts`, `components/ManifestBuilder.tsx`, `architect/rules.py` |
-| Systems | Ubuntu 24.04, Parrot OS and BlackArch (desktop builds and a VNC handshake in a hardened container, in CI job `desktop-images`); Kali is marked as supporting it but its desktop is not built in CI (large image) | `registry/base-images.yaml`, `.github/workflows/ci.yml` |
+| Systems | Ubuntu 24.04, Kali, Parrot OS and BlackArch (desktop builds and a VNC handshake in a hardened container, in CI job `desktop-images`) | `registry/base-images.yaml`, `.github/workflows/ci.yml` |
 | Tests | Backend: desktop API (binary bridge, audit, ticket purpose swap refused, single use, owner only, origin, session limit, open failure, policy), recipe and run args; real Docker: API → WebSocket → VNC handshake twice, desktop runs as `cyberlab`, nothing listens on a TCP port; real browser: open the desktop, check the screen is drawn, type into its terminal and find the created file in Files | `tests/test_desktop.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
 
 ## Implemented (Phase 5, step 2 — troubleshooter and evaluation set)
@@ -187,7 +187,6 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Feature | Planned phase |
 |---|---|
 | Tools without a distro package (ZAP, Volatility 3, Trivy, Grype, osquery): need vendor installs with pinned checksums | 2 |
-| Kali base images are not built in CI (large image, Docker Hub limits) | 2 |
 | Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
@@ -262,7 +261,7 @@ real limits (for example Codespaces: about 32 GB disk and a monthly free-hours a
 
 | Wish | Status | How it would work / why not |
 |---|---|---|
-| Kali Linux | **Implemented** (`kali-rolling` base image) | container, browser terminal |
+| Kali Linux | **Implemented** (`kali-rolling` base image) | container, browser terminal, remote desktop; all its tool packs (including detection-engineering) are built and smoke-tested in CI |
 | Parrot OS | **Implemented** (`parrot-core` base image) | official `parrotsec/core` image (Parrot Security 7, Debian-based); boot and safe user tested locally, tool-pack builds tested in CI |
 | BlackArch | **Implemented** (`blackarch` base image) | official `blackarchlinux/blackarch` image; recipes use `pacman` (`family: arch`, per-tool `archPackage`); boot and safe user tested locally, tool-pack builds tested in CI |
 | Predator-OS | Unverified | no official container image found yet; would need checking |
