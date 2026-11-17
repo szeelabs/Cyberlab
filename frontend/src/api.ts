@@ -52,6 +52,8 @@ export type Usage = {
   limits: { environments: number; cpu: number; memoryMiB: number; storageGiB: number };
 };
 
+export type Advice = { severity: "problem" | "warning" | "info" | "ok"; code: string; title: string; explanation: string; fix: string };
+
 export type AiStatus = { provider: string | null; status: "READY" | "OFF"; detail: string; paid: boolean; model?: string | null };
 
 export type ArchitectDraft =
@@ -176,6 +178,8 @@ export const api = {
     request<Environment>(`${env(id, e)}?keep_workspace=${keepData}`, { method: "DELETE" }),
   terminalTicket: (id: string, e: string) =>
     request<{ ticket: string; websocketPath: string }>(`${env(id, e)}/terminal`, { method: "POST" }),
+  diagnose: (id: string, e: string) =>
+    request<{ environment: string; state: string; advice: Advice[] }>(`${env(id, e)}/diagnose`),
   desktopTicket: (id: string, e: string) =>
     request<{ ticket: string; websocketPath: string }>(`${env(id, e)}/desktop`, { method: "POST" }),
 

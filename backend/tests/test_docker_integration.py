@@ -504,3 +504,18 @@ def test_remote_desktop_vnc_handshake_on_real_container(client):
         assert out == "", f"something is listening: {out}"
     finally:
         destroy_all(client, ws_id, [env])
+
+
+def test_troubleshooter_explains_out_of_memory(client):
+    ws_id, (env,) = provision(client, BASIC, "it-oom")
+    name = env["resources"]["container"]
+    try:
+        url = f"/v1/workspaces/{ws_id}/environments/{env['id']}/diagnose"
+        assert client.get(url, headers=auth()).json()["advice"][0]["code"] == "state.running"
+        code, _ = sh(name, "tail /dev/zero")  # eats all memory until the kernel kills it
+        assert code == 137
+        body = client.get(url, headers=auth()).json()
+        assert body["advice"][0]["code"] == "runtime.out-of-memory", body
+        assert body["state"] == "running"  # only the program was killed
+    finally:
+        destroy_all(client, ws_id, [env])

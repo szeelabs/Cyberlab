@@ -141,6 +141,12 @@ test("full lab: environment, terminal, files, snapshot, destroy", async ({ page 
   const envs = page.getByRole("region", { name: "Environments" });
   await expect(envs.getByText("running")).toBeVisible({ timeout: 120_000 });
 
+  // Troubleshooter: plain-language health check.
+  await envs.getByRole("button", { name: "What's wrong?" }).click();
+  const help = page.getByRole("region", { name: "What's wrong: shell" });
+  await expect(help.getByRole("list", { name: "Advice" })).toContainText("Running normally");
+  await help.getByRole("button", { name: "Close" }).click();
+
   // Terminal: run a command in the real container.
   await envs.getByRole("button", { name: "Terminal" }).click();
   const term = page.getByRole("region", { name: "Terminal: shell" });

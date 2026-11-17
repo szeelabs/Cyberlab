@@ -167,6 +167,13 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Systems | Ubuntu 24.04, Parrot OS and BlackArch (desktop builds and a VNC handshake in a hardened container, in CI job `desktop-images`); Kali is marked as supporting it but its desktop is not built in CI (large image) | `registry/base-images.yaml`, `.github/workflows/ci.yml` |
 | Tests | Backend: desktop API (binary bridge, audit, ticket purpose swap refused, single use, owner only, origin, session limit, open failure, policy), recipe and run args; real Docker: API → WebSocket → VNC handshake twice, desktop runs as `cyberlab`, nothing listens on a TCP port; real browser: open the desktop, check the screen is drawn, type into its terminal and find the created file in Files | `tests/test_desktop.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
 
+## Implemented (Phase 5, step 2 — troubleshooter and evaluation set)
+| Area | What works | Where |
+|---|---|---|
+| Troubleshooter | "What's wrong?" on every machine. `GET .../environments/{id}/diagnose` explains in plain words, with a fix: provider not connected, out of memory (also when only a program inside was killed and the machine still runs), build failures (package missing for that system, downloads failed, timeouts), internet not approved, stopped by the idle timer, removed by its time limit, crashed, disappeared, stuck creating, expiring soon. Rule-based, free, no AI. Reads state, the last error, Docker's container state and the reaper's audit records; changes nothing | `troubleshoot.py`, `api/troubleshoot.py`, `components/Troubleshoot.tsx` |
+| Evaluation set | 20 learner requests with what any acceptable draft must contain (system, tools, network, desktop, approval, machine count), including refusals both ways. `cyberlab architect eval` scores the configured planner (the paid Claude planner only with `--yes`). The built-in planner passes 20/20, enforced by a test | `architect/eval_prompts.yaml`, `architect/evaluate.py`, `cli.py` |
+| Tests | 27 troubleshooter rules and API tests; real Docker: a program eats all memory and the troubleshooter says so; browser test: "What's wrong?" on a running machine; 15 evaluation tests, including bad drafts the checker must catch | `tests/test_troubleshoot.py`, `tests/test_architect_eval.py`, `tests/test_docker_integration.py`, `frontend/e2e` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -176,7 +183,7 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
-| AI Lab Architect: troubleshooting assistant (reads environment status and logs), evaluation with a fixture prompt set, other model providers | 5 |
+| AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
 | Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
 | Remote desktop extras: copy/paste between your computer and the desktop, resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Claude Code Skill, release automation | 7 |
@@ -235,9 +242,8 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
    message if the screen fails to start, and CI prints the desktop's logs on failure.
 
 ## Next milestone
-1. Merge the remote desktop PR (#16).
+1. Merge the troubleshooter / evaluation PR.
 2. Try the `anthropic` planner with a real key (user decision: it costs money).
-3. Phase 5 step 2: troubleshooting assistant, and a fixture prompt set to evaluate drafts.
 4. Remote desktop extras (clipboard, screen resizing); a supported way to add user-supplied
    installers (e.g. Cisco Packet Tracer) to a machine's image.
 

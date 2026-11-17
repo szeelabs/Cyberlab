@@ -42,11 +42,11 @@ export bundle = manifest + snapshot, restore. Alembic migrations, Postgres in CI
 Scheduler, idle reaper and TTL reaper, live quota accounting, provider cost classes, a
 user-owned-host adapter, rate limiting, audit export/retention.
 
-## Phase 5 — AI Lab Architect (in progress)
+## Phase 5 — AI Lab Architect ✅ (core)
 - [x] 1. Describe a lab in plain words → draft manifest restricted to registry IDs → policy
       engine → user saves and approves. Planners: built-in keyword rules (free, default) and
       Claude (paid, opt-in; tested with a fake client only). Refuses attacks on real systems.
-- [ ] 2. Troubleshooting assistant; evaluation with a fixture prompt set; more providers.
+- [x] 2. Troubleshooter ("What's wrong?", rule-based) and an evaluation set with `cyberlab architect eval`. Still to do: other model providers (optional).
 `LLMAdapter` (Anthropic / OpenAI-compatible / Ollama), prompt → structured manifest
 draft restricted to registry IDs, policy engine review, approval UI, a troubleshooting
 assistant that reads environment status and logs. Evaluated with a fixture prompt set.

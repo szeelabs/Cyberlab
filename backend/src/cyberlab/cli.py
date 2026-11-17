@@ -161,6 +161,34 @@ def _cmd_registry(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_architect_eval(args: argparse.Namespace) -> int:
+    from cyberlab.architect import build_model
+    from cyberlab.architect.evaluate import load_cases, run
+
+    settings = get_settings()
+    reg = load_registry(Path(args.registry) if args.registry else settings.registry_dir)
+    model = build_model(settings, reg)
+    if model is None:
+        print("the AI Lab Architect is off (CYBERLAB_AI_PROVIDER=off)", file=sys.stderr)
+        return 2
+    if model.name == "anthropic" and not args.yes:
+        print(
+            "this sends every evaluation prompt to the paid Anthropic API; "
+            "re-run with --yes to accept the cost",
+            file=sys.stderr,
+        )
+        return 2
+    results = run(model, reg, settings.quotas, load_cases(Path(args.file) if args.file else None))
+    for r in results:
+        mark = "PASS" if r.passed else "FAIL"
+        print(f"{mark}  {r.prompt}")
+        for p in r.problems:
+            print(f"        - {p}")
+    passed = sum(r.passed for r in results)
+    print(f"\n{model.name}: {passed}/{len(results)} cases passed ({100 * passed // len(results)}%)")
+    return 0 if passed == len(results) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cyberlab")
     parser.add_argument("--registry", help="path to registry directory")
@@ -193,6 +221,13 @@ def main(argv: list[str] | None = None) -> int:
     mx = isub.add_parser("matrix", help="JSON CI build matrix of buildable packs")
     mx.add_argument("--bases", required=True, help="comma-separated base image ids")
     mx.set_defaults(func=_cmd_image_matrix)
+
+    ar = sub.add_parser("architect", help="AI Lab Architect tools")
+    asub = ar.add_subparsers(dest="architect_command", required=True)
+    ev = asub.add_parser("eval", help="score the configured planner on the evaluation set")
+    ev.add_argument("--file", help="YAML evaluation file (default: the built-in set)")
+    ev.add_argument("--yes", action="store_true", help="accept API costs (anthropic planner)")
+    ev.set_defaults(func=_cmd_architect_eval)
 
     db = sub.add_parser("db", help="database migrations")
     dsub = db.add_subparsers(dest="db_command", required=True)

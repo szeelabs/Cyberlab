@@ -4,6 +4,7 @@ import { api, ApiError, download, formatBytes, type Environment, type Plan } fro
 import { Architect } from "../components/Architect";
 import { ManifestBuilder } from "../components/ManifestBuilder";
 import { Terminal } from "../components/Terminal";
+import { Troubleshoot } from "../components/Troubleshoot";
 import { ErrorNotice, Pill, timeAgo, useAction, useLoad } from "../ui";
 
 // Loaded only when a desktop is opened (noVNC is large).
@@ -225,6 +226,7 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
   const act = useAction();
   const [terminal, setTerminal] = useState<Environment | null>(null);
   const [desktop, setDesktop] = useState<Environment | null>(null);
+  const [checking, setChecking] = useState<Environment | null>(null);
   const [keepData, setKeepData] = useState(true);
   const live = envs.filter((e) => e.state !== "destroyed");
   const run = (fn: () => Promise<unknown>) => act.run(async () => { await fn(); await reload(); });
@@ -272,8 +274,9 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
                         {e.state === "running" && e.desktop && <button onClick={() => setDesktop(e)}>Desktop</button>}
                         {e.state === "running" && <button disabled={act.busy} onClick={() => run(() => api.stop(id, e.id))}>Stop</button>}
                         {e.state === "stopped" && <button disabled={act.busy} onClick={() => run(() => api.start(id, e.id))}>Start</button>}
+                        <button onClick={() => setChecking(e)}>What's wrong?</button>
                         <ConfirmButton label="Destroy" confirm="Confirm destroy" disabled={act.busy}
-                          onConfirm={() => run(async () => { if (terminal?.id === e.id) setTerminal(null); if (desktop?.id === e.id) setDesktop(null); await api.destroy(id, e.id, keepData); })} />
+                          onConfirm={() => run(async () => { if (terminal?.id === e.id) setTerminal(null); if (desktop?.id === e.id) setDesktop(null); if (checking?.id === e.id) setChecking(null); await api.destroy(id, e.id, keepData); })} />
                       </div>
                     </td>
                   </tr>
@@ -283,6 +286,7 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
           </div>
         )}
       </section>
+      {checking && <Troubleshoot key={checking.id} workspaceId={id} environmentId={checking.id} name={checking.name} onClose={() => setChecking(null)} />}
       {desktop && (
         <Suspense fallback={<div className="muted">Loading the desktop viewer…</div>}>
           <Desktop key={desktop.id} workspaceId={id} environmentId={desktop.id} name={desktop.name} onClose={() => setDesktop(null)} />

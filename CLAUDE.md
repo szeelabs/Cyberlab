@@ -126,5 +126,6 @@ the **web app** at `/app`, merged (PR #12); step 2, **beginner form + `./scripts
 Parrot OS and BlackArch base systems added (PR #14).
 **Phase 5 (AI Lab Architect):** approved by the user; step 1, **drafts from plain words**
 (keyword planner by default, Claude opt-in and paid, untested with a real key) merged (PR #15).
-**Phase 6 step 3:** the **remote desktop** (noVNC, VNC via `docker exec`, no open port) is built.
+**Phase 6 step 3:** the **remote desktop** (noVNC, VNC via `docker exec`, no open port) merged (PR #16).
+**Phase 5 step 2:** the **troubleshooter** ("What's wrong?") and the architect **evaluation set** are built.
 Details: `docs/DEVELOPMENT_STATUS.md`.
