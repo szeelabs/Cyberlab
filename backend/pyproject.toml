@@ -38,6 +38,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 cyberlab = [
   "static/*", "static/vendor/xterm/*", "migrations/script.py.mako", "execution/desktop.sh",
+  "architect/eval_prompts.yaml",
 ]
 
 [tool.pytest.ini_options]

@@ -29,6 +29,9 @@ machine becomes just a window.
 
 ## Try CyberLab
 
+New to all this? Follow the step-by-step **[Getting started guide](docs/guides/getting-started.md)**:
+your first Kali lab in the browser in about 15 minutes, using none of your own disk.
+
 **In your browser (nothing to install):** [open CyberLab in a GitHub Codespace](https://codespaces.new/szeelabs/Cyberlab).
 When it has finished setting up, run:
 ```bash

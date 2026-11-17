@@ -1,0 +1,55 @@
+name: release
+
+# Runs only when a maintainer pushes a version tag (e.g. v0.1.0). Publishes a GitHub release
+# with the Python package and the built web app. Nothing else is deployed.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write  # create the release; nothing else
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tag must match the version
+        run: |
+          VERSION="$(python -c 'import tomllib;print(tomllib.load(open("backend/pyproject.toml","rb"))["project"]["version"])')"
+          test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != version $VERSION"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Test
+        working-directory: backend
+        run: |
+          pip install -e '.[dev]'
+          ruff check src tests
+          pytest
+      - name: Build the web app
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          tar -czf "../cyberlab-web-$VERSION.tar.gz" -C dist .
+      - name: Build the Python package
+        run: pip wheel --no-deps ./backend -w dist
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" {on=1; next}
+            on && /^## \[/ {exit}
+            on {print}' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section for $VERSION"; exit 1; }
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "CyberLab $VERSION" --notes-file notes.md \
+            dist/*.whl "cyberlab-web-$VERSION.tar.gz"

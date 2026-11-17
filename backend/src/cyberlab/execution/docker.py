@@ -463,6 +463,23 @@ class DockerAdapter:
             return EnvState.missing
         return STATE_MAP.get(res.stdout, EnvState.failed)
 
+    def details(self, provider_ref: str) -> dict | None:
+        """Runtime facts for the troubleshooter (exit code, out-of-memory). None if gone."""
+        _check("container id", provider_ref, _REF)
+        res = self._docker(
+            "inspect", "--format", "{{json .State}}", provider_ref, timeout=30, ok=True
+        )
+        if res.returncode != 0:
+            return None
+        try:
+            state = json.loads(res.stdout)
+        except ValueError:
+            return None
+        if not isinstance(state, dict):
+            return None
+        keep = ("Status", "OOMKilled", "ExitCode", "Error", "StartedAt", "FinishedAt")
+        return {k: state.get(k) for k in keep}
+
     def start(self, provider_ref: str) -> EnvState:
         _check("container id", provider_ref, _REF)
         self._docker("start", provider_ref, timeout=60)
