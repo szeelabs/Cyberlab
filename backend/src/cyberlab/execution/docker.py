@@ -14,10 +14,13 @@ Containers share the host kernel, so this is not a boundary for hostile code.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
 import os
 import re
 import subprocess
+import tarfile
 import tempfile
 import time
 from collections.abc import Callable
@@ -31,8 +34,15 @@ from cyberlab.execution.base import (
     ProviderStatus,
     ProvisionRequest,
     ProvisionResult,
+    normalize_arch,
 )
-from cyberlab.execution.images import DESKTOP_COMMAND, ImageRecipe, ImageRecipeError, render
+from cyberlab.execution.images import (
+    DESKTOP_COMMAND,
+    IMAGE_REPOSITORY,
+    ImageRecipe,
+    ImageRecipeError,
+    render,
+)
 from cyberlab.execution.shell import PipeSession, PtyShellSession, ShellSession, StreamSession
 from cyberlab.manifest.models import NetworkMode
 
@@ -45,6 +55,21 @@ DEFAULT_PIDS_LIMIT = 256
 EGRESS_ALIAS = "egress-proxy"
 EGRESS_PORT = 3128
 DEFAULT_EGRESS_IMAGE = "docker.io/library/python:3.13-slim"
+INSTALL_VERSION = "1"  # bump to rebuild installer images after changing the template
+# The only file in the build context is the user's package; it is installed as root during
+# the build, then the image switches back to the unprivileged user.
+INSTALL_DOCKERFILE = """FROM {base}
+LABEL dev.cyberlab.managed="true" dev.cyberlab.installed="{sha}"
+USER 0:0
+COPY package.deb /tmp/cyberlab-package.deb
+RUN (apt-get update -q || echo "cyberlab: package lists could not be refreshed" >&2) \\
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
+      /tmp/cyberlab-package.deb \\
+ && apt-get clean \\
+ && rm -rf /var/lib/apt/lists/* /tmp/cyberlab-package.deb
+USER {user}
+WORKDIR /workspace
+"""
 BUILD_TIMEOUT = 1800  # seconds; first build of a large pack can be slow
 STATE_MAP = {
     "created": EnvState.stopped,
@@ -407,13 +432,18 @@ class DockerAdapter:
                 cost,
             )
         try:
-            res = self._docker("version", "--format", "{{.Server.Version}}", timeout=15, ok=True)
+            res = self._docker(
+                "version", "--format", "{{.Server.Version}} {{.Server.Arch}}", timeout=15, ok=True
+            )
         except ProviderError as exc:
             return ProviderStatus(self.name, False, str(exc), cost)
         if res.returncode != 0 or not res.stdout:
             detail = (res.stderr or "daemon unreachable").splitlines()[-1][:200]
             return ProviderStatus(self.name, False, f"not connected: {detail}", cost)
-        return ProviderStatus(self.name, True, f"Docker Engine {res.stdout}", cost)
+        version, _, arch = res.stdout.partition(" ")
+        return ProviderStatus(
+            self.name, True, f"Docker Engine {version}", cost, normalize_arch(arch) or "unknown"
+        )
 
     def provision(self, request: ProvisionRequest) -> ProvisionResult:
         env = request.environment
@@ -433,17 +463,20 @@ class DockerAdapter:
         else:  # pragma: no cover - enum is exhaustive
             raise ProviderError(f"unsupported network mode {mode}")
 
-        try:
-            recipe = render(
-                self.resolve_image(request.image),
-                request.tool_packs,
-                request.family,
-                request.source_rewrite,
-                desktop=request.environment.access.desktop,
-            )
-        except ImageRecipeError as exc:
-            raise ProviderError(str(exc)) from exc
-        image = self.ensure_image(recipe)
+        if request.image_override:
+            image = _check("image", request.image_override, _IMAGE)
+        else:
+            try:
+                recipe = render(
+                    self.resolve_image(request.image),
+                    request.tool_packs,
+                    request.family,
+                    request.source_rewrite,
+                    desktop=request.environment.access.desktop,
+                )
+            except ImageRecipeError as exc:
+                raise ProviderError(str(exc)) from exc
+            image = self.ensure_image(recipe)
         self._prepare_volume(n["volume"], image, request.workspace_key)
         res = self._docker(*self.build_run_args(request, network, image))
         ref = res.stdout.splitlines()[-1] if res.stdout else ""
@@ -735,10 +768,86 @@ class DockerAdapter:
         if res.returncode != 0:
             raise _file_error(res.stderr, path)
 
+    def write_file_from_path(self, provider_ref: str, path: str, source) -> None:
+        """Like write_file, but streams the content from a local file (large uploads)."""
+        if self._stream is None:
+            data = open(source, "rb").read()  # noqa: SIM115 - small fallback path
+            return self.write_file(provider_ref, path, data)
+        _check("container id", provider_ref, _REF)
+        parent = path.rsplit("/", 1)[0]
+        mk = self._exec(provider_ref, "mkdir", "-p", "--", parent)
+        if mk.returncode != 0:
+            raise _file_error(mk.stderr, parent)
+        args = [self._bin, "exec", "--interactive", provider_ref, "sh", "-c", 'cat > "$1"', "sh"]
+        res = self._stream([*args, path], BUILD_TIMEOUT, stdin_path=source)
+        if res.returncode != 0:
+            raise _file_error(res.stderr, path)
+        return None
+
     def delete_path(self, provider_ref: str, path: str, *, recursive: bool) -> None:
         res = self._exec(provider_ref, "rm", *(["-r"] if recursive else []), "--", path)
         if res.returncode != 0:
             raise _file_error(res.stderr, path)
+
+    # ------------------------------------------------------------------ installers
+    def install_package(self, provider_ref: str, path: str, max_bytes: int) -> dict:
+        """Build a new image: this environment's image plus a .deb from its /workspace.
+
+        The .deb is read by the locked-down helper (no network, read-only, unprivileged),
+        then sent as the only file in a build context. Only the install step runs as root,
+        inside the image build; the environment itself keeps running unprivileged.
+        Returns {"image", "sha256", "bytes"}. The caller recreates the container.
+        """
+        _check("container id", provider_ref, _REF)
+        res = self._docker(
+            "inspect",
+            "--format",
+            '{{.Config.Image}}|{{range .Mounts}}{{if eq .Destination "/workspace"}}'
+            "{{.Name}}{{end}}{{end}}",
+            provider_ref,
+            timeout=30,
+        )
+        image, _, volume = res.stdout.partition("|")
+        _check("image", image, _IMAGE)
+        if self._stream is None:
+            raise ProviderError("installers need a streaming runner")
+        with tempfile.TemporaryDirectory(prefix="cyberlab-install-") as tmp:
+            deb = os.path.join(tmp, "package.deb")
+            args = [*self._snapshot_helper(volume, image, writable=False), "cat", "--", path]
+            got = self._stream(args, BUILD_TIMEOUT, stdout_path=deb, max_bytes=max_bytes)
+            if got.returncode == -1:
+                raise FileOpError("too_large", f"the installer is larger than {max_bytes} bytes")
+            if got.returncode != 0:
+                raise _file_error(got.stderr, path)
+            digest = hashlib.sha256()
+            with open(deb, "rb") as fh:
+                while chunk := fh.read(1024 * 1024):
+                    digest.update(chunk)
+            sha = digest.hexdigest()
+            with open(deb, "rb") as fh:
+                if fh.read(8) != b"!<arch>\n":
+                    raise FileOpError("invalid", "this file is not a .deb package")
+            tag = (
+                f"{IMAGE_REPOSITORY}:"
+                + hashlib.sha256(f"{image}|{sha}|{INSTALL_VERSION}".encode()).hexdigest()[:16]
+            )
+            if self._docker("image", "inspect", tag, ok=True).returncode != 0:
+                dockerfile = INSTALL_DOCKERFILE.format(base=image, user=self._user, sha=sha)
+                context = os.path.join(tmp, "context.tar")
+                with tarfile.open(context, "w") as tar:
+                    info = tarfile.TarInfo("Dockerfile")
+                    data = dockerfile.encode()
+                    info.size = len(data)
+                    tar.addfile(info, io.BytesIO(data))
+                    tar.add(deb, arcname="package.deb")
+                built = self._stream(
+                    [self._bin, "build", "--tag", tag, "-"], BUILD_TIMEOUT, stdin_path=context
+                )
+                if built.returncode != 0:
+                    reason = (built.stderr or "unknown error").strip().splitlines()[-1][:300]
+                    raise ProviderError(f"installing the package failed: {reason}")
+            size = os.path.getsize(deb)
+        return {"image": tag, "sha256": sha, "bytes": size}
 
     # ------------------------------------------------------------------ snapshots
     def _snapshot_helper(self, volume: str, image: str, *, writable: bool) -> list[str]:

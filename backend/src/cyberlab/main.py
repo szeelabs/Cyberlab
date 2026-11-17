@@ -20,6 +20,7 @@ from cyberlab.api.bundles import router as bundles_router
 from cyberlab.api.desktop import router as desktop_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
+from cyberlab.api.install import router as install_router
 from cyberlab.api.routes import router
 from cyberlab.api.snapshots import router as snapshots_router
 from cyberlab.api.terminal import router as terminal_router
@@ -130,7 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
         length = request.headers.get("content-length")
         if request.method == "PUT" and request.url.path.endswith("/files/content"):
-            limit = settings.max_file_bytes
+            limit = settings.max_upload_bytes
         elif request.method == "POST" and request.url.path == "/v1/workspaces/import":
             limit = settings.max_bundle_bytes
         else:
@@ -164,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(architect_router)
     app.include_router(desktop_router)
     app.include_router(troubleshoot_router)
+    app.include_router(install_router)
     app.include_router(bundles_router)
     app.include_router(env_router)
     app.include_router(files_router)

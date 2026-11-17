@@ -183,6 +183,28 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Claude Code Skill | `.claude/skills/cyberlab-manifest/SKILL.md`: how to write and validate manifests with real registry IDs, the safest network, sizes, the desktop, and the authorized-practice rule. A test checks its example manifest passes the policy engine | `.claude/skills/`, `tests/test_release.py` |
 | Releases | Pushing a tag `vX.Y.Z` runs `release.yml`: checks the tag matches the version, runs lint and tests, builds the web app and the Python package, and publishes a GitHub release with notes from the changelog. **Not run yet**: no tag has been pushed (the maintainer decides when) | `.github/workflows/release.yml` |
 
+## Implemented (ARM servers)
+| Area | What works | Where |
+|---|---|---|
+| Processor types | Each operating system lists its `architectures` (Ubuntu, Debian, Kali, Parrot OS: amd64 and arm64; BlackArch: amd64 only). The Docker adapter reports the server's processor type (`/v1/system/execution` → `architecture`). Creating a machine whose system isn't published for that processor is refused up front with a plain message; the beginner form shows such systems as unavailable; "What's wrong?" explains processor-type errors | `registry/base-images.yaml`, `execution/docker.py`, `api/environments.py`, `components/ManifestBuilder.tsx`, `troubleshoot.py` |
+| Tested on real ARM | CI jobs on GitHub's arm64 runners: `arm64-images` builds Ubuntu, Debian, Kali and Parrot OS with every tool pack (and the desktop on the systems that offer it), checks each tool runs as the unprivileged user and completes a VNC handshake; `arm64-integration` runs the whole real-Docker test suite on arm64 | `.github/workflows/ci.yml` |
+
+This is what makes free ARM servers such as Oracle Cloud's Always Free tier (4 ARM cores,
+24 GB RAM, 200 GB disk) a supported place to run machines, through the SSH guide. Not tested:
+an actual Oracle Cloud account (that needs the user's sign-up).
+
+## Implemented (install your own software)
+| Area | What works | Where |
+|---|---|---|
+| Large uploads | File uploads stream through a temporary file into the machine (never held in memory), up to `CYBERLAB_MAX_UPLOAD_BYTES` (2 GiB). Downloads keep the 25 MiB limit | `api/files.py`, `execution/docker.py`, `config.py` |
+| Install a .deb | Upload a `.deb` (e.g. Cisco Packet Tracer, downloaded with your own Cisco account) and click **Install** in the Files tab. The machine's software is read-only, so CyberLab builds a new image (the current one plus the package, installed as root only during that build; the build context holds only the package, read out by the no-network, unprivileged helper), then recreates the machine from it. `/workspace` is kept; the machine still runs unprivileged and read-only. Checks: `.deb` only (file signature checked), Ubuntu/Debian/Kali/Parrot only, not on machines with allow-listed websites (their proxy credentials can't be re-issued per machine yet). Audited with the package's SHA-256 | `api/install.py`, `execution/docker.py` (`install_package`), Files tab |
+| Tests | 11 API tests (rebuild + recreate keeping the volume, bad paths, wrong system, build failure leaves the machine untouched, not a .deb, too large, recreate failure, ownership); real Docker: a real `.deb` built with dpkg-deb is uploaded, installed, and its command runs, files kept, still uid 1000 and read-only; browser test: upload, Install, confirm, run it in the terminal | `tests/test_install.py`, `tests/test_files.py`, `tests/test_docker_integration.py`, `frontend/e2e` |
+
+**Not tested:** Cisco Packet Tracer itself (it can only be downloaded with a Cisco account).
+Its installer may ask to accept a licence during installation; if it fails non-interactively,
+"What's wrong?" and the error message will show it. Installs last until the machine is
+destroyed: creating the environments again from the manifest starts without them.
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -266,5 +288,5 @@ real limits (for example Codespaces: about 32 GB disk and a monthly free-hours a
 | BlackArch | **Implemented** (`blackarch` base image) | official `blackarchlinux/blackarch` image; recipes use `pacman` (`family: arch`, per-tool `archPackage`); boot and safe user tested locally, tool-pack builds tested in CI |
 | Predator-OS | Unverified | no official container image found yet; would need checking |
 | Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
-| Cisco Packet Tracer | Planned, later, user supplies installer | proprietary and licensed via Cisco NetAcad, so CyberLab cannot ship it. The remote desktop it needs now exists; still missing: a supported way to install a user-supplied `.deb` (machines run without root, so it must go into the image build) |
+| Cisco Packet Tracer | **Path built, not tested with Packet Tracer itself** | download the `.deb` with your Cisco NetAcad account, upload it to a machine with a remote desktop (x86 server: Cisco publishes it for amd64 only), click Install. The install feature is tested with a real `.deb`; Packet Tracer itself is not (needs a Cisco account) |
 | VMware | Not planned | it is a commercial hypervisor and cannot run inside a container; CyberLab itself plays VMware's role (machines + lab networks) |

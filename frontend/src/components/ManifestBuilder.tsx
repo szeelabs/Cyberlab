@@ -20,7 +20,14 @@ type Props = { onUse: (yaml: string) => void; onCancel: () => void };
 
 /** A beginner-friendly form that writes a Universe Manifest. */
 export function ManifestBuilder({ onUse, onCancel }: Props) {
-  const registry = useLoad(() => Promise.all([api.baseImages(), api.toolPacks()]));
+  const registry = useLoad(() =>
+    Promise.all([
+      api.baseImages(),
+      api.toolPacks(),
+      // The server's processor type (amd64/arm64), so systems that can't run there are shown as such.
+      api.execution().then((s) => (typeof s.architecture === "string" ? s.architecture : null)).catch(() => null),
+    ]),
+  );
   const [lab, setLab] = useState<LabDraft>({ name: "my-lab", description: "", environments: [newEnvironment(0)] });
   const [hostText, setHostText] = useState<Record<number, string>>({});
   const problems = formProblems(lab);
@@ -30,7 +37,8 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
 
   if (registry.error) return <ErrorNotice error={registry.error} />;
   if (!registry.data) return <div className="muted">Loading the tool catalogue…</div>;
-  const [bases, packs] = registry.data;
+  const [bases, packs, arch] = registry.data;
+  const runsHere = (b: { architectures: string[] }) => !arch || !["amd64", "arm64"].includes(arch) || b.architectures.includes(arch);
 
   return (
     <section className="panel" aria-label="Build with a form">
@@ -83,7 +91,11 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
                     update(i, { baseImage: base, toolPacks: env.toolPacks.filter((t) => ok.has(t)), desktop: env.desktop && desktopOk });
                   }}
                 >
-                  {bases.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  {bases.map((b) => (
+                    <option key={b.id} value={b.id} disabled={!runsHere(b)}>
+                      {b.name}{runsHere(b) ? "" : ` (not on this server: needs ${b.architectures.join("/")})`}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="field">

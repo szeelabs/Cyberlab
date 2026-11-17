@@ -519,3 +519,52 @@ def test_troubleshooter_explains_out_of_memory(client):
         assert body["state"] == "running"  # only the program was killed
     finally:
         destroy_all(client, ws_id, [env])
+
+
+def _build_test_deb(tmp_path) -> bytes:
+    """A real, tiny .deb (built with dpkg-deb) that installs /usr/local/bin/cyberlab-hello."""
+    image = f"{os.environ.get('CYBERLAB_TEST_IMAGE_MIRROR', 'docker.io')}/library/debian:12-slim"
+    script = (
+        "set -e; mkdir -p /p/DEBIAN /p/usr/local/bin; "
+        "printf 'Package: cyberlab-hello\\nVersion: 1.0\\nArchitecture: all\\n"
+        "Maintainer: test <test@example.com>\\nDescription: test package\\n' > /p/DEBIAN/control; "
+        "printf '#!/bin/sh\\necho hello-from-my-package\\n' > /p/usr/local/bin/cyberlab-hello; "
+        "chmod 755 /p/usr/local/bin/cyberlab-hello; dpkg-deb --build /p /out/hello.deb; "
+        "chmod 644 /out/hello.deb"
+    )
+    p = subprocess.run(
+        ["docker", "run", "--rm", "-v", f"{tmp_path}:/out", image, "sh", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert p.returncode == 0, p.stderr
+    return (tmp_path / "hello.deb").read_bytes()
+
+
+def test_install_your_own_package(client, tmp_path):
+    ws_id, (env,) = provision(client, BASIC, "it-install")
+    base = f"/v1/workspaces/{ws_id}/environments/{env['id']}"
+    try:
+        deb = _build_test_deb(tmp_path)
+        files = f"{base}/files/content"
+        up = client.put(files, params={"path": "installers/hello.deb"}, content=deb, headers=auth())
+        assert up.status_code == 201, up.text
+        client.put(files, params={"path": "notes.txt"}, content=b"keep me", headers=auth())
+        # not a package: refused before anything is built
+        bad = client.post(f"{base}/install", json={"path": "notes.txt"}, headers=auth())
+        assert bad.status_code == 422
+        r = client.post(f"{base}/install", json={"path": "installers/hello.deb"}, headers=auth())
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["state"] == "running"
+        assert body["installed"][0]["path"] == "/workspace/installers/hello.deb"
+        name = body["resources"]["container"]
+        assert sh(name, "cyberlab-hello") == (0, "hello-from-my-package")
+        assert sh(name, "cat /workspace/notes.txt") == (0, "keep me")  # files kept
+        assert sh(name, "id -u") == (0, "1000")  # still unprivileged
+        info = docker("inspect", "--format", "{{.HostConfig.ReadonlyRootfs}}", name).stdout.strip()
+        assert info == "true"  # still read-only
+    finally:
+        destroy_all(client, ws_id, [env])

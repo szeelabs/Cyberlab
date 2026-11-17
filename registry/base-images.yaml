@@ -36,3 +36,4 @@
   description: Arch-based penetration testing system with the BlackArch tool repository.
   minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
   supportsDesktop: true
+  architectures: [amd64]  # BlackArch publishes x86 images only

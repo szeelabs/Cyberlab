@@ -88,6 +88,10 @@ def _env_out(e: EnvironmentRecord) -> dict:
         "lastError": e.last_error,
         "resources": e.resources,
         "toolPacks": e.spec.get("toolPacks", []),
+        "installed": [
+            {"path": i.get("path"), "sha256": i.get("sha256")}
+            for i in (e.resources or {}).get("installers", [])
+        ],
         "desktop": bool((e.spec.get("access") or {}).get("desktop")),
         # True once the environment runs an image built with its tool packs installed.
         "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,
@@ -143,6 +147,7 @@ def execution_status(
         "status": "CONNECTED" if st.connected else "NOT CONNECTED",
         "detail": st.detail,
         "costClass": st.cost_class.value,
+        "architecture": st.architecture,
     }
 
 
@@ -318,6 +323,20 @@ def provision_environments(
             {"detail": "this would exceed your resource limits", "problems": problems},
         )
     adapter = _require_provider(provider)
+    arch = adapter.status().architecture
+    wrong_arch = [
+        reg.base_images[e.base_image]
+        for e in manifest.spec.environments
+        if arch in ("amd64", "arm64") and arch not in reg.base_images[e.base_image].architectures
+    ]
+    if wrong_arch:
+        names = ", ".join(sorted({b.name for b in wrong_arch}))
+        kind = "ARM (arm64)" if arch == "arm64" else "x86 (amd64)"
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{names} doesn't run on this server's processor type, {kind}. "
+            "Choose another operating system for that machine in Setup.",
+        )
 
     proxy_urls, egress_error = _configure_egress(adapter, ws, manifest, settings)
     created = []

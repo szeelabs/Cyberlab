@@ -30,6 +30,7 @@ export type Environment = {
   lastError: string | null;
   toolPacks: string[];
   toolPacksInstalled: boolean;
+  installed: { path: string; sha256: string }[];
   desktop: boolean;
   image: string | null;
   lastActivityAt: string | null;
@@ -154,7 +155,8 @@ export const api = {
 
   categories: () => request<Category[]>("/v1/registry/categories"),
   toolPacks: () => request<ToolPack[]>("/v1/registry/tool-packs"),
-  baseImages: () => request<{ id: string; name: string; supportsDesktop: boolean }[]>("/v1/registry/base-images"),
+  baseImages: () =>
+    request<{ id: string; name: string; supportsDesktop: boolean; architectures: string[] }[]>("/v1/registry/base-images"),
 
   workspaces: () => request<Workspace[]>("/v1/workspaces"),
   createWorkspace: (name: string, description = "") => request<Workspace>("/v1/workspaces", json("POST", { name, description })),
@@ -188,6 +190,8 @@ export const api = {
   fileUrl: (id: string, e: string, path: string) => `${env(id, e)}/files/content?path=${enc(path)}`,
   upload: (id: string, e: string, path: string, data: Blob) =>
     request<unknown>(`${env(id, e)}/files/content?path=${enc(path)}`, { method: "PUT", body: data }),
+  install: (id: string, e: string, path: string) =>
+    request<Environment>(`${env(id, e)}/install`, json("POST", { path })),
   deleteFile: (id: string, e: string, path: string, recursive: boolean) =>
     request<void>(`${env(id, e)}/files?path=${enc(path)}&recursive=${recursive}`, { method: "DELETE" }),
 
