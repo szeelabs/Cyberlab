@@ -59,7 +59,7 @@ Next.js app: sign-in, workspace "desktop", environment dashboard, xterm.js termi
 tool-universe explorer, manifest editor with live validation, optional Guacamole/noVNC.
 
 ## Phase 7 — Open Source Ecosystem (in progress)
-- [x] 1. Getting started guide, contributor guide, changelog, versioned releases from tags (not run yet).
+- [x] 1. Getting started guide, contributor guide, changelog, versioned releases from tags (not run yet), Claude Code Skill for manifests.
 Install guides (Codespaces, single VM, BYO host), a Claude Code Skill for authoring
 manifests, developer docs, a tool pack contribution guide, release automation (tags →
 images + changelog).
