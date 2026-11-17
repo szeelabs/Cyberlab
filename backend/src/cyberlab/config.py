@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     auth_algorithms: list[str] = ["HS256"]
     auth_audience: str | None = "authenticated"  # Supabase default audience
     auth_issuer: str | None = None
+    # Real sign-in with Supabase Auth. Both values are public (made to be used in browsers);
+    # token checking (JWKS URL, issuer, algorithms) is derived from the URL when not set.
+    auth_supabase_url: str | None = Field(
+        default=None,
+        pattern=r"^(https://[a-z0-9-]{1,63}\.supabase\.co|http://(127\.0\.0\.1|localhost):[0-9]{2,5})$",
+    )
+    auth_supabase_publishable_key: str | None = Field(default=None, min_length=20, max_length=512)
     dev_user_subject: str = "dev-user"
 
     # --- HTTP hardening ---------------------------------------------------
@@ -130,6 +137,20 @@ class Settings(BaseSettings):
     def _check_security(self) -> Settings:
         if self.auth_mode == "dev" and self.environment == "production":
             raise ValueError("CYBERLAB_AUTH_MODE=dev is not allowed in production")
+        if self.auth_supabase_url:
+            if self.environment == "production" and not self.auth_supabase_url.startswith(
+                "https://"
+            ):
+                raise ValueError("CYBERLAB_AUTH_SUPABASE_URL must use https in production")
+            if not self.auth_supabase_publishable_key:
+                raise ValueError(
+                    "CYBERLAB_AUTH_SUPABASE_URL needs CYBERLAB_AUTH_SUPABASE_PUBLISHABLE_KEY"
+                )
+            base = self.auth_supabase_url
+            self.auth_jwks_url = self.auth_jwks_url or f"{base}/auth/v1/.well-known/jwks.json"
+            self.auth_issuer = self.auth_issuer or f"{base}/auth/v1"
+            if self.auth_algorithms == ["HS256"] and self.auth_jwt_secret is None:
+                self.auth_algorithms = ["ES256", "RS256"]  # Supabase's asymmetric signing keys
         if self.auth_mode == "jwt":
             asymmetric = [a for a in self.auth_algorithms if not a.startswith("HS")]
             if "none" in (a.lower() for a in self.auth_algorithms):

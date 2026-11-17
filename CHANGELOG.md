@@ -6,6 +6,8 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Real sign-in with Supabase: sign-in and create-account screen, automatic token refresh,
+  sign out; tokens checked with the project's public keys (ES256).
 - Copy and paste between your computer and the remote desktop.
 - Install your own software: upload a .deb (for example Cisco Packet Tracer) and click
   Install; the machine is rebuilt with it, keeping your files. Uploads can now be up to
@@ -15,6 +17,10 @@ heading matches the pushed tag.
   shown as unavailable and refused with a clear message.
 - Kali is built and tested in CI like the other systems (all tool packs and the desktop);
   the detection-engineering pack (Suricata, YARA) is now offered on Kali.
+
+### Fixed
+- Leaving a terminal or desktop while it was closing could leave the machine-side process
+  running and the session unaudited; teardown now always completes.
 
 ## [0.1.0] - not released yet
 The first version. Everything below is built and tested; `docs/DEVELOPMENT_STATUS.md` lists

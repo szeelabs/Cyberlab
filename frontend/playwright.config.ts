@@ -14,7 +14,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: { baseURL: `http://127.0.0.1:${port}`, trace: "off", ...devices["Desktop Chrome"] },
-  webServer: {
+  webServer: [{
     command: `rm -rf ${dataDir} && mkdir -p ${dataDir} && cd ../backend && ${python} -m uvicorn --factory cyberlab.main:app_factory --port ${port}`,
     url: `http://127.0.0.1:${port}/healthz`,
     timeout: 60_000,
@@ -30,4 +30,29 @@ export default defineConfig({
       CYBERLAB_RATE_LIMIT_PER_MINUTE: "0",
     },
   },
+  // Real sign-in: a stand-in for Supabase Auth (real ES256 tokens) and a second control
+  // plane in JWT mode that checks them through the stand-in's public key list.
+  {
+    command: `node e2e/fake-supabase.mjs ${port - 3}`,
+    url: `http://127.0.0.1:${port - 3}/health`,
+    timeout: 30_000,
+    reuseExistingServer: false,
+  },
+  {
+    command: `rm -rf ${dataDir}-auth && mkdir -p ${dataDir}-auth && cd ../backend && ${python} -m uvicorn --factory cyberlab.main:app_factory --port ${port - 2}`,
+    url: `http://127.0.0.1:${port - 2}/healthz`,
+    timeout: 60_000,
+    reuseExistingServer: false,
+    env: {
+      CYBERLAB_ENVIRONMENT: "development",
+      CYBERLAB_AUTH_MODE: "jwt",
+      CYBERLAB_AUTH_SUPABASE_URL: `http://127.0.0.1:${port - 3}`,
+      CYBERLAB_AUTH_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_e2e_only_not_a_secret",
+      CYBERLAB_DATABASE_URL: `sqlite:///${dataDir}-auth/e2e.db`,
+      CYBERLAB_SNAPSHOT_DIR: `${dataDir}-auth/snapshots`,
+      CYBERLAB_EXECUTION_PROVIDER: "none",
+      CYBERLAB_REAPER_INTERVAL_SECONDS: "0",
+      CYBERLAB_RATE_LIMIT_PER_MINUTE: "0",
+    },
+  }],
 });

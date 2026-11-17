@@ -205,6 +205,17 @@ Its installer may ask to accept a licence during installation; if it fails non-i
 "What's wrong?" and the error message will show it. Installs last until the machine is
 destroyed: creating the environments again from the manifest starts without them.
 
+## Implemented (Phase 6, step 4 — real sign-in)
+| Area | What works | Where |
+|---|---|---|
+| Server | `CYBERLAB_AUTH_SUPABASE_URL` + `CYBERLAB_AUTH_SUPABASE_PUBLISHABLE_KEY` turn on Supabase sign-in; the JWKS URL, issuer and algorithms (ES256/RS256) are derived. Public `GET /v1/system/auth` tells the web app; the web app's CSP allows exactly that Supabase address. Guards: Supabase URLs only (or localhost outside production), https in production, the key is required | `config.py`, `api/routes.py`, `main.py` |
+| Web app | Sign-in screen (email + password), create account (with the email-confirmation message), plain-language errors, automatic token refresh shortly before expiry, back to sign-in on a revoked session or any 401, signed-in email and Sign out in the header. Talks to Supabase's REST API directly (no extra library). Development mode is unchanged | `src/auth.ts`, `src/pages/SignIn.tsx`, `src/App.tsx` |
+| Tests | Backend: ES256 tokens checked through a real local JWKS server: valid token, wrong issuer, wrong audience, expired, other key, unknown key id, `alg: none`, and a hand-forged HS256 token using the public key; settings guards; the public config; the real project's key list. Web: 8 unit tests (incl. the real Supabase error format). Browser: a stand-in for Supabase signing real ES256 tokens and a second CyberLab in JWT mode: wrong password, create account, "confirm your email", confirm, sign in, create a workspace, reload, sign out, API refuses without a token | `tests/test_supabase_auth.py`, `src/auth.test.ts`, `e2e/fake-supabase.mjs`, `e2e/app.spec.ts` |
+| Guide | Turning it on, Site URL for confirmation emails, free-plan email limits | `docs/guides/sign-in.md` |
+
+The user's Supabase project is connected to Claude (connector) and its address and public key
+are known; they are **not** committed to the repository (each CyberLab owner sets their own).
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -214,7 +225,7 @@ destroyed: creating the environments again from the manifest starts without them
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
-| Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
+| Forgotten-password flow in the sign-in screen; sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io); a project website | 7 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
@@ -223,8 +234,10 @@ destroyed: creating the environments again from the manifest starts without them
 1. **Fixed:** `backend/pyproject.toml` referenced `../README.md` as the package readme.
    Current setuptools rejects files outside the package directory, so a clean
    `pip install -e .` failed, which would break CI and Codespaces. The line was removed.
-2. Supabase Auth has **not** been tested against a real project. Only the HS256 token path
-   has automated tests; the JWKS (asymmetric key) path is untested.
+2. **Mostly resolved:** the JWKS (ES256) path is tested with a real P-256 key served as a JWKS,
+   including forged-token attacks, and CyberLab reads the **real** Supabase project's key list
+   (`CYBERLAB_TEST_SUPABASE_URL`). The real project's error format and browser access (CORS)
+   were checked. Still untested: a full sign-up with a real email (needs the user's inbox).
 3. The test client prints a Starlette deprecation warning about `httpx`. Harmless for now.
 4. **Fixed in Phase 3:** the schema is now managed by Alembic migrations.
 5. Work reaches `main` only through reviewed pull requests (PR #1 merged Phase 1 and Phase 2 part 1).

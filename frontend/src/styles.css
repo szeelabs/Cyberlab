@@ -88,3 +88,4 @@ tr:last-child td { border-bottom: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 button.link { background: none; border: none; padding: 0 4px; color: var(--accent); text-decoration: underline; cursor: pointer; font-size: inherit; }
 .desktop-box { width: 100%; height: min(72vh, 820px); background: #0e1311; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.signin { min-height: 100vh; display: grid; place-items: center; padding: 16px; } .signin .panel { width: min(420px, 100%); display: grid; gap: 12px; }

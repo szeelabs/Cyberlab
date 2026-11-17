@@ -87,6 +87,13 @@ build fail with "no matching manifest", each base image declares its architectur
 CyberLab checks them against the Docker host before creating anything. CI proves the ARM
 path on GitHub's free arm64 runners (available because the repository is public).
 
+## Sign-in: Supabase Auth over REST, tokens checked with the project's JWKS
+*Status: implemented.* Free, email + password out of the box, and modern projects sign tokens
+with ES256 keys published as a JWKS, which CyberLab already verified with PyJWT. The web app
+calls Supabase's documented REST endpoints directly instead of adding `supabase-js` (smaller,
+and the CSP stays a single allowed address). Tokens live in sessionStorage for the tab only.
+Only the public URL and publishable key are configured; no Supabase secret is ever needed.
+
 ## Rejected / deferred
 * **Kubernetes now:** too heavy for the free-first target and impossible locally on this
   machine. A Kubernetes adapter can come later behind `ProviderAdapter`.

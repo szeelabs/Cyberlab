@@ -213,3 +213,35 @@ def test_desktop_on_unsupported_system_is_refused_by_policy(client):
     )
     assert not r.json()["valid"]
     assert any(f["code"] == "access.desktop" for f in r.json()["findings"])
+
+
+class SlowCloseVnc(FakeVnc):
+    """Takes a moment to shut down, like docker exec on a slow server."""
+
+    async def close(self):
+        await asyncio.sleep(0.3)
+        self.closed = True
+
+
+def test_leaving_while_the_desktop_closes_still_cleans_up(client, provider):
+    """The browser goes away and the server cancels the handler mid-teardown: the docker
+    exec must still be closed, the session audited and the slot released."""
+    provider.open_desktop = lambda ref: _remember(provider, SlowCloseVnc())
+    ws, env = make_env(client)
+    for _ in range(3):  # more than the limit of 2: each slot must be released
+        tok = desk_ticket(client, ws, env["id"])
+        with client.websocket_connect("/v1/desktop") as sock:
+            sock.send_text(json.dumps({"type": "auth", "ticket": tok}))
+            assert json.loads(sock.receive_text())["type"] == "ready"
+            assert sock.receive_bytes() == b"RFB 003.008\n"
+        # leaving the block disconnects, then cancels the handler straight away
+    assert len(provider.desktops) == 3 and all(d.closed for d in provider.desktops)
+    closes = [
+        e for e in client.get("/v1/audit", headers=auth()).json() if e["action"] == "desktop.close"
+    ]
+    assert len(closes) == 3 and {c["detail"]["reason"] for c in closes} == {"disconnect"}
+
+
+async def _remember(provider, d):
+    provider.desktops.append(d)
+    return d
