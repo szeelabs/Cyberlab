@@ -5,6 +5,10 @@ with `0.`, anything may still change. The release workflow publishes the section
 heading matches the pushed tag.
 
 ## [Unreleased]
+### Added
+- Copy and paste between your computer and the remote desktop.
+- Kali is built and tested in CI like the other systems (all tool packs and the desktop);
+  the detection-engineering pack (Suricata, YARA) is now offered on Kali.
 
 ## [0.1.0] - not released yet
 The first version. Everything below is built and tested; `docs/DEVELOPMENT_STATUS.md` lists

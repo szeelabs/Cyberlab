@@ -12,6 +12,9 @@ export function Desktop({ workspaceId, environmentId, name, onClose }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"connecting" | "connected" | "closed" | "error">("connecting");
   const [message, setMessage] = useState("");
+  const [clip, setClip] = useState("");
+  const [clipNote, setClipNote] = useState("");
+  const rfbRef = useRef<RFB | null>(null);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -38,10 +41,16 @@ export function Desktop({ workspaceId, environmentId, name, onClose }: Props) {
             // From here on the socket carries VNC only; noVNC takes it over.
             const channel = new AuthedChannel(ws);
             rfb = new RFB(box.current!, channel, { shared: true });
+            rfbRef.current = rfb;
             rfb.scaleViewport = true;
             rfb.background = "#0e1311";
             rfb.addEventListener("connect", () => { setStatus("connected"); rfb?.focus(); });
             rfb.addEventListener("disconnect", () => setStatus((s) => (s === "error" ? s : "closed")));
+            // Text copied inside the desktop arrives here.
+            rfb.addEventListener("clipboard", (e) => {
+              setClip((e as CustomEvent<{ text: string }>).detail.text);
+              setClipNote("Copied on the desktop.");
+            });
           }
         };
       } catch (e) {
@@ -52,6 +61,7 @@ export function Desktop({ workspaceId, environmentId, name, onClose }: Props) {
 
     return () => {
       disposed = true;
+      rfbRef.current = null;
       rfb?.disconnect();
       socket?.close();
     };
@@ -73,6 +83,39 @@ export function Desktop({ workspaceId, environmentId, name, onClose }: Props) {
         (for example <span className="mono">xterm &amp;</span>) also appear here.
       </p>
       <div className="desktop-box" ref={box} data-testid="desktop" />
+      <div className="grid" style={{ gridTemplateColumns: "1fr auto", alignItems: "start", marginTop: 10 }}>
+        <label className="field">
+          Clipboard (shared with the desktop)
+          <textarea
+            aria-label="Clipboard"
+            rows={2}
+            maxLength={100_000}
+            value={clip}
+            placeholder="Paste text here, then send it to the desktop"
+            onChange={(e) => { setClip(e.target.value); setClipNote(""); }}
+          />
+        </label>
+        <div style={{ display: "grid", gap: 6, paddingTop: 18 }}>
+          <button
+            disabled={status !== "connected" || !clip}
+            onClick={() => { rfbRef.current?.clipboardPasteFrom(clip); setClipNote("Sent: in the desktop, paste with middle-click or Shift+Insert."); }}
+          >
+            Send to desktop
+          </button>
+          <button
+            disabled={!clip}
+            onClick={() =>
+              navigator.clipboard
+                ?.writeText(clip)
+                .then(() => setClipNote("Copied to your computer."))
+                .catch(() => setClipNote("Your browser blocked it: select the text above and copy it."))
+            }
+          >
+            Copy to my computer
+          </button>
+        </div>
+      </div>
+      {clipNote && <div className="muted small" role="status">{clipNote}</div>}
     </section>
   );
 }
