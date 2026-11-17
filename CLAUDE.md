@@ -127,5 +127,6 @@ Parrot OS and BlackArch base systems added (PR #14).
 **Phase 5 (AI Lab Architect):** approved by the user; step 1, **drafts from plain words**
 (keyword planner by default, Claude opt-in and paid, untested with a real key) merged (PR #15).
 **Phase 6 step 3:** the **remote desktop** (noVNC, VNC via `docker exec`, no open port) merged (PR #16).
-**Phase 5 step 2:** the **troubleshooter** ("What's wrong?") and the architect **evaluation set** are built.
+**Phase 5 step 2:** the **troubleshooter** ("What's wrong?") and the architect **evaluation set** (PR #18).
+**Phase 7 step 1:** getting-started guide, contributor guide, changelog, tag-triggered releases.
 Details: `docs/DEVELOPMENT_STATUS.md`.

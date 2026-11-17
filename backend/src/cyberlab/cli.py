@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from cyberlab import __version__
 from cyberlab.config import QuotaSettings, get_settings
 from cyberlab.manifest.models import UniverseManifest
 from cyberlab.manifest.policy import plan_from_text
@@ -192,6 +193,7 @@ def _cmd_architect_eval(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cyberlab")
     parser.add_argument("--registry", help="path to registry directory")
+    parser.add_argument("--version", action="version", version=f"cyberlab {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     m = sub.add_parser("manifest", help="Universe Manifest tools")

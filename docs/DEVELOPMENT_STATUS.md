@@ -174,6 +174,14 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Evaluation set | 20 learner requests with what any acceptable draft must contain (system, tools, network, desktop, approval, machine count), including refusals both ways. `cyberlab architect eval` scores the configured planner (the paid Claude planner only with `--yes`). The built-in planner passes 20/20, enforced by a test | `architect/eval_prompts.yaml`, `architect/evaluate.py`, `cli.py` |
 | Tests | 27 troubleshooter rules and API tests; real Docker: a program eats all memory and the troubleshooter says so; browser test: "What's wrong?" on a running machine; 15 evaluation tests, including bad drafts the checker must catch | `tests/test_troubleshoot.py`, `tests/test_architect_eval.py`, `tests/test_docker_integration.py`, `frontend/e2e` |
 
+## Implemented (Phase 7, step 1 — getting started and releases)
+| Area | What works | Where |
+|---|---|---|
+| Beginner guide | From nothing to a running Kali lab in a Codespace: what to click, what to expect, free-limit habits, what to do when something goes wrong; linked from the README | `docs/guides/getting-started.md` |
+| Contributor guide | Web app and real-Docker tests, adding tool packs (Arch names, CI coverage, planner keywords and evaluation cases), adding operating systems, releases | `CONTRIBUTING.md` |
+| Versions | `cyberlab --version`; `CHANGELOG.md`; a test keeps the backend and web app versions and the changelog in step | `cli.py`, `tests/test_release.py` |
+| Releases | Pushing a tag `vX.Y.Z` runs `release.yml`: checks the tag matches the version, runs lint and tests, builds the web app and the Python package, and publishes a GitHub release with notes from the changelog. **Not run yet**: no tag has been pushed (the maintainer decides when) | `.github/workflows/release.yml` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -186,7 +194,7 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
 | Real sign-in in the web app (Supabase/OIDC login). Deferred: it can't be tested without a real provider account, so today the app takes a pasted token | 6 |
 | Remote desktop extras: copy/paste between your computer and the desktop, resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
-| Claude Code Skill, release automation | 7 |
+| Claude Code Skill for writing manifests; container images published to a registry (ghcr.io) | 7 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues
