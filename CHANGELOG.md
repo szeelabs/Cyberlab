@@ -18,6 +18,10 @@ heading matches the pushed tag.
 - Kali is built and tested in CI like the other systems (all tool packs and the desktop);
   the detection-engineering pack (Suricata, YARA) is now offered on Kali.
 
+### Fixed
+- Leaving a terminal or desktop while it was closing could leave the machine-side process
+  running and the session unaudited; teardown now always completes.
+
 ## [0.1.0] - not released yet
 The first version. Everything below is built and tested; `docs/DEVELOPMENT_STATUS.md` lists
 exactly how, and what does not work yet.

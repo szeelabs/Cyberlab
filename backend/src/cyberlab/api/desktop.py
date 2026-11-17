@@ -19,6 +19,7 @@ import json
 import time
 from collections.abc import Callable
 
+import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, status
 from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketState
@@ -128,10 +129,13 @@ async def _run_desktop(
         for t in done:
             reason = t.result() if not t.cancelled() and t.exception() is None else "error"
     finally:
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await stream.close()
+        # Shielded: if the browser leaves and the server cancels this handler mid-teardown,
+        # the docker exec must still be closed and the session audited.
+        with anyio.CancelScope(shield=True):
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await stream.close()
         record_audit(
             db,
             actor=subject,
