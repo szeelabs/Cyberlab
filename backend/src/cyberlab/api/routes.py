@@ -157,6 +157,18 @@ def _owned(db: Session, user: User, ws_id: str) -> Workspace:
     return ws
 
 
+@router.get("/v1/system/auth", tags=["system"])
+def auth_config(settings: Settings = Depends(get_settings)) -> dict:
+    """How the web app signs in. Public: it only contains values meant for browsers."""
+    supabase = settings.auth_mode == "jwt" and settings.auth_supabase_url is not None
+    return {
+        "mode": settings.auth_mode,
+        "provider": "supabase" if supabase else None,
+        "url": settings.auth_supabase_url if supabase else None,
+        "publishableKey": settings.auth_supabase_publishable_key if supabase else None,
+    }
+
+
 @router.get("/v1/me", tags=["identity"])
 def me(user: User = Depends(current_user)) -> dict:
     return {"id": user.id, "subject": user.subject, "email": user.email}

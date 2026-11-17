@@ -6,6 +6,8 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Real sign-in with Supabase: sign-in and create-account screen, automatic token refresh,
+  sign out; tokens checked with the project's public keys (ES256).
 - Copy and paste between your computer and the remote desktop.
 - Install your own software: upload a .deb (for example Cisco Packet Tracer) and click
   Install; the machine is rebuilt with it, keeping your files. Uploads can now be up to

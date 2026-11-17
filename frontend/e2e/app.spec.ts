@@ -317,3 +317,56 @@ test("install your own package (.deb) from the Files tab", async ({ page }) => {
   await expect(envs.getByText("No environments.")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test.describe("real sign-in (Supabase Auth stand-in, ES256 tokens)", () => {
+  const port = Number(process.env.E2E_PORT ?? 8799);
+  const app = `http://127.0.0.1:${port - 2}/app/`;
+  const auth = `http://127.0.0.1:${port - 3}`;
+
+  test("create an account, confirm, sign in, use CyberLab, sign out", async ({ page, request }) => {
+    const errors = watchConsole(page);
+    const email = `learner-${Date.now()}@example.com`;
+    await page.goto(app);
+    const form = page.getByRole("region", { name: "Sign in" });
+    await expect(form).toBeVisible();
+
+    // Wrong password: a plain message.
+    await form.getByLabel("Email").fill(email);
+    await form.getByLabel("Password").fill("nope-nope");
+    await form.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("alert")).toContainText("Wrong email or password.");
+
+    // Create an account: a confirmation email is "sent".
+    await page.getByRole("button", { name: "Create an account" }).click();
+    const create = page.getByRole("region", { name: "Create account" });
+    await create.getByLabel("Email").fill(email);
+    await create.getByLabel("Password").fill("a-long-password");
+    await create.getByRole("button", { name: "Create account" }).click();
+    await expect(page.getByRole("status")).toContainText("confirmation link");
+
+    // Signing in before confirming explains what to do.
+    await form.getByLabel("Password").fill("a-long-password");
+    await form.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("alert")).toContainText("confirm your email");
+
+    // "Click the link in the email", then sign in for real.
+    expect((await request.post(`${auth}/__confirm`, { data: { email } })).ok()).toBe(true);
+    await form.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByLabel("Signed in as")).toHaveText(email);
+
+    // The API accepts the ES256 token (checked against the JWKS): create a workspace.
+    await page.getByLabel("New workspace name").fill("signed-in-lab");
+    await page.getByRole("button", { name: "Create workspace" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "signed-in-lab" })).toBeVisible();
+
+    // Still signed in after a reload (this tab only).
+    await page.reload();
+    await expect(page.getByLabel("Signed in as")).toHaveText(email);
+
+    // Sign out: back to the sign-in screen, and the API refuses requests without a token.
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("region", { name: "Sign in" })).toBeVisible();
+    expect((await request.get(`http://127.0.0.1:${port - 2}/v1/workspaces`)).status()).toBe(401);
+    expect(errors).toEqual([]);
+  });
+});

@@ -118,7 +118,16 @@ export function describeError(body: unknown, fallback: string): string {
   return fallback;
 }
 
+// Set by the app when real sign-in is on: refresh the token first, and react to 401s.
+let beforeRequest: (() => Promise<unknown>) | null = null;
+let onUnauthorized: (() => void) | null = null;
+export function setAuthHooks(before: typeof beforeRequest, unauthorized: typeof onUnauthorized): void {
+  beforeRequest = before;
+  onUnauthorized = unauthorized;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  if (beforeRequest) await beforeRequest();
   const headers = new Headers(init.headers);
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -126,6 +135,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
   const type = res.headers.get("content-type") ?? "";
   const body = type.includes("application/json") ? await res.json() : await res.text();
+  if (res.status === 401 && onUnauthorized) onUnauthorized();
   if (!res.ok) throw new ApiError(res.status, describeError(body, `${res.status} ${res.statusText}`), body);
   return body as T;
 }
@@ -142,6 +152,7 @@ const env = (wsId: string, envId: string) => `${ws(wsId)}/environments/${enc(env
 
 export const api = {
   me: () => request<{ subject: string; email: string | null }>("/v1/me"),
+  authConfig: () => request<import("./auth").AuthConfig>("/v1/system/auth"),
   usage: () => request<Usage>("/v1/me/usage"),
   execution: () => request<ServiceStatus>("/v1/system/execution"),
   storage: () => request<ServiceStatus>("/v1/system/storage"),
@@ -204,6 +215,7 @@ export const api = {
 
 /** Download a URL that needs the API token, without putting the token in the URL. */
 export async function download(url: string, filename: string): Promise<void> {
+  if (beforeRequest) await beforeRequest();
   const headers = new Headers();
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);

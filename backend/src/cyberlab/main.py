@@ -43,6 +43,17 @@ WEBAPP_CSP = (
     "connect-src 'self'; img-src 'self' data:; font-src 'self'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
+
+
+def webapp_csp_for(settings: Settings) -> str:
+    """The web app's CSP, also allowing the sign-in provider's address when one is set."""
+    if settings.auth_mode == "jwt" and settings.auth_supabase_url:
+        return WEBAPP_CSP.replace(
+            "connect-src 'self'", f"connect-src 'self' {settings.auth_supabase_url}", 1
+        )
+    return WEBAPP_CSP
+
+
 NOT_BUILT = """<!doctype html><meta charset="utf-8"><title>CyberLab</title>
 <body style="font-family:system-ui;background:#0e1311;color:#dde7e2;padding:2rem">
 <h1>The CyberLab web app isn't built yet</h1>
@@ -63,6 +74,7 @@ SECURITY_HEADERS = {
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     is_prod = settings.environment == "production"
+    webapp_csp = webapp_csp_for(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -145,7 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Request-ID"] = rid
         if request.url.path.startswith("/app"):
-            response.headers.setdefault("Content-Security-Policy", WEBAPP_CSP)
+            response.headers.setdefault("Content-Security-Policy", webapp_csp)
         for k, v in SECURITY_HEADERS.items():
             if k == "Content-Security-Policy" and request.url.path == "/docs":
                 continue  # Swagger UI (dev only) needs its own scripts

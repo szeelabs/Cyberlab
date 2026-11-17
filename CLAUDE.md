@@ -129,4 +129,8 @@ Parrot OS and BlackArch base systems added (PR #14).
 **Phase 6 step 3:** the **remote desktop** (noVNC, VNC via `docker exec`, no open port) merged (PR #16).
 **Phase 5 step 2:** the **troubleshooter** ("What's wrong?") and the architect **evaluation set** (PR #18).
 **Phase 7 step 1:** getting-started guide, contributor guide, changelog, tag-triggered releases.
+Kali in CI + desktop copy/paste (PR #19); ARM servers + install your own .deb (PR #20).
+**Phase 6 step 4:** **real sign-in** with Supabase is built. The user connected the Supabase
+connector; their existing Supabase project (free plan) is used for Auth only. A
+"Cyberlab" cloud environment allows that project's host. Values are not committed.
 Details: `docs/DEVELOPMENT_STATUS.md`.

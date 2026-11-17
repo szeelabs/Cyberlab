@@ -18,7 +18,7 @@ attacker (tool images).
 
 | Threat | Example | Mitigation | Status |
 |---|---|---|---|
-| **Spoofing** | Forged JWT, `alg: none`, wrong audience | Signature, `exp`, `sub`, audience/issuer checked; `none` refused at config and verify; dev auth refused in production | ✅ tested |
+| **Spoofing** | Forged JWT, `alg: none`, wrong audience | Signature, `exp`, `sub`, audience/issuer checked; `none` refused at config and verify; dev auth refused in production | ✅ tested, incl. ES256 via JWKS (forged, cross-project, expired and algorithm-confusion tokens refused) |
 | **Tampering** | Malicious shared manifest (YAML tags, alias bombs, unknown fields like `privileged`) | SafeLoader subclass with aliases rejected; single document; size limits; `extra="forbid"`; no privileged/host options exist in the schema | ✅ tested |
 | **Repudiation** | "I didn't start that lab" | Append-only audit log with request IDs | ✅ (export/retention: Phase 4) |
 | **Information disclosure** | Reading another user's workspace | Owner-scoped queries, uniform 404; security headers; docs disabled in prod | ✅ tested |
