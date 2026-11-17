@@ -63,6 +63,19 @@ _ERROR_RULES: list[tuple[re.Pattern[str], Advice]] = [
         ),
     ),
     (
+        re.compile(r"no matching manifest for|exec format error|doesn't run on this server", re.I),
+        Advice(
+            "problem",
+            "build.wrong-processor",
+            "This operating system doesn't run on this server's processor",
+            "Computers have different processor types (x86, used by most PCs, or ARM, used by "
+            "some free cloud servers and phones). This operating system is not published for "
+            "the processor of the server running your machines.",
+            "Choose another operating system for this machine in Setup. Ubuntu, Debian, Kali "
+            "and Parrot OS run on both types; BlackArch needs x86.",
+        ),
+    ),
+    (
         re.compile(r"internet access was not approved", re.I),
         Advice(
             "problem",

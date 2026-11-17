@@ -7,6 +7,9 @@ heading matches the pushed tag.
 ## [Unreleased]
 ### Added
 - Copy and paste between your computer and the remote desktop.
+- ARM (arm64) servers, such as free cloud ARM machines: Ubuntu, Debian, Kali and Parrot OS
+  are built and tested on ARM in CI; systems that can't run on the server's processor are
+  shown as unavailable and refused with a clear message.
 - Kali is built and tested in CI like the other systems (all tool packs and the desktop);
   the detection-engineering pack (Suricata, YARA) is now offered on Kali.
 

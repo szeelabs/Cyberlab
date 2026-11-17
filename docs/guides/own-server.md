@@ -5,6 +5,12 @@ environments run on **a Linux machine you control**: an old PC, a home server, o
 cloud VM. CyberLab talks to that machine's Docker Engine **over SSH**, so no Docker port is
 ever exposed to the network.
 
+> **ARM servers work too.** Many free cloud servers (for example Oracle Cloud's "Always
+> Free" tier) use ARM (arm64) processors instead of x86. Ubuntu, Debian, Kali and Parrot OS,
+> with all their tool packs and the desktop, are built and tested on ARM in CI. BlackArch is
+> published for x86 only: on an ARM server CyberLab shows it as unavailable and refuses it
+> with a clear message instead of failing halfway.
+
 > **Read this first.** Anyone who can use a Docker Engine effectively has root on that
 > machine. Use a machine (or VM) dedicated to CyberLab, never your personal computer's main
 > account, and keep the SSH key secret.

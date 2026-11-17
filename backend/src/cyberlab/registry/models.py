@@ -61,6 +61,11 @@ class BaseImage(BaseModel):
     description: str = ""
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     supports_desktop: bool = Field(default=False, alias="supportsDesktop")
+    architectures: list[Literal["amd64", "arm64"]] = Field(
+        default_factory=lambda: ["amd64", "arm64"],
+        min_length=1,
+        description="Processor types its image is published for (amd64 = x86, arm64 = ARM)",
+    )
     source_rewrite: SourceRewrite | None = Field(
         default=None,
         alias="sourceRewrite",

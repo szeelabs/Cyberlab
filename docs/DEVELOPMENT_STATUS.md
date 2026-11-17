@@ -183,6 +183,16 @@ client. Treat the `anthropic` planner as untested until someone runs it with a r
 | Claude Code Skill | `.claude/skills/cyberlab-manifest/SKILL.md`: how to write and validate manifests with real registry IDs, the safest network, sizes, the desktop, and the authorized-practice rule. A test checks its example manifest passes the policy engine | `.claude/skills/`, `tests/test_release.py` |
 | Releases | Pushing a tag `vX.Y.Z` runs `release.yml`: checks the tag matches the version, runs lint and tests, builds the web app and the Python package, and publishes a GitHub release with notes from the changelog. **Not run yet**: no tag has been pushed (the maintainer decides when) | `.github/workflows/release.yml` |
 
+## Implemented (ARM servers)
+| Area | What works | Where |
+|---|---|---|
+| Processor types | Each operating system lists its `architectures` (Ubuntu, Debian, Kali, Parrot OS: amd64 and arm64; BlackArch: amd64 only). The Docker adapter reports the server's processor type (`/v1/system/execution` → `architecture`). Creating a machine whose system isn't published for that processor is refused up front with a plain message; the beginner form shows such systems as unavailable; "What's wrong?" explains processor-type errors | `registry/base-images.yaml`, `execution/docker.py`, `api/environments.py`, `components/ManifestBuilder.tsx`, `troubleshoot.py` |
+| Tested on real ARM | CI jobs on GitHub's arm64 runners: `arm64-images` builds Ubuntu, Debian, Kali and Parrot OS with every tool pack and the desktop, checks each tool runs as the unprivileged user and completes a VNC handshake; `arm64-integration` runs the whole real-Docker test suite on arm64 | `.github/workflows/ci.yml` |
+
+This is what makes free ARM servers such as Oracle Cloud's Always Free tier (4 ARM cores,
+24 GB RAM, 200 GB disk) a supported place to run machines, through the SSH guide. Not tested:
+an actual Oracle Cloud account (that needs the user's sign-up).
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|

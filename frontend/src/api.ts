@@ -154,7 +154,8 @@ export const api = {
 
   categories: () => request<Category[]>("/v1/registry/categories"),
   toolPacks: () => request<ToolPack[]>("/v1/registry/tool-packs"),
-  baseImages: () => request<{ id: string; name: string; supportsDesktop: boolean }[]>("/v1/registry/base-images"),
+  baseImages: () =>
+    request<{ id: string; name: string; supportsDesktop: boolean; architectures: string[] }[]>("/v1/registry/base-images"),
 
   workspaces: () => request<Workspace[]>("/v1/workspaces"),
   createWorkspace: (name: string, description = "") => request<Workspace>("/v1/workspaces", json("POST", { name, description })),

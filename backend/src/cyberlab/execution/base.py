@@ -35,12 +35,21 @@ class ProviderError(RuntimeError):
     """A provider operation failed. The message is safe to show to the user."""
 
 
+ARCH_ALIASES = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+
+
+def normalize_arch(raw: str | None) -> str | None:
+    """Docker reports amd64/arm64; some hosts say x86_64/aarch64."""
+    return ARCH_ALIASES.get((raw or "").strip().lower()) if raw else None
+
+
 @dataclass(frozen=True)
 class ProviderStatus:
     name: str
     connected: bool
     detail: str
     cost_class: CostClass
+    architecture: str | None = None  # the host's processor type: amd64, arm64 or unknown
 
 
 @dataclass(frozen=True)

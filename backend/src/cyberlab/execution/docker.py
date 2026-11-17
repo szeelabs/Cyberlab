@@ -31,6 +31,7 @@ from cyberlab.execution.base import (
     ProviderStatus,
     ProvisionRequest,
     ProvisionResult,
+    normalize_arch,
 )
 from cyberlab.execution.images import DESKTOP_COMMAND, ImageRecipe, ImageRecipeError, render
 from cyberlab.execution.shell import PipeSession, PtyShellSession, ShellSession, StreamSession
@@ -407,13 +408,18 @@ class DockerAdapter:
                 cost,
             )
         try:
-            res = self._docker("version", "--format", "{{.Server.Version}}", timeout=15, ok=True)
+            res = self._docker(
+                "version", "--format", "{{.Server.Version}} {{.Server.Arch}}", timeout=15, ok=True
+            )
         except ProviderError as exc:
             return ProviderStatus(self.name, False, str(exc), cost)
         if res.returncode != 0 or not res.stdout:
             detail = (res.stderr or "daemon unreachable").splitlines()[-1][:200]
             return ProviderStatus(self.name, False, f"not connected: {detail}", cost)
-        return ProviderStatus(self.name, True, f"Docker Engine {res.stdout}", cost)
+        version, _, arch = res.stdout.partition(" ")
+        return ProviderStatus(
+            self.name, True, f"Docker Engine {version}", cost, normalize_arch(arch) or "unknown"
+        )
 
     def provision(self, request: ProvisionRequest) -> ProvisionResult:
         env = request.environment

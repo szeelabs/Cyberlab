@@ -79,6 +79,14 @@ one two-way socket, so `socat` joins `docker exec`'s two pipes (found by testing
 the handshake hangs). Openbox and xterm keep the image small; a fuller desktop can be a tool
 pack later. noVNC 1.7.0 is used because 1.6 cannot be bundled.
 
+## ARM (arm64) servers: per-system architectures, refused up front, tested on real ARM
+*Status: implemented.* The largest free servers (Oracle Cloud Always Free) are ARM. The
+official images of Ubuntu, Debian, Kali and Parrot OS are multi-architecture, so the same
+recipes build natively on ARM; BlackArch is x86-only. Rather than emulate (slow) or let a
+build fail with "no matching manifest", each base image declares its architectures and
+CyberLab checks them against the Docker host before creating anything. CI proves the ARM
+path on GitHub's free arm64 runners (available because the repository is public).
+
 ## Rejected / deferred
 * **Kubernetes now:** too heavy for the free-first target and impossible locally on this
   machine. A Kubernetes adapter can come later behind `ProviderAdapter`.
