@@ -88,7 +88,7 @@ export function WorkspacePage({ id, tab }: { id: string; tab: string }) {
       </nav>
       {tab === "setup" && <SetupTab id={id} hasManifest={ws.data.manifest_revision !== null} onSaved={() => { void ws.reload(); }} />}
       {tab === "environments" && <EnvironmentsTab id={id} envs={envs.data ?? []} error={envs.error} reload={envs.reload} />}
-      {tab === "files" && <FilesTab id={id} envs={envs.data ?? []} />}
+      {tab === "files" && <FilesTab id={id} envs={envs.data ?? []} reloadEnvs={envs.reload} />}
       {tab === "snapshots" && <SnapshotsTab id={id} envs={envs.data ?? []} reloadEnvs={envs.reload} />}
     </>
   );
@@ -298,7 +298,7 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
 }
 
 // ---------------------------------------------------------------- files
-function FilesTab({ id, envs }: { id: string; envs: Environment[] }) {
+function FilesTab({ id, envs, reloadEnvs }: { id: string; envs: Environment[]; reloadEnvs: () => Promise<void> }) {
   const running = envs.filter((e) => e.state === "running");
   const [envId, setEnvId] = useState("");
   const [path, setPath] = useState("");
@@ -310,6 +310,18 @@ function FilesTab({ id, envs }: { id: string; envs: Environment[] }) {
   const parts = path ? path.split("/") : [];
   const join = (name: string) => (path ? `${path}/${name}` : name);
   const upload = (file: File) => act.run(async () => { await api.upload(id, current.id, join(file.name), file); await listing.reload(); });
+  const [installing, setInstalling] = useState<string | null>(null);
+  const install = (name: string) =>
+    act.run(async () => {
+      setInstalling(name);
+      try {
+        await api.install(id, current.id, join(name));
+        await reloadEnvs();
+        await listing.reload();
+      } finally {
+        setInstalling(null);
+      }
+    });
 
   return (
     <section className="panel" aria-label="Files">
@@ -331,6 +343,18 @@ function FilesTab({ id, envs }: { id: string; envs: Environment[] }) {
         ))}
       </nav>
       <ErrorNotice error={act.error ?? listing.error} />
+      {installing && (
+        <div className="notice" role="status">
+          Installing {installing}: CyberLab builds a new version of this machine with it, then restarts it.
+          Your files are kept. This can take several minutes.
+        </div>
+      )}
+      {current.installed.length > 0 && (
+        <div className="muted small" aria-label="Installed packages">
+          Installed on this machine: {current.installed.map((i) => i.path.replace("/workspace/", "")).join(", ")}
+          {" "}(kept until the machine is destroyed).
+        </div>
+      )}
       {listing.data && listing.data.entries.length === 0 && <div className="empty">This folder is empty.</div>}
       {listing.data && listing.data.entries.length > 0 && (
         <div className="table-wrap">
@@ -350,6 +374,10 @@ function FilesTab({ id, envs }: { id: string; envs: Environment[] }) {
                     <div className="row">
                       {f.type === "file" && (
                         <button disabled={act.busy} onClick={() => act.run(() => download(api.fileUrl(id, current.id, join(f.name)), f.name))}>Download</button>
+                      )}
+                      {f.type === "file" && f.name.toLowerCase().endsWith(".deb") && (
+                        <ConfirmButton label="Install" confirm="Install (restarts the machine)" disabled={act.busy}
+                          onConfirm={() => install(f.name)} />
                       )}
                       <ConfirmButton label="Delete" confirm="Confirm delete" disabled={act.busy}
                         onConfirm={() => act.run(async () => { await api.deleteFile(id, current.id, join(f.name), f.type === "directory"); await listing.reload(); })} />

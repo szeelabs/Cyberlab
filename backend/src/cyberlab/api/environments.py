@@ -88,6 +88,10 @@ def _env_out(e: EnvironmentRecord) -> dict:
         "lastError": e.last_error,
         "resources": e.resources,
         "toolPacks": e.spec.get("toolPacks", []),
+        "installed": [
+            {"path": i.get("path"), "sha256": i.get("sha256")}
+            for i in (e.resources or {}).get("installers", [])
+        ],
         "desktop": bool((e.spec.get("access") or {}).get("desktop")),
         # True once the environment runs an image built with its tool packs installed.
         "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,

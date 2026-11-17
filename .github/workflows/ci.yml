@@ -201,7 +201,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        base: [ubuntu-24-04, debian-12, kali-rolling, parrot-core]
+        include:  # desktop only where the system offers it (Debian slim doesn't)
+          - {base: ubuntu-24-04, desktop: "--desktop"}
+          - {base: debian-12, desktop: ""}
+          - {base: kali-rolling, desktop: "--desktop"}
+          - {base: parrot-core, desktop: "--desktop"}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -216,14 +220,14 @@ jobs:
             | python3 -c 'import json,sys; print(",".join(x["pack"] for x in json.load(sys.stdin)["include"]))')"
           echo "PACKS=$PACKS" >> "$GITHUB_ENV"
           echo "packs: $PACKS"
-      - name: Build (all packs + desktop)
+      - name: Build (all packs, plus the desktop where offered)
         run: |
           cyberlab --registry registry image dockerfile --base "${{ matrix.base }}" --packs "$PACKS" \
-            --desktop --mirror mirror.gcr.io > Dockerfile
+            ${{ matrix.desktop }} --mirror mirror.gcr.io > Dockerfile
           docker build --tag arm-test - < Dockerfile && exit 0
           echo "::warning::build via mirror failed; retrying from Docker Hub"
           cyberlab --registry registry image dockerfile --base "${{ matrix.base }}" --packs "$PACKS" \
-            --desktop > Dockerfile.direct
+            ${{ matrix.desktop }} > Dockerfile.direct
           docker build --tag arm-test - < Dockerfile.direct
       - name: Every tool runs, as the unprivileged user
         run: |
@@ -235,6 +239,7 @@ jobs:
               test \"\$(whoami)\" = cyberlab
               for c in $CMDS; do command -v \$c >/dev/null || { echo missing \$c; exit 1; }; echo ok \$c; done"
       - name: Desktop VNC handshake
+        if: matrix.desktop != ''
         run: |
           docker run -d --name desk --init --user 1000:1000 --cap-drop ALL \
             --security-opt no-new-privileges --read-only \

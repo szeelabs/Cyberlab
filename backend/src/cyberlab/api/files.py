@@ -6,6 +6,9 @@ so this API can do nothing the browser terminal couldn't. Every change is audite
 
 from __future__ import annotations
 
+import asyncio
+import tempfile
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -30,6 +33,7 @@ STATUS = {
     "too_large": status.HTTP_413_CONTENT_TOO_LARGE,
     "no_space": status.HTTP_507_INSUFFICIENT_STORAGE,
     "failed": status.HTTP_502_BAD_GATEWAY,
+    "invalid": status.HTTP_422_UNPROCESSABLE_CONTENT,
 }
 BASE = "/v1/workspaces/{ws_id}/environments/{env_id}/files"
 
@@ -127,32 +131,45 @@ async def upload_file(
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
 ) -> dict:
-    """Create or replace a file (raw request body). Parent directories are created."""
+    """Create or replace a file (raw request body). Parent directories are created.
+
+    The body is streamed to a temporary file first (never held in memory), so large files
+    such as installers can be uploaded, up to ``max_upload_bytes``.
+    """
     adapter, rec = _target(db, user, ws_id, env_id, provider)
     full = _path(path)
-    data = b""
-    async for chunk in request.stream():
-        data += chunk
-        if len(data) > settings.max_file_bytes:
-            raise HTTPException(
-                status.HTTP_413_CONTENT_TOO_LARGE,
-                f"file is larger than {settings.max_file_bytes} bytes",
-            )
-    try:
-        adapter.write_file(rec.provider_ref, full, data)
-    except FileOpError as exc:
-        raise _fail(exc) from exc
+    size = 0
+    with tempfile.NamedTemporaryFile(prefix="cyberlab-upload-") as tmp:
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > settings.max_upload_bytes:
+                raise HTTPException(
+                    status.HTTP_413_CONTENT_TOO_LARGE,
+                    f"file is larger than {settings.max_upload_bytes} bytes",
+                )
+            tmp.write(chunk)
+        tmp.flush()
+        try:
+            from_path = getattr(adapter, "write_file_from_path", None)
+            if from_path is not None:
+                await asyncio.to_thread(from_path, rec.provider_ref, full, tmp.name)
+            else:  # providers without streaming support take the bytes directly
+                tmp.seek(0)
+                adapter.write_file(rec.provider_ref, full, tmp.read())
+        except FileOpError as exc:
+            raise _fail(exc) from exc
+    data_len = size
     record_audit(
         db,
         actor=user.subject,
         action="file.upload",
         target_type="environment",
         target_id=rec.id,
-        detail={"path": full, "bytes": len(data)},
+        detail={"path": full, "bytes": data_len},
         request_id=request_id(request),
     )
     db.commit()
-    return {"path": full.removeprefix("/workspace/"), "bytes": len(data)}
+    return {"path": full.removeprefix("/workspace/"), "bytes": data_len}
 
 
 @router.delete(BASE, status_code=204)

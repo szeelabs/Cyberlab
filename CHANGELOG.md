@@ -7,6 +7,9 @@ heading matches the pushed tag.
 ## [Unreleased]
 ### Added
 - Copy and paste between your computer and the remote desktop.
+- Install your own software: upload a .deb (for example Cisco Packet Tracer) and click
+  Install; the machine is rebuilt with it, keeping your files. Uploads can now be up to
+  2 GiB.
 - ARM (arm64) servers, such as free cloud ARM machines: Ubuntu, Debian, Kali and Parrot OS
   are built and tested on ARM in CI; systems that can't run on the server's processor are
   shown as unavailable and refused with a clear message.

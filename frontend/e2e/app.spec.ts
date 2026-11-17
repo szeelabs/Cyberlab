@@ -1,3 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { expect, test, type Page } from "@playwright/test";
 
 const BROKEN = `apiVersion: cyberlab.dev/v1alpha1
@@ -256,6 +261,56 @@ test("remote desktop: see the screen and type into it", async ({ page }) => {
   await expect(files.getByText("from-clipboard.txt")).toBeVisible();
 
   await page.getByRole("button", { name: "Environments" }).click();
+  await envs.getByLabel(/keep files/).uncheck(); // leave nothing behind
+  await envs.getByRole("button", { name: "Destroy" }).click();
+  await envs.getByRole("button", { name: "Confirm destroy" }).click();
+  await expect(envs.getByText("No environments.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+/** A real, tiny .deb (built with dpkg-deb in a container) that installs `cyberlab-hello`. */
+function buildTestDeb(): Buffer {
+  const dir = mkdtempSync(join(tmpdir(), "cyberlab-deb-"));
+  const mirror = process.env.E2E_IMAGE_MIRROR ?? "docker.io";
+  const script =
+    "set -e; mkdir -p /p/DEBIAN /p/usr/local/bin; " +
+    "printf 'Package: cyberlab-hello\\nVersion: 1.0\\nArchitecture: all\\nMaintainer: t <t@example.com>\\nDescription: test\\n' > /p/DEBIAN/control; " +
+    "printf '#!/bin/sh\\necho hello-from-my-package\\n' > /p/usr/local/bin/cyberlab-hello; " +
+    "chmod 755 /p/usr/local/bin/cyberlab-hello; dpkg-deb --build /p /out/hello.deb; chmod 644 /out/hello.deb";
+  execFileSync("docker", ["run", "--rm", "-v", `${dir}:/out`, `${mirror}/library/debian:12-slim`, "sh", "-c", script]);
+  return readFileSync(join(dir, "hello.deb"));
+}
+
+test("install your own package (.deb) from the Files tab", async ({ page }) => {
+  test.skip(process.env.E2E_DOCKER !== "1", "set E2E_DOCKER=1 to run against a real Docker Engine");
+  test.setTimeout(300_000);
+  const errors = watchConsole(page);
+  await createWorkspace(page, `e2e-install-${Date.now() % 100000}`);
+  await saveManifest(page, GOOD);
+  await expect(page.getByText("Saved as revision 1.")).toBeVisible();
+  await page.getByRole("button", { name: "Environments" }).click();
+  await page.getByRole("button", { name: "Create environments" }).click();
+  const envs = page.getByRole("region", { name: "Environments" });
+  await expect(envs.getByText("running")).toBeVisible({ timeout: 120_000 });
+
+  await page.getByRole("button", { name: "Files" }).click();
+  const files = page.getByRole("region", { name: "Files" });
+  await files.locator('input[type="file"]').setInputFiles({ name: "hello.deb", mimeType: "application/vnd.debian.binary-package", buffer: buildTestDeb() });
+  await expect(files.getByText("hello.deb")).toBeVisible();
+  await files.getByRole("button", { name: "Install" }).click();
+  await files.getByRole("button", { name: "Install (restarts the machine)" }).click();
+  await expect(files.getByLabel("Installed packages")).toContainText("hello.deb", { timeout: 240_000 });
+
+  // The machine was restarted with the package: run it from the terminal.
+  await page.getByRole("button", { name: "Environments" }).click();
+  await envs.getByRole("button", { name: "Terminal" }).click();
+  const term = page.getByRole("region", { name: "Terminal: shell" });
+  await expect(term.getByText("connected")).toBeVisible();
+  await page.getByTestId("terminal").click();
+  await page.keyboard.type("cyberlab-hello\n");
+  await expect(page.locator(".xterm-rows")).toContainText("hello-from-my-package");
+  await term.getByRole("button", { name: "Close terminal" }).click();
+
   await envs.getByLabel(/keep files/).uncheck(); // leave nothing behind
   await envs.getByRole("button", { name: "Destroy" }).click();
   await envs.getByRole("button", { name: "Confirm destroy" }).click();

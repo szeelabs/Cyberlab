@@ -156,7 +156,7 @@ def provider():
 
 @pytest.fixture
 def client(settings, provider):
-    app = create_app(settings.model_copy(update={"max_file_bytes": 1024}))
+    app = create_app(settings.model_copy(update={"max_file_bytes": 1024, "max_upload_bytes": 1024}))
     app.state.provider = provider
     with TestClient(app) as c:
         yield c
@@ -233,3 +233,31 @@ def test_errors_map_to_statuses(client, base):
     assert client.get(base, params={"path": "nope"}, headers=auth()).status_code == 404
     client.put(f"{base}/content", params={"path": "f.txt"}, content=b"x", headers=auth())
     assert client.get(base, params={"path": "f.txt"}, headers=auth()).status_code == 409
+
+
+def test_upload_limit_is_separate_from_download_limit(settings, provider):
+    # Uploads stream through a temp file, so they may be much larger than downloads.
+    app = create_app(settings.model_copy(update={"max_file_bytes": 1024, "max_upload_bytes": 8192}))
+    app.state.provider = provider
+    with TestClient(app) as c:
+        ws = c.post("/v1/workspaces", json={"name": "u"}, headers=auth()).json()["id"]
+        c.put(f"/v1/workspaces/{ws}/manifest", content=MINIMAL, headers=YAML | auth())
+        (env,) = c.post(f"/v1/workspaces/{ws}/environments", json={}, headers=auth()).json()[
+            "environments"
+        ]
+        base = f"/v1/workspaces/{ws}/environments/{env['id']}/files"
+        r = c.put(f"{base}/content", params={"path": "a.deb"}, content=b"x" * 5000, headers=auth())
+        assert r.status_code == 201 and r.json()["bytes"] == 5000
+        too_big = c.put(
+            f"{base}/content", params={"path": "b"}, content=b"x" * 9000, headers=auth()
+        )
+        assert too_big.status_code == 413
+
+
+def test_streamed_upload_without_length_is_still_limited(client, base):
+    def chunks():
+        for _ in range(4):
+            yield b"x" * 512
+
+    r = client.put(f"{base}/content", params={"path": "s"}, content=chunks(), headers=auth())
+    assert r.status_code == 413
