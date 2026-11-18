@@ -136,6 +136,21 @@ class Snapshot(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class LabRun(Base):
+    """One run of a ready-made lab in a workspace. Only hashes of the answers are stored."""
+
+    __tablename__ = "lab_runs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), unique=True
+    )
+    lab_id: Mapped[str] = mapped_column(String(63))
+    answer_hashes: Mapped[dict] = mapped_column(JSON)  # task id -> sha256(run id + answer)
+    solved: Mapped[dict] = mapped_column(JSON, default=dict)  # task id -> ISO time
+    setup_error: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

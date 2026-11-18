@@ -184,6 +184,59 @@ test("full lab: environment, terminal, files, snapshot, destroy", async ({ page 
   expect(errors).toEqual([]);
 });
 
+test("labs catalog: browse, and a clear message when no machines can be created", async ({ page }) => {
+  test.skip(process.env.E2E_DOCKER === "1", "covered by the full ready-made lab test");
+  const errors = watchConsole(page);
+  await page.goto("/app/");
+  await page.getByRole("link", { name: "Browse labs →" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Ready-made labs" })).toBeVisible();
+  const card = page.getByRole("region", { name: "First steps in Linux" });
+  await expect(card.getByText("beginner")).toBeVisible();
+  await expect(card.getByText(/4 tasks/)).toBeVisible();
+  await card.getByRole("button", { name: "Start lab" }).click();
+  await expect(page.getByRole("alert")).toContainText("no execution provider");
+  expect(errors.filter((e) => !/status of 503/.test(e))).toEqual([]);
+});
+
+test("ready-made lab: one click, read a flag in the terminal, get it checked", async ({ page }) => {
+  test.skip(process.env.E2E_DOCKER !== "1", "set E2E_DOCKER=1 to run against a real Docker Engine");
+  const errors = watchConsole(page);
+  await page.goto("/app/#/labs");
+  await page.getByRole("region", { name: "First steps in Linux" }).getByRole("button", { name: "Start lab" }).click();
+  const lab = page.getByRole("region", { name: "Lab", exact: true });
+  await expect(lab.getByText("0 of 4 solved")).toBeVisible({ timeout: 180_000 });
+
+  // A wrong answer is refused, and hints appear one at a time.
+  const task = page.getByRole("region", { name: "Task 1: Read a file" });
+  await task.getByLabel("Answer for Read a file").fill("CL{not-it}");
+  await task.getByRole("button", { name: "Check" }).click();
+  await expect(task.getByRole("alert")).toContainText("Not quite");
+  await task.getByRole("button", { name: "Show a hint" }).click();
+  await expect(task.getByText(/lists files/)).toBeVisible();
+
+  // Read the real flag with cat in the real machine, and submit it.
+  await lab.getByRole("button", { name: "Open terminal: student" }).click();
+  await expect(page.getByRole("region", { name: "Terminal: student" }).getByText("connected")).toBeVisible();
+  await page.getByTestId("terminal").click();
+  await page.keyboard.type("cat welcome.txt\n");
+  const rows = page.locator(".xterm-rows");
+  await expect(rows).toContainText(/CL\{[0-9a-f]{16}\}/);
+  const flag = ((await rows.innerText()).match(/CL\{[0-9a-f]{16}\}/) ?? [""])[0];
+  await task.getByLabel("Answer for Read a file").fill(flag);
+  await task.getByRole("button", { name: "Check" }).click();
+  await expect(task.getByText("solved")).toBeVisible();
+  await expect(lab.getByText("1 of 4 solved")).toBeVisible();
+
+  // Clean up: destroy the lab machine and its files.
+  await page.getByRole("button", { name: "Environments" }).click();
+  const envs = page.getByRole("region", { name: "Environments" });
+  await envs.getByLabel(/keep files/).uncheck();
+  await envs.getByRole("button", { name: "Destroy" }).click();
+  await envs.getByRole("button", { name: "Confirm destroy" }).click();
+  await expect(envs.getByText("No environments.")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 const DESKTOP = `apiVersion: cyberlab.dev/v1alpha1
 kind: Universe
 metadata: {name: e2e-desktop}

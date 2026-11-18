@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { api, ApiError, download, formatBytes, type Environment, type Plan } from "../api";
+import { api, ApiError, download, formatBytes, type Environment, type LabRun, type Plan } from "../api";
 import { Architect } from "../components/Architect";
+import { LabTab } from "../components/LabTab";
 import { ManifestBuilder } from "../components/ManifestBuilder";
 import { Terminal } from "../components/Terminal";
 import { Troubleshoot } from "../components/Troubleshoot";
@@ -26,6 +27,7 @@ spec:
 `;
 
 const TABS = [
+  ["lab", "Lab"],
   ["setup", "Setup"],
   ["environments", "Environments"],
   ["files", "Files"],
@@ -54,7 +56,10 @@ function ConfirmButton({ label, confirm, onConfirm, disabled }: { label: string;
 export function WorkspacePage({ id, tab }: { id: string; tab: string }) {
   const ws = useLoad(() => api.workspace(id), [id]);
   const envs = useLoad(() => api.environments(id), [id]);
+  const lab = useLoad(() => api.workspaceLab(id), [id]);
+  const [labRun, setLabRun] = useState<LabRun | null>(null);
   const action = useAction();
+  const run = labRun ?? lab.data;
 
   if (ws.error) return <ErrorNotice error={ws.error} />;
   if (!ws.data) return <div className="muted">Loading…</div>;
@@ -80,12 +85,14 @@ export function WorkspacePage({ id, tab }: { id: string; tab: string }) {
       </div>
       <ErrorNotice error={action.error} />
       <nav className="tabs" aria-label="Workspace sections">
-        {TABS.map(([key, label]) => (
+        {TABS.filter(([key]) => key !== "lab" || run).map(([key, label]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => (window.location.hash = `#/workspace/${id}/${key}`)}>
             {label}
           </button>
         ))}
       </nav>
+      {tab === "lab" && run && <LabTab wsId={id} run={run} onRun={setLabRun} envs={envs.data ?? []} />}
+      {tab === "lab" && !run && !lab.loading && <div className="empty">This workspace wasn't started from a ready-made lab. Find one in <a href="#/labs">Labs</a>.</div>}
       {tab === "setup" && <SetupTab id={id} hasManifest={ws.data.manifest_revision !== null} onSaved={() => { void ws.reload(); }} />}
       {tab === "environments" && <EnvironmentsTab id={id} envs={envs.data ?? []} error={envs.error} reload={envs.reload} />}
       {tab === "files" && <FilesTab id={id} envs={envs.data ?? []} reloadEnvs={envs.reload} />}

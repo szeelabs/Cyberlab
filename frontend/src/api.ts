@@ -38,6 +38,28 @@ export type Environment = {
   createdAt: string;
 };
 
+export type LabTask = { id: string; title: string; text: string; hints: string[]; answerFormat: string };
+export type Lab = {
+  id: string;
+  title: string;
+  level: "beginner" | "intermediate" | "advanced";
+  minutes: number;
+  summary: string;
+  topic: string;
+  skills: string[];
+  introduction: string;
+  machines: { name: string; baseImage: string; toolPacks: string[]; desktop: boolean }[];
+  tasks: LabTask[];
+};
+export type LabRun = {
+  lab: Lab;
+  runId: string;
+  solved: Record<string, string>;
+  progress: { solved: number; total: number };
+  setupError: string | null;
+  startedAt: string;
+};
+
 export type Snapshot = {
   id: string;
   environment: string;
@@ -182,6 +204,17 @@ export const api = {
   plan: (id: string) => request<Plan & { revision: number; approvalCodes: string[]; approved: boolean }>(`${ws(id)}/plan`),
   approve: (id: string, revision: number, codes: string[]) =>
     request<unknown>(`${ws(id)}/approvals`, json("POST", { revision, approve: codes })),
+
+  labs: () => request<Lab[]>("/v1/labs"),
+  startLab: (labId: string) => request<LabRun & { workspaceId: string }>(`/v1/labs/${enc(labId)}/start`, { method: "POST" }),
+  /** The lab running in a workspace, or null if it isn't a lab workspace. */
+  workspaceLab: (id: string) =>
+    request<LabRun>(`${ws(id)}/lab`).catch((e) => {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }),
+  answer: (id: string, task: string, answer: string) =>
+    request<LabRun & { correct: boolean }>(`${ws(id)}/lab/answer`, json("POST", { task, answer })),
 
   environments: (id: string) => request<Environment[]>(`${ws(id)}/environments?refresh=true`),
   provision: (id: string) => request<{ environments: Environment[] }>(`${ws(id)}/environments`, json("POST", {})),

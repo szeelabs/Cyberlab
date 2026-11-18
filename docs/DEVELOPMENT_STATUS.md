@@ -216,6 +216,17 @@ destroyed: creating the environments again from the manifest starts without them
 The user's Supabase project is connected to Claude (connector) and its address and public key
 are known; they are **not** committed to the repository (each CyberLab owner sets their own).
 
+## Implemented (Phase 8, step 1 — ready-made labs)
+| Area | What works | Where |
+|---|---|---|
+| Lab format | `registry/labs/<id>.yaml`: title, level, minutes, topic, skills, introduction, the machines (a normal manifest `spec`), setup files and tasks with hints. Checked at startup: valid manifest, passes the policy engine with no approval needed, only `isolated`/`lab` networks, relative paths inside `/workspace` only, every task's answer placed or generated, known generators only (lab files never contain code). Quotas are the server owner's and are checked when a lab starts | `backend/src/cyberlab/labs/`, `registry/labs/` |
+| Fresh answers | Every run gets new random flags (`CL{16 hex}`) and newly generated content: `maze` (a folder tree with one treasure), `app-log` (3000 lines, one flag), `auth-log` (an SSH log with one brute-force attacker; answers: address, account, number of failures; documentation addresses only). Only a SHA-256 of each answer (salted with the run) is stored; compared in constant time; spaces and case ignored | `labs/__init__.py`, `labs/generators.py` |
+| API | `GET /v1/labs`, `GET /v1/labs/{id}` (public, no answers or setup), `POST /v1/labs/{id}/start` (one click: workspace, manifest, machines, lab files unpacked as the learner with one `tar` inside the machine; nothing is left behind if limits refuse it; a machine that fails to start is reported), `GET /v1/workspaces/{id}/lab`, `POST /v1/workspaces/{id}/lab/answer`. Audited as `lab.start` / `lab.answer` (task and right/wrong, never the answer). Deleting the workspace deletes its lab run. Migration `0004` | `api/labs.py`, `db.py`, `migrations/versions/0004_lab_runs.py` |
+| Web app | **Labs** page (cards: level, topic, time, skills, Start lab); **Lab** tab in lab workspaces (introduction, progress bar, Open terminal, tasks with hints one at a time, answer box, right/wrong messages, a finished message); a pointer on the dashboard | `pages/Labs.tsx`, `components/LabTab.tsx`, `pages/Workspace.tsx` |
+| Labs | *First steps in Linux* (4 tasks) and *Log detective: catch the attacker* (3 tasks), both on Ubuntu with no network | `registry/labs/` |
+| Tests | Catalog loads and passes policy; 10 kinds of broken lab refused; answers fresh per run and salted; generated logs match their answers; the API (start, files placed, right/wrong, other task's flag refused, private to the owner, no provider, limits, failed machine, delete). Real Docker: the lab files are in the machine, owned by the learner, the flags read with `cat`/`find`/`grep` are accepted, the machine has no network. Real browser: start from the Labs page, wrong answer and hint, read the flag in the terminal, solved | `tests/test_labs.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
+| Guide | Using labs and writing your own | `docs/guides/labs.md`, `docs/plans/ready-made-labs.md` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -228,6 +239,7 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Forgotten-password flow in the sign-in screen; sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io); a project website | 7 |
+| Lab target machines (intentionally vulnerable services on the private lab network) and more labs | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues

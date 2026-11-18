@@ -15,6 +15,7 @@ from cyberlab.config import Settings, get_settings
 from cyberlab.db import (
     AuditEvent,
     EnvironmentRecord,
+    LabRun,
     ManifestRevision,
     PlanApproval,
     Snapshot,
@@ -233,7 +234,7 @@ def delete_workspace(
     store = request.app.state.snapshot_store
     for snap in db.scalars(select(Snapshot).where(Snapshot.workspace_id == ws.id)):
         store.delete(snap.storage_key)  # snapshot data goes with the workspace
-    for model in (EnvironmentRecord, PlanApproval, ManifestRevision, Snapshot):
+    for model in (EnvironmentRecord, PlanApproval, ManifestRevision, Snapshot, LabRun):
         db.query(model).filter(model.workspace_id == ws.id).delete()
     db.delete(ws)
     record_audit(
