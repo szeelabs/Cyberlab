@@ -1,0 +1,76 @@
+# A ready-made lab. Flags are made fresh for every run; {{flag:<task>}} marks where.
+id: linux-first-steps
+title: First steps in Linux
+level: beginner
+minutes: 20
+topic: linux
+summary: Move around a Linux machine like a pro. Find four hidden flags with ls, cd, cat, find and grep.
+skills: [ls, cd, cat, hidden files, find, grep]
+introduction: |
+  Everything in security starts with being comfortable in a Linux terminal.
+  Open the Terminal of the machine "student". You start in your home folder, /workspace.
+  Each task hides a flag that looks like CL{...}. Copy it into the answer box.
+spec:
+  environments:
+    - name: student
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: student
+    path: welcome.txt
+    content: |
+      Welcome to CyberLab!
+
+      You just used "cat" to print a file. That is how you read files in a terminal.
+      Your first flag: {{flag:read-a-file}}
+
+      Next: some files are hidden. Their names start with a dot.
+  - environment: student
+    path: .secret-note.txt
+    content: |
+      Hidden files don't show up with plain "ls". You found this one with "ls -a".
+      Flag: {{flag:hidden-file}}
+  - environment: student
+    path: maze
+    generator: maze
+    flagTask: find-a-file
+  - environment: student
+    path: logs/app.log
+    generator: app-log
+    flagTask: search-a-file
+tasks:
+  - id: read-a-file
+    title: Read a file
+    text: |
+      List the files in your folder with `ls`, then print welcome.txt with `cat welcome.txt`.
+    hints:
+      - "`ls` lists files. Type it and press Enter."
+      - "Type `cat welcome.txt` exactly. Tab completes file names for you."
+  - id: hidden-file
+    title: Find the hidden file
+    text: |
+      Files whose names start with a dot are hidden. Show them with `ls -a`, then read the
+      one that looks secret.
+    hints:
+      - "`-a` means \"all\": `ls -a` shows hidden files too."
+      - "The file is called .secret-note.txt. Read it with `cat`."
+  - id: find-a-file
+    title: Search a maze of folders
+    text: |
+      The folder `maze` has hundreds of folders inside folders. Somewhere there is a file
+      called treasure.txt. Opening folders one by one would take forever: let `find` search
+      for you.
+    hints:
+      - "`find maze -name treasure.txt` searches the whole maze for that file name."
+      - "find prints the file's path. Give that path to `cat`."
+  - id: search-a-file
+    title: Search inside a big file
+    text: |
+      logs/app.log has 3000 lines. One of them contains the word "flag". Find it without
+      scrolling: `grep` prints only the lines that match.
+    hints:
+      - "`grep flag logs/app.log`"
+      - "Add `-i` to ignore upper/lower case: `grep -i flag logs/app.log`."

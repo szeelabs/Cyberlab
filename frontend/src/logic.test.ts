@@ -30,6 +30,8 @@ describe("parseRoute", () => {
   it("maps hashes to pages", () => {
     expect(parseRoute("")).toEqual({ page: "dashboard" });
     expect(parseRoute("#/tools")).toEqual({ page: "tools" });
+    expect(parseRoute("#/labs")).toEqual({ page: "labs" });
+    expect(parseRoute("#/workspace/abc/lab")).toEqual({ page: "workspace", id: "abc", tab: "lab" });
     expect(parseRoute("#/workspace/abc")).toEqual({ page: "workspace", id: "abc", tab: "setup" });
     expect(parseRoute("#/workspace/abc/files")).toEqual({ page: "workspace", id: "abc", tab: "files" });
     expect(parseRoute("#/nonsense")).toEqual({ page: "dashboard" });

@@ -64,6 +64,11 @@ Install guides (Codespaces, single VM, BYO host), a Claude Code Skill for author
 manifests, developer docs, a tool pack contribution guide, release automation (tags →
 images + changelog).
 
+## Phase 8 — Ready-made labs (in progress)
+- [x] 1. Lab format, one-click start, fresh answers, answer checking, Labs page and Lab tab; two labs (Linux basics, log analysis).
+- [ ] 2. Target machines (intentionally vulnerable services on the private lab network): nmap and web labs.
+- [ ] 3. More labs and progress badges. 4. Sharing community labs.
+
 ## Exact next steps
 1. Merge Phase 1 and enable branch protection on `main` with CI required.
 2. Create a Supabase project (free tier) and run `/v1/me` against a real token to verify

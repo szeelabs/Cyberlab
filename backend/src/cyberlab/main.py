@@ -21,6 +21,7 @@ from cyberlab.api.desktop import router as desktop_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
 from cyberlab.api.install import router as install_router
+from cyberlab.api.labs import router as labs_router
 from cyberlab.api.routes import router
 from cyberlab.api.snapshots import router as snapshots_router
 from cyberlab.api.terminal import router as terminal_router
@@ -29,6 +30,7 @@ from cyberlab.architect import build_model
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
 from cyberlab.execution import build_provider
+from cyberlab.labs import load_labs
 from cyberlab.ratelimit import EXEMPT_PREFIXES, RateLimiter, client_key, retry_after_header
 from cyberlab.registry import load_registry
 from cyberlab.storage import build_store
@@ -98,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.dependency_overrides[get_settings] = lambda: settings
     app.state.settings = settings
     app.state.registry = load_registry(settings.registry_dir)
+    app.state.labs = load_labs(settings.registry_dir, app.state.registry, settings.quotas)
     app.state.db = Database(settings.database_url)
     if settings.database_auto_migrate:
         migrations.upgrade(app.state.db.engine)
@@ -178,6 +181,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(desktop_router)
     app.include_router(troubleshoot_router)
     app.include_router(install_router)
+    app.include_router(labs_router)
     app.include_router(bundles_router)
     app.include_router(env_router)
     app.include_router(files_router)

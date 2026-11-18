@@ -50,6 +50,8 @@ Without Docker everything works except running environments (shown as NOT CONNEC
 Development mode has **no sign-in**, so the script only listens on this machine
 (`127.0.0.1`). For real deployments, configure sign-in (see `.env.example`).
 
+**Ready-made labs:** open **Labs**, press Start, and practise with tasks and hints: [docs/guides/labs.md](docs/guides/labs.md).
+
 **Run environments on your own server:** [docs/guides/own-server.md](docs/guides/own-server.md).
 
 ## Documentation

@@ -768,6 +768,22 @@ class DockerAdapter:
         if res.returncode != 0:
             raise _file_error(res.stderr, path)
 
+    def extract_files(self, provider_ref: str, archive: bytes) -> None:
+        """Unpack a tar archive into /workspace, as the environment's own user."""
+        res = self._exec(
+            provider_ref,
+            "tar",
+            "-xf",
+            "-",
+            "-C",
+            "/workspace",
+            "--no-same-owner",
+            "--no-same-permissions",
+            input=archive,
+        )
+        if res.returncode != 0:
+            raise _file_error(res.stderr, "/workspace")
+
     def write_file_from_path(self, provider_ref: str, path: str, source) -> None:
         """Like write_file, but streams the content from a local file (large uploads)."""
         if self._stream is None:

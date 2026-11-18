@@ -568,3 +568,45 @@ def test_install_your_own_package(client, tmp_path):
         assert info == "true"  # still read-only
     finally:
         destroy_all(client, ws_id, [env])
+
+
+def test_ready_made_lab_on_real_container(client):
+    """One click starts the Linux lab: the files are really there, owned by the learner,
+    the flags the learner reads with ordinary commands are accepted, and the machine has
+    no network."""
+    import re
+
+    r = client.post("/v1/labs/linux-first-steps/start", headers=auth())
+    assert r.status_code == 201, r.text
+    out = r.json()
+    ws = out["workspaceId"]
+    envs = client.get(f"/v1/workspaces/{ws}/environments", headers=auth()).json()
+    try:
+        assert out["setupError"] is None, out["setupError"]
+        name = envs[0]["resources"]["container"]
+
+        def flag(cmd):
+            code, text = sh(name, cmd)
+            assert code == 0, text
+            return re.search(r"CL\{[0-9a-f]{16}\}", text).group()
+
+        answers = {
+            "read-a-file": flag("cat welcome.txt"),
+            "hidden-file": flag("ls -a | grep -q secret && cat .secret-note.txt"),
+            "find-a-file": flag("cat $(find maze -name treasure.txt)"),
+            "search-a-file": flag("grep -i flag logs/app.log"),
+        }
+        for task, value in answers.items():
+            res = client.post(
+                f"/v1/workspaces/{ws}/lab/answer",
+                json={"task": task, "answer": value},
+                headers=auth(),
+            ).json()
+            assert res["correct"] is True, task
+        assert res["progress"] == {"solved": 4, "total": 4}
+        code, owner = sh(name, "stat -c %U welcome.txt maze logs/app.log | sort -u")
+        assert owner == "cyberlab", owner
+        code, net = sh(name, "ls /sys/class/net | grep -v '^lo$' || true")
+        assert net == "", f"the lab machine has a network: {net}"
+    finally:
+        destroy_all(client, ws, envs)

@@ -23,6 +23,11 @@ export function Dashboard() {
   return (
     <>
       <h1>Your universe</h1>
+      <div className="notice row">
+        <span>🧪 New: ready-made labs with tasks, hints and instant checking.</span>
+        <span className="spacer" />
+        <a href="#/labs">Browse labs →</a>
+      </div>
       <div className="grid">
         <section className="panel" aria-label="System status">
           <h2>System</h2>
@@ -75,7 +80,10 @@ export function Dashboard() {
         </div>
         <ErrorNotice error={create.error ?? list.error} />
         {list.data && list.data.length === 0 && (
-          <div className="empty">No workspaces yet. Create one, then paste a Universe Manifest into it.</div>
+          <div className="empty">
+            No workspaces yet. New here? <a href="#/labs">Start a ready-made lab</a>: one click and you're practising.
+            Or create a workspace and describe your own lab.
+          </div>
         )}
         {list.data && list.data.length > 0 && (
           <div className="table-wrap">

@@ -133,4 +133,6 @@ Kali in CI + desktop copy/paste (PR #19); ARM servers + install your own .deb (P
 **Phase 6 step 4:** **real sign-in** with Supabase is built. The user connected the Supabase
 connector; their existing Supabase project (free plan) is used for Auth only. A
 "Cyberlab" cloud environment allows that project's host. Values are not committed.
+**Phase 8 (Ready-made labs):** approved by the user (2026-11-18); step 1, lab format, one-click start,
+answer checking, Labs page, two labs. Plan: `docs/plans/ready-made-labs.md`. Next: target machines.
 Details: `docs/DEVELOPMENT_STATUS.md`.

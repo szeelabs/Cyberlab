@@ -1,0 +1,58 @@
+id: log-detective
+title: "Log detective: catch the attacker"
+level: beginner
+minutes: 30
+topic: blue-team
+summary: Someone broke into a server over SSH. Read its login log and find who, from where, and how many passwords they tried.
+skills: [grep, wc, sort, uniq, awk, reading logs]
+introduction: |
+  Defenders spend a lot of time reading logs. Here is a real-looking SSH login log from a
+  server called "webserver". Somebody tried password after password until they got in.
+  Open the Terminal of the machine "analyst". The log is auth.log in your home folder.
+  The addresses in it come from ranges reserved for documentation, so none of them is a
+  real computer.
+spec:
+  environments:
+    - name: analyst
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: analyst
+    path: auth.log
+    generator: auth-log
+tasks:
+  - id: attacker-ip
+    title: Who is attacking?
+    text: |
+      Failed logins look like "Failed password for ... from <address> ...". Which address
+      has by far the most failed passwords?
+    answer: attacker-ip
+    answerFormat: an IP address, like 192.0.2.10
+    hints:
+      - "`grep \"Failed password\" auth.log` shows only failed logins."
+      - "Pick out the address with `awk '{print $(NF-3)}'`, then count with `sort | uniq -c | sort -n`."
+      - "Full command: `grep \"Failed password\" auth.log | awk '{print $(NF-3)}' | sort | uniq -c | sort -n`"
+  - id: attacker-user
+    title: Which account did they break into?
+    text: |
+      After many failures, the attacker finally got in. A successful login says
+      "Accepted password for <account> from <address>". Which account did the attacker's
+      address get into?
+    answer: attacker-user
+    answerFormat: an account name
+    hints:
+      - "`grep Accepted auth.log` shows successful logins."
+      - "Add the attacker's address: `grep Accepted auth.log | grep <address>`"
+  - id: failed-count
+    title: How many passwords did they try?
+    text: |
+      Count the attacker's failed passwords. This tells you how noisy the attack was (and
+      that a limit on failed logins would have stopped it).
+    answer: failed-count
+    answerFormat: a number
+    hints:
+      - "`wc -l` counts lines."
+      - "`grep \"Failed password\" auth.log | grep <address> | wc -l`"

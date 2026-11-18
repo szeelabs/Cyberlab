@@ -6,6 +6,9 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Ready-made labs: pick a lab, press Start, and practise with tasks, hints and instant
+  answer checking; fresh answers for every run. First labs: *First steps in Linux* and
+  *Log detective* (find an SSH attacker in a log). Write your own in `registry/labs/`.
 - Real sign-in with Supabase: sign-in and create-account screen, automatic token refresh,
   sign out; tokens checked with the project's public keys (ES256).
 - Copy and paste between your computer and the remote desktop.
