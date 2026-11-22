@@ -969,11 +969,17 @@ spec:
         assert st["state"] == "ready", st
         # QEMU starts once the ISO has stopped growing, with KVM, as the unprivileged user
         for _ in range(60):
-            code, ps = sh(name, "ps -o user=,args= -C qemu-system-x86_64 || true")
+            # (no ps in the image: read /proc directly)
+            code, ps = sh(
+                name,
+                "for p in /proc/[0-9]*; do c=$(tr '\\0' ' ' < $p/cmdline 2>/dev/null); "
+                'case "$c" in qemu-system*) '
+                "echo \"$(awk '/^Uid/{print $2}' $p/status) $c\";; esac; done",
+            )
             if "qemu" in ps:
                 break
             _time.sleep(1)
-        assert "-enable-kvm" in ps and ps.split()[0] in ("cyberlab", "1000"), ps
+        assert "-enable-kvm" in ps and ps.split()[0] == "1000", ps
         # the VM's screen through the desktop channel (VNC handshake with QEMU)
         r = client.post(f"/v1/workspaces/{ws}/environments/{env['id']}/desktop", headers=auth())
         assert r.status_code == 201, r.text

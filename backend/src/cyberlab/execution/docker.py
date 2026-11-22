@@ -22,6 +22,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -253,6 +254,7 @@ class DockerAdapter:
         microvm_runtime: str = "kata",
     ) -> None:
         self._kvm: tuple[float, int | None] | None = None  # (checked at, KVM group id)
+        self._kvm_probing = threading.Event()
         self._runtimes = {
             "sandbox": _check("runtime", sandbox_runtime, _RUNTIME),
             "microvm": _check("runtime", microvm_runtime, _RUNTIME),
@@ -485,17 +487,31 @@ class DockerAdapter:
             cost,
             normalize_arch(arch) or "unknown",
             self.isolation_levels(),
-            self.kvm_group() is not None,
+            self.kvm_group(wait=False) is not None,
         )
 
     KVM_PROBE_IMAGE = "docker.io/library/busybox:1.36"
 
-    def kvm_group(self) -> int | None:
+    def kvm_group(self, wait: bool = True) -> int | None:
         """The group id of /dev/kvm on the Docker host, or None without KVM. Cached for
-        five minutes: it starts a tiny throwaway container."""
+        five minutes: it starts a tiny throwaway container (and the first time downloads a
+        small image). With wait=False it never blocks: it answers from the cache and, if
+        there is no answer yet, checks in the background (status pages stay fast)."""
         now = time.monotonic()
         if self._kvm is not None and now - self._kvm[0] < 300:
             return self._kvm[1]
+        if not wait:
+            if not self._kvm_probing.is_set():
+                self._kvm_probing.set()
+
+                def probe() -> None:
+                    try:
+                        self.kvm_group()
+                    finally:
+                        self._kvm_probing.clear()
+
+                threading.Thread(target=probe, name="kvm-probe", daemon=True).start()
+            return self._kvm[1] if self._kvm is not None else None
         res = self._docker(
             "run", "--rm", "--network", "none", "--device", "/dev/kvm",
             self.resolve_image(self.KVM_PROBE_IMAGE), "stat", "-c", "%g", "/dev/kvm",

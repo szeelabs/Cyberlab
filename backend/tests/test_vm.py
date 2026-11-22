@@ -137,10 +137,37 @@ def test_isolated_vm_has_no_network():
 def test_no_kvm_is_refused_clearly_and_reported():
     r = runner(kvm=None)
     a = DockerAdapter(r)
-    assert a.status().full_vm is False
     with pytest.raises(ProviderError, match="no KVM"):
         a.provision(req())
-    assert DockerAdapter(runner()).status().full_vm is True
+    assert a.status().full_vm is False
+    b = DockerAdapter(runner())
+    b.kvm_group()
+    assert b.status().full_vm is True
+
+
+def test_status_never_waits_for_the_kvm_probe():
+    """The first probe may download an image; status pages must not wait for it."""
+    import threading
+
+    gate = threading.Event()
+    slow = runner()
+    real = slow.__call__
+
+    def call(args, timeout, input=None):
+        if args[1:3] == ["run", "--rm"]:
+            gate.wait(5)
+        return real(args, timeout, input=input)
+
+    a = DockerAdapter(call)
+    started = time.monotonic()
+    assert a.status().full_vm is False  # not known yet: answered at once
+    assert time.monotonic() - started < 1
+    gate.set()
+    for _ in range(50):
+        if a.status().full_vm:
+            break
+        time.sleep(0.05)
+    assert a.status().full_vm is True  # known once the background check finished
 
 
 def test_kvm_probe_is_cached():
