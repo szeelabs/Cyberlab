@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -274,6 +274,7 @@ def start_class_lab(
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
     labs: dict[str, Lab] = Depends(get_user_labs),
+    wait: bool = Query(default=True, description="false: prepare the machines in background"),
 ) -> dict:
     """A student starts their own copy of the class's lab (or gets the one they have)."""
     c = db.get(Classroom, class_id)
@@ -290,7 +291,7 @@ def start_class_lab(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "class not found")
     if member.workspace_id and db.get(Workspace, member.workspace_id):
         return {"workspaceId": member.workspace_id, "existing": True}
-    out = start_lab(c.lab_id, request, user, db, reg, settings, provider, labs)
+    out = start_lab(c.lab_id, request, user, db, reg, settings, provider, labs, wait=wait)
     member.workspace_id = out["workspaceId"]
     db.commit()
     return out | {"existing": False}

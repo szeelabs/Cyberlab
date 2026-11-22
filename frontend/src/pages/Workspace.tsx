@@ -61,6 +61,16 @@ export function WorkspacePage({ id, tab }: { id: string; tab: string }) {
   const [labRun, setLabRun] = useState<LabRun | null>(null);
   const action = useAction();
   const run = labRun ?? lab.data;
+  // While machines are being prepared in the background, check again every 2 seconds.
+  const busy = (envs.data ?? []).some((e) => e.state === "provisioning") || (run != null && !run.ready);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => {
+      void envs.reload();
+      void lab.reload().then(() => setLabRun(null));
+    }, 2000);
+    return () => clearInterval(t);
+  }, [busy, envs.reload, lab.reload]);
 
   if (ws.error) return <ErrorNotice error={ws.error} />;
   if (!ws.data) return <div className="muted">Loading…</div>;
@@ -273,6 +283,7 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
                     </td>
                     <td>
                       <Pill kind={e.state}>{e.state}</Pill>
+                      {e.progress && <div className="small muted">{e.progress}…</div>}
                       {e.lastError && <div className="small" style={{ color: "var(--bad)" }}>{e.lastError}</div>}
                     </td>
                     <td className="small">

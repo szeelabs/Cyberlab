@@ -359,10 +359,15 @@ class DockerAdapter:
             timeout=120,
         )
 
-    def ensure_image(self, recipe: ImageRecipe) -> str:
+    def ensure_image(self, recipe: ImageRecipe, progress=None) -> str:
         """Build the environment image once; later environments reuse it by tag."""
         if self._docker("image", "inspect", recipe.tag, ok=True).returncode == 0:
             return recipe.tag
+        if progress is not None:
+            progress(
+                "installing the system and its tools (only the first time: this can take a "
+                "few minutes)"
+            )
         # Dockerfile on stdin, no build context: nothing from the host can be copied in.
         self._docker(
             "build",
@@ -584,7 +589,9 @@ class DockerAdapter:
                 )
             except ImageRecipeError as exc:
                 raise ProviderError(str(exc)) from exc
-            image = self.ensure_image(recipe)
+            image = self.ensure_image(recipe, request.progress)
+        if request.progress is not None:
+            request.progress("starting the machine")
         self._prepare_volume(n["volume"], image, request.workspace_key)
         res = self._docker(*self.build_run_args(request, network, image))
         ref = res.stdout.splitlines()[-1] if res.stdout else ""

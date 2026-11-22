@@ -7,6 +7,7 @@ hosts or cloud VMs later). The control plane only talks to this interface.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
@@ -71,6 +72,8 @@ class ProvisionRequest:
     egress_proxy_url: str | None = None
     internet_approved: bool = False
     labels: dict[str, str] = field(default_factory=dict)
+    # Called with a short, plain-language step ("building the tools...") while it works.
+    progress: Callable[[str], None] | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)

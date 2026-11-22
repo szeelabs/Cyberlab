@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from cyberlab import __version__, migrations, reaper
+from cyberlab import __version__, autosnap, migrations, reaper
 from cyberlab.api.architect import router as architect_router
 from cyberlab.api.bundles import router as bundles_router
 from cyberlab.api.classes import router as classes_router
@@ -38,6 +38,27 @@ from cyberlab.registry import load_registry
 from cyberlab.storage import build_store
 
 log = logging.getLogger("cyberlab")
+
+
+def _recover_interrupted(database: Database) -> None:
+    """Machines that were still being created when CyberLab stopped will never finish:
+    mark them failed with a plain explanation instead of "provisioning" forever."""
+    from sqlalchemy import update
+
+    from cyberlab.db import EnvironmentRecord
+
+    with database.new_session() as s:
+        s.execute(
+            update(EnvironmentRecord)
+            .where(EnvironmentRecord.state == "provisioning")
+            .values(
+                state="failed",
+                last_error="CyberLab restarted while this machine was being created. "
+                "Destroy it and create it again.",
+            )
+        )
+        s.commit()
+
 
 # The web app's own scripts and styles only: no inline scripts, no third-party code.
 # 'unsafe-inline' for styles is needed by the terminal widget and progress bars (style
@@ -108,6 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         migrations.upgrade(app.state.db.engine)
     elif migrations.current(app.state.db.engine) != migrations.head():
         raise RuntimeError("database schema is out of date: run `cyberlab db upgrade`")
+    _recover_interrupted(app.state.db)
     app.state.provider = build_provider(settings)
     app.state.architect = build_model(settings, app.state.registry)
     app.state.terminal_sessions = {}
@@ -213,8 +235,21 @@ def _mount_webapp(app: FastAPI, directory: Path) -> None:
 
 
 def reap_now(app: FastAPI) -> list:
+    settings, provider = app.state.settings, app.state.provider
+    store = getattr(app.state, "snapshot_store", None)
+
+    def on_stopped(db, rec) -> None:
+        if store is not None:
+            autosnap.after_stop(db, rec, settings, provider, store)
+
     with app.state.db.new_session() as db:
-        return reaper.run_once(db, app.state.provider, active=set(app.state.active_terminals))
+        actions = reaper.run_once(
+            db, provider, active=set(app.state.active_terminals), on_stopped=on_stopped
+        )
+        if store is not None:
+            for name in autosnap.run_daily(db, provider, store, settings):
+                log.info("daily snapshot: %s", name)
+        return actions
 
 
 async def _reaper_loop(app: FastAPI, interval: int) -> None:

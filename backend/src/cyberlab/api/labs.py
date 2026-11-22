@@ -8,7 +8,7 @@ import secrets
 import tarfile
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -16,10 +16,9 @@ from sqlalchemy.orm import Session
 
 from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.api.environments import (
-    ProvisionIn,
     _require_provider,
     get_provider,
-    provision_environments,
+    start_provisioning,
 )
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
@@ -328,6 +327,8 @@ def run_out(lab: Lab, run: LabRun) -> dict:
         "solved": run.solved,
         "progress": {"solved": len(run.solved), "total": len(lab.tasks)},
         "setupError": run.setup_error,
+        # False while the machines are still being prepared in the background
+        "ready": run.ready,
         "startedAt": run.created_at.isoformat(),
     }
 
@@ -342,10 +343,13 @@ def start_lab(
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
     labs: dict[str, Lab] = Depends(get_user_labs),
+    wait: bool = Query(default=True, description="false: return at once, prepare in background"),
 ) -> dict:
-    """One click: a new workspace with the lab's machines running and its files in place."""
+    """One click: a new workspace with the lab's machines running and its files in place.
+    With wait=false the answer comes at once and the machines are prepared in the
+    background (the Lab tab shows each step)."""
     lab = _lab(labs, lab_id)
-    adapter = _require_provider(provider)  # fail before creating anything
+    _require_provider(provider)  # fail before creating anything
     ws = Workspace(owner_id=user.id, name=_free_name(db, user, lab.id), description=lab.title)
     db.add(ws)
     db.flush()
@@ -357,6 +361,11 @@ def start_lab(
             created_by=user.subject,
         )
     )
+    content = new_run(lab)
+    run = LabRun(workspace_id=ws.id, lab_id=lab.id, answer_hashes={}, solved={})
+    db.add(run)
+    db.flush()  # gives the run its id, which salts the answer hashes
+    run.answer_hashes = {t: answer_hash(run.id, a) for t, a in content.answers.items()}
     record_audit(
         db,
         actor=user.subject,
@@ -367,53 +376,55 @@ def start_lab(
         request_id=request_id(request),
     )
     db.commit()
+    run_id, ws_id, subject, req_id = run.id, ws.id, user.subject, request_id(request)
+    adapter = provider
+
+    def place_files(session: Session) -> None:
+        envs = {
+            e.name: e
+            for e in session.scalars(
+                select(EnvironmentRecord).where(EnvironmentRecord.workspace_id == ws_id)
+            )
+        }
+        errors = []
+        for name, files in content.files.items():
+            env = envs.get(name)
+            if env is None or not env.provider_ref or env.state != "running":
+                errors.append(
+                    f"{name}: the machine did not start ({(env and env.last_error) or 'unknown'})"
+                )
+                continue
+            try:
+                _place(adapter, env.provider_ref, files, content.modes.get(name, {}))
+            except ProviderError as exc:
+                errors.append(f"{name}: lab files could not be placed ({exc})")
+        r = session.get(LabRun, run_id)
+        r.setup_error = "; ".join(errors) or None
+        r.ready = True
+        record_audit(
+            session,
+            actor=subject,
+            action="lab.start",
+            target_type="workspace",
+            target_id=ws_id,
+            detail={"lab": lab.id, "ok": not errors},
+            request_id=req_id,
+        )
+        session.commit()
+
     try:
-        provision_environments(
-            ws.id, ProvisionIn(revision=1), request, user, db, reg, settings, adapter
+        start_provisioning(
+            ws, 1, request, user, db, reg, settings, provider, wait=wait, after=place_files
         )
     except HTTPException:
         # Nothing was created (limits, processor type...): leave no empty workspace behind.
-        db.query(ManifestRevision).filter(ManifestRevision.workspace_id == ws.id).delete()
-        db.query(EnvironmentRecord).filter(EnvironmentRecord.workspace_id == ws.id).delete()
+        for model in (LabRun, ManifestRevision, EnvironmentRecord):
+            db.query(model).filter(model.workspace_id == ws_id).delete()
         db.delete(ws)
         db.commit()
         raise
-
-    content = new_run(lab)
-    run = LabRun(workspace_id=ws.id, lab_id=lab.id, answer_hashes={}, solved={})
-    db.add(run)
-    db.flush()  # gives the run its id, which salts the answer hashes
-    run.answer_hashes = {t: answer_hash(run.id, a) for t, a in content.answers.items()}
-    envs = {
-        e.name: e
-        for e in db.scalars(
-            select(EnvironmentRecord).where(EnvironmentRecord.workspace_id == ws.id)
-        )
-    }
-    errors = []
-    for name, files in content.files.items():
-        env = envs.get(name)
-        if env is None or not env.provider_ref or env.state != "running":
-            errors.append(
-                f"{name}: the machine did not start ({(env and env.last_error) or 'unknown'})"
-            )
-            continue
-        try:
-            _place(adapter, env.provider_ref, files, content.modes.get(name, {}))
-        except ProviderError as exc:
-            errors.append(f"{name}: lab files could not be placed ({exc})")
-    run.setup_error = "; ".join(errors) or None
-    record_audit(
-        db,
-        actor=user.subject,
-        action="lab.start",
-        target_type="workspace",
-        target_id=ws.id,
-        detail={"lab": lab.id, "ok": not errors},
-        request_id=request_id(request),
-    )
-    db.commit()
-    return {"workspaceId": ws.id} | run_out(lab, run)
+    db.refresh(run)
+    return {"workspaceId": ws_id} | run_out(lab, run)
 
 
 def _run(db: Session, ws: Workspace) -> LabRun:
