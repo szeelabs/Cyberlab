@@ -32,9 +32,11 @@ generators are a fixed list of Python functions, never code inside the YAML.
 2. **Target machines**: hardened, intentionally vulnerable services written by us (no
    third-party vulnerable images), running only on the private lab network, reachable by
    name (`target`). Labs: *Scan a network with nmap*, *Find the secret in a web app*.
-3. **More labs and progress**: a "completed" badge per lab, 10–20 labs across Linux,
-   networking (with Packet Tracer where installed), web, forensics and crypto.
+3. **More labs and progress**: a "completed" badge per lab, labs at every level
+   (beginner, intermediate, advanced) across Linux, networking, web, forensics, crypto
+   and blue team, including multi-network pivoting.
 4. **Community labs**: share and import lab files, with the same validation.
+5. **Classroom mode**: an instructor starts a lab for a group, sees progress, resets machines.
 
 ## Safety
 * Lab machines use the safest network that works: `isolated` when there is no target,

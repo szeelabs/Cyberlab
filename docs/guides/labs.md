@@ -21,9 +21,20 @@ in **Environments** to free your resources, or delete the workspace.
 |---|---|---|
 | First steps in Linux | beginner | `ls`, `cd`, `cat`, hidden files, `find`, `grep` |
 | Log detective: catch the attacker | beginner | reading an SSH log with `grep`, `awk`, `sort`, `uniq`, `wc` |
+| Scan a network with nmap | beginner | `nmap`, all-port scans, service versions, banners, `nc` |
+| Web recon: find the secrets | beginner | `curl`, page source, `robots.txt`, IDOR |
 
-Labs never reach the internet: these two have no network at all. Lab logs use only
-addresses reserved for documentation (RFC 5737), never a real computer.
+Labs never reach the internet. Labs without a target have no network at all; labs with a
+**practice target** put your machine and the target on a private network of their own, so
+you reach it simply by its name (`target`). Lab logs use only addresses reserved for
+documentation (RFC 5737), never a real computer.
+
+### Practice targets
+A practice target is a small machine running CyberLab's own practice program. It is
+*deliberately leaky*, not exploitable: every answer comes from a fixed table the lab
+writes when it starts (banners, pages, hidden paths, other users' notes). You can't open
+a terminal, desktop or files on a target, just like a real remote computer: you reach it
+over the lab network from your own machine.
 
 ## Write your own lab
 A lab is one YAML file in `registry/labs/<id>.yaml`. CyberLab checks every lab when it
@@ -64,6 +75,23 @@ content for every run:
 | `maze` | a folder of folders with one `treasure.txt` (needs `flagTask`) | the flag |
 | `app-log` | a 3000-line application log with one flag line (needs `flagTask`) | the flag |
 | `auth-log` | an SSH log with one brute-force attacker | `attacker-ip`, `attacker-user`, `failed-count` |
+| `scan-target` | a target config: FTP, SSH and web on 21/22/80, plus a banner on a random high port | `open-ports`, `ssh-version`, `hidden-port`, `banner-flag` |
+| `web-target` | a target config: a small web app with a comment, a `robots.txt` path and an IDOR | `source-flag`, `robots-flag`, `idor-flag` |
+
+A practice target in a lab looks like this (the generator's file goes into the target):
+
+```yaml
+    - name: target
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab}
+      access: {terminal: false}
+setup:
+  - environment: target
+    path: .cyberlab-target.json
+    generator: web-target
+```
 
 A task's `answer` is `flag` (the default) or the name of a generated answer, for example
 `answer: attacker-ip`. Generators are Python functions in
@@ -72,6 +100,5 @@ A task's `answer` is `flag` (the default) or the name of a generated answer, for
 Check your lab with the tests: `cd backend && pytest tests/test_labs.py`.
 
 ## Coming next
-Target machines with intentionally vulnerable services on a private lab network, for
-labs such as *Scan a network with nmap* and *Find the secret in a web app*
-(see `docs/plans/ready-made-labs.md`).
+More labs at every level (intermediate and advanced, multi-network pivoting), completed
+badges, and classroom mode (see `docs/plans/ready-made-labs.md`).

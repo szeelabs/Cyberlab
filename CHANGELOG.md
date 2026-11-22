@@ -6,6 +6,10 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Practice targets for labs: a second machine on the lab's private network to scan and
+  test, reached by its name. New labs: *Scan a network with nmap* and *Web recon: find the
+  secrets*. New Network Basics tool pack (curl, wget, netcat).
+- `access.terminal: false` in a manifest is now enforced.
 - Ready-made labs: pick a lab, press Start, and practise with tasks, hints and instant
   answer checking; fresh answers for every run. First labs: *First steps in Linux* and
   *Log detective* (find an SSH attacker in a log). Write your own in `registry/labs/`.

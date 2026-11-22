@@ -264,7 +264,10 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
               <tbody>
                 {live.map((e) => (
                   <tr key={e.id}>
-                    <td className="mono">{e.name}</td>
+                    <td className="mono">
+                      {e.name}
+                      {e.role === "target" && <div className="muted small">practice target</div>}
+                    </td>
                     <td>
                       <Pill kind={e.state}>{e.state}</Pill>
                       {e.lastError && <div className="small" style={{ color: "var(--bad)" }}>{e.lastError}</div>}
@@ -277,7 +280,7 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
                     <td className="muted small">{e.expiresAt ? new Date(`${e.expiresAt}${e.expiresAt.includes("+") ? "" : "Z"}`).toLocaleString() : "never"}</td>
                     <td>
                       <div className="row">
-                        {e.state === "running" && <button onClick={() => setTerminal(e)}>Terminal</button>}
+                        {e.state === "running" && e.terminal && <button onClick={() => setTerminal(e)}>Terminal</button>}
                         {e.state === "running" && e.desktop && <button onClick={() => setDesktop(e)}>Desktop</button>}
                         {e.state === "running" && <button disabled={act.busy} onClick={() => run(() => api.stop(id, e.id))}>Stop</button>}
                         {e.state === "stopped" && <button disabled={act.busy} onClick={() => run(() => api.start(id, e.id))}>Start</button>}
@@ -306,7 +309,7 @@ function EnvironmentsTab({ id, envs, error, reload }: { id: string; envs: Enviro
 
 // ---------------------------------------------------------------- files
 function FilesTab({ id, envs, reloadEnvs }: { id: string; envs: Environment[]; reloadEnvs: () => Promise<void> }) {
-  const running = envs.filter((e) => e.state === "running");
+  const running = envs.filter((e) => e.state === "running" && e.role !== "target");
   const [envId, setEnvId] = useState("");
   const [path, setPath] = useState("");
   const current = running.find((e) => e.id === envId) ?? running[0];
@@ -403,7 +406,7 @@ function FilesTab({ id, envs, reloadEnvs }: { id: string; envs: Environment[]; r
 // ---------------------------------------------------------------- snapshots
 function SnapshotsTab({ id, envs, reloadEnvs }: { id: string; envs: Environment[]; reloadEnvs: () => Promise<void> }) {
   const list = useLoad(() => api.snapshots(id), [id]);
-  const usable = envs.filter((e) => e.state === "running" || e.state === "stopped");
+  const usable = envs.filter((e) => (e.state === "running" || e.state === "stopped") && e.role !== "target");
   const [envId, setEnvId] = useState("");
   const [label, setLabel] = useState("");
   const [target, setTarget] = useState("");

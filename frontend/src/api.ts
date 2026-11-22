@@ -32,6 +32,9 @@ export type Environment = {
   toolPacksInstalled: boolean;
   installed: { path: string; sha256: string }[];
   desktop: boolean;
+  /** False for practice targets and machines with terminal access turned off. */
+  terminal: boolean;
+  role: "workstation" | "target";
   image: string | null;
   lastActivityAt: string | null;
   expiresAt: string | null;

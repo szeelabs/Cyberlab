@@ -13,7 +13,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy.orm import Session
 
 from cyberlab.api.deps import current_user, get_db, request_id
-from cyberlab.api.environments import _env_owned, _require_provider, get_provider
+from cyberlab.api.environments import (
+    _env_owned,
+    _require_provider,
+    _require_workstation,
+    get_provider,
+)
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import EnvironmentRecord, User, record_audit
@@ -43,6 +48,7 @@ def _target(
 ) -> tuple[ProviderAdapter, EnvironmentRecord]:
     ws = _owned(db, user, ws_id)
     rec = _env_owned(db, ws, env_id)
+    _require_workstation(rec, "file access")
     adapter = _require_provider(provider)
     if not hasattr(adapter, "list_files"):
         raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "provider has no file access")

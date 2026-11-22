@@ -227,6 +227,16 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Tests | Catalog loads and passes policy; 10 kinds of broken lab refused; answers fresh per run and salted; generated logs match their answers; the API (start, files placed, right/wrong, other task's flag refused, private to the owner, no provider, limits, failed machine, delete). Real Docker: the lab files are in the machine, owned by the learner, the flags read with `cat`/`find`/`grep` are accepted, the machine has no network. Real browser: start from the Labs page, wrong answer and hint, read the flag in the terminal, solved | `tests/test_labs.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
 | Guide | Using labs and writing your own | `docs/guides/labs.md`, `docs/plans/ready-made-labs.md` |
 
+## Implemented (Phase 8, step 2 — practice targets)
+| Area | What works | Where |
+|---|---|---|
+| Practice targets | Manifest `role: target` with the `lab-target` base (`python:3.13-slim`, no package downloads). The image carries CyberLab's practice program (standard-library Python) instead of a shell; it waits for its config, then answers on its ports from a fixed table (banners; HTTP routes incl. query strings, redirects, HEAD, 404). Low ports via the per-container `ip_unprivileged_port_start=0` setting, otherwise the usual hardening. Policy: `lab-target` only for targets, targets only on `lab`, no packs or desktop. The architect and the beginner form never offer `lab-target` | `execution/target_services.py`, `execution/images.py`, `execution/docker.py`, `manifest/models.py`, `manifest/policy.py`, `registry/base-images.yaml` |
+| Names on the lab network | Every machine on a network gets its manifest name as a network alias, so `nmap target` / `curl http://target` work | `execution/docker.py` |
+| Lockdown | Terminal, desktop, files, snapshots and installs are refused (403) for practice targets; `access.terminal: false` is now honoured for any machine | `api/environments.py` (`_require_workstation`), `api/terminal.py`, `api/files.py`, `api/snapshots.py`, `api/install.py` |
+| Labs | *Scan a network with nmap* (open ports, SSH version with `-sV`, a hidden high port with `-p-`, its banner) and *Web recon: find the secrets* (page source, `robots.txt`, IDOR); generators `scan-target`, `web-target`; new **Network Basics** tool pack (curl, wget, netcat) | `registry/labs/`, `labs/generators.py`, `registry/toolpacks/net-basics.yaml` |
+| Web app | Targets marked as "practice target" with no Terminal button; the Lab tab says to reach them by name; Files/Snapshots don't offer targets | `components/LabTab.tsx`, `pages/Workspace.tsx` |
+| Tests | Practice program (banner, HTTP table, traversal is just a 404, HEAD, waiting for config, standard library only); generators match their answers; 5 policy refusals; run args (command, port setting, alias; workstations unchanged); API lockdown (6 endpoints) and `terminal: false`. Real Docker: attacker reaches the target by name on 22/80/31337 with bash only, target unprivileged with no way out. CI (with package downloads): both labs solved end to end with nmap, nc and curl | `tests/test_targets.py`, `tests/test_docker_integration.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -239,7 +249,7 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Forgotten-password flow in the sign-in screen; sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io); a project website | 7 |
-| Lab target machines (intentionally vulnerable services on the private lab network) and more labs | 8 |
+| More labs (intermediate/advanced, pivoting), completed badges, classroom mode | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues
