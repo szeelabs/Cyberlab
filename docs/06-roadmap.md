@@ -66,7 +66,7 @@ images + changelog).
 
 ## Phase 8 — Ready-made labs (in progress)
 - [x] 1. Lab format, one-click start, fresh answers, answer checking, Labs page and Lab tab; two labs (Linux basics, log analysis).
-- [ ] 2. Target machines (intentionally vulnerable services on the private lab network): nmap and web labs.
+- [x] 2. Practice targets on the private lab network: nmap and web recon labs.
 - [ ] 3. More labs and progress badges. 4. Sharing community labs.
 
 ## Exact next steps

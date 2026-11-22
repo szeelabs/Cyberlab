@@ -610,3 +610,119 @@ def test_ready_made_lab_on_real_container(client):
         assert net == "", f"the lab machine has a network: {net}"
     finally:
         destroy_all(client, ws, envs)
+
+
+TARGET_PAIR = """apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: it-target}
+spec:
+  environments:
+    - name: attacker
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: lab}
+    - name: target
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab}
+      access: {terminal: false}
+"""
+
+
+def test_practice_target_on_real_containers(client):
+    """A practice target serves its config on low ports, unprivileged, and the attacker
+    reaches it by name on the private lab network (bash /dev/tcp, no tools needed)."""
+    import json as _json
+
+    ws, envs = provision(client, TARGET_PAIR, "it-target")
+    by = {e["name"]: e["resources"]["container"] for e in envs}
+    try:
+        config = {
+            "services": [
+                {"port": 22, "kind": "banner", "banner": "SSH-2.0-OpenSSH_9.6p1 it"},
+                {"port": 80, "kind": "http", "routes": {"/": {"body": "it-works"}}},
+                {"port": 31337, "kind": "banner", "banner": "hidden-it"},
+            ]
+        }
+        data = _json.dumps(config).replace("'", "")
+        code, out = sh(by["target"], f"echo '{data}' > /workspace/.cyberlab-target.json")
+        assert code == 0, out
+        probe = (
+            "for i in $(seq 1 40); do "
+            "(exec 3<>/dev/tcp/target/22) 2>/dev/null && break; sleep 0.5; done; "
+            "timeout 5 cat < /dev/tcp/target/22; "
+            "exec 3<>/dev/tcp/target/80; printf 'GET / HTTP/1.0\\r\\n\\r\\n' >&3; "
+            "timeout 5 cat <&3; "
+            "timeout 5 cat < /dev/tcp/target/31337"
+        )
+        code, out = sh(by["attacker"], probe, interpreter="bash")
+        assert "SSH-2.0-OpenSSH_9.6p1 it" in out, out
+        assert "it-works" in out and "hidden-it" in out, out
+        code, who = sh(by["target"], "ps -o user= -p 1 2>/dev/null || stat -c %U /proc/1")
+        assert "1000" in who or "cyberlab" in who, who
+        # the target has no route out: its only network is the internal lab network
+        code, out = sh(
+            by["target"],
+            "python3 -c \"import socket; socket.create_connection(('1.1.1.1', 53), 3)\"",
+        )
+        assert code != 0
+    finally:
+        destroy_all(client, ws, envs)
+
+
+@pytest.mark.skipif(
+    os.environ.get("CYBERLAB_DOCKER_BUILD_TESTS") != "1",
+    reason="installs nmap and curl; needs internet access during image builds",
+)
+@pytest.mark.parametrize("lab", ["network-scanning", "web-secrets"])
+def test_target_labs_end_to_end(client, lab):
+    """The real labs: solve every task with the tools the hints suggest."""
+    import re
+
+    out = client.post(f"/v1/labs/{lab}/start", headers=auth()).json()
+    ws = out["workspaceId"]
+    envs = client.get(f"/v1/workspaces/{ws}/environments", headers=auth()).json()
+    try:
+        assert out.get("setupError") is None, out
+        attacker = next(e for e in envs if e["name"] == "attacker")["resources"]["container"]
+        wait = (
+            "for i in $(seq 1 60); do "
+            "(exec 3<>/dev/tcp/target/80) 2>/dev/null && break; sleep 0.5; done"
+        )
+        sh(attacker, wait, interpreter="bash")
+        answers = {}
+        if lab == "network-scanning":
+            _, scan = sh(attacker, "nmap -Pn target")
+            answers["open-ports"] = str(len(re.findall(r"^\d+/tcp\s+open", scan, re.M)))
+            _, ver = sh(attacker, "nmap -Pn -sV -p 22 target")
+            answers["ssh-version"] = re.search(r"OpenSSH[ _]([0-9.]+p\d)", ver).group(1)
+            _, full = sh(attacker, "nmap -Pn -p- --min-rate 2000 target")
+            ports = re.findall(r"^(\d+)/tcp\s+open", full, re.M)
+            hidden = next(p for p in ports if p not in ("21", "22", "80"))
+            answers["hidden-port"] = hidden
+            _, banner = sh(attacker, f"timeout 5 nc target {hidden} </dev/null")
+            answers["banner-flag"] = re.search(r"CL\{[0-9a-f]{16}\}", banner).group()
+        else:
+            _, home = sh(attacker, "curl -s http://target/")
+            answers["source-flag"] = re.search(r"CL\{[0-9a-f]{16}\}", home).group()
+            _, robots = sh(attacker, "curl -s http://target/robots.txt")
+            path = re.search(r"Disallow: (\S+)", robots).group(1)
+            _, page = sh(attacker, f"curl -sL http://target{path}")
+            answers["robots-flag"] = re.search(r"CL\{[0-9a-f]{16}\}", page).group()
+            loop = (
+                'for i in $(seq 1 100); do curl -s "http://target/api/notes?id=$i"; echo; done'
+                " | grep admin"
+            )
+            _, note = sh(attacker, loop)
+            answers["idor-flag"] = re.search(r"CL\{[0-9a-f]{16}\}", note).group()
+        for task, value in answers.items():
+            r = client.post(
+                f"/v1/workspaces/{ws}/lab/answer",
+                json={"task": task, "answer": value},
+                headers=auth(),
+            ).json()
+            assert r["correct"] is True, (task, value)
+        assert r["progress"]["solved"] == r["progress"]["total"]
+    finally:
+        destroy_all(client, ws, envs)

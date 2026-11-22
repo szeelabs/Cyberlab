@@ -61,6 +61,11 @@ class BaseImage(BaseModel):
     description: str = ""
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     supports_desktop: bool = Field(default=False, alias="supportsDesktop")
+    target_only: bool = Field(
+        default=False,
+        alias="targetOnly",
+        description="Only for lab practice targets (environments with role 'target')",
+    )
     architectures: list[Literal["amd64", "arm64"]] = Field(
         default_factory=lambda: ["amd64", "arm64"],
         min_length=1,

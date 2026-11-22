@@ -27,6 +27,7 @@ spec:
         allowedEgress: []           # exact hostnames, only with restricted-egress
       access: {terminal: true, desktop: false}
       lifecycle: {ephemeral: false, idleTimeoutMinutes: 60, ttlHours: null}
+      role: workstation           # or "target": a lab practice target (see ready-made labs)
   workspace: {persistent: true, storageGiB: 5, snapshotPolicy: manual}  # manual|daily|on-stop
   preferences: {shell: bash, editor: vim, theme: system, timezone: UTC}
 ```
@@ -46,6 +47,7 @@ spec:
 | `registry.incompatible` | error | Pack must list the base in `compatibleBases` |
 | `resources.cpu/memory/storage` | error | ≥ max(base, packs) CPU/RAM; storage ≥ base + Σ packs; desktop adds 1024 MiB |
 | `access.desktop` | error | Base must support desktop |
+| `role: target` | error | Practice targets (ready-made labs): base `lab-target` only, `lab` network only, no tool packs or desktop; the `lab-target` base is refused for anything else |
 | `security.isolation` | error | Packs with `requiresIsolation` need `isolated` or `lab` |
 | `security.high-risk-pack` | approval | Packs with `risk: high` |
 | `security.internet-egress` | approval | `network.mode: internet` |

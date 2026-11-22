@@ -33,7 +33,12 @@ from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from cyberlab.api.deps import current_user, get_db, request_id
-from cyberlab.api.environments import _env_owned, _require_provider, get_provider
+from cyberlab.api.environments import (
+    _env_owned,
+    _require_provider,
+    _require_workstation,
+    get_provider,
+)
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import EnvironmentRecord, TerminalTicket, User, record_audit
@@ -94,6 +99,7 @@ def issue_ticket(
     purpose: str,
 ) -> str:
     """Check the environment is running and return a new single-use ticket for it."""
+    _require_workstation(rec, purpose)
     adapter = _require_provider(provider)
     if rec.provider_ref is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "environment was never created")

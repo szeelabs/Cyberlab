@@ -122,7 +122,12 @@ export function LabTab({ wsId, run, onRun, envs }: { wsId: string; run: LabRun; 
         </div>
         <div className="row">
           {live.map((e) =>
-            e.state === "running" ? (
+            e.role === "target" ? (
+              <span key={e.id} className="small muted">
+                🎯 <b>{e.name}</b>: practice target ({e.state}). Reach it by its name, <code>{e.name}</code>, from your
+                machine.
+              </span>
+            ) : e.state === "running" ? (
               <button key={e.id} className="primary" onClick={() => setTerminal(e)}>
                 Open terminal: {e.name}
               </button>

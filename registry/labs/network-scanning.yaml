@@ -1,0 +1,74 @@
+id: network-scanning
+title: Scan a network with nmap
+level: beginner
+minutes: 30
+topic: networking
+summary: Discover what a computer is running, which versions, and the service hiding on a port a normal scan misses.
+skills: [nmap, port scanning, service versions, banners, netcat]
+introduction: |
+  Before testing any system, a security professional maps it: which ports are open, and
+  which programs answer on them. That is called reconnaissance.
+
+  This lab has two machines on a private network of their own: "attacker" (yours, with
+  nmap) and "target" (a practice machine). From the attacker you reach it simply by its
+  name, target. Open the Terminal of "attacker" to begin.
+
+  Only ever scan machines you own or are allowed to test, like this one.
+spec:
+  environments:
+    - name: attacker
+      baseImage: ubuntu-24-04
+      resources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
+      toolPacks: [network-analysis, net-basics]
+      network: {mode: lab}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+    - name: target
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab}
+      access: {terminal: false}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: target
+    path: .cyberlab-target.json
+    generator: scan-target
+tasks:
+  - id: open-ports
+    title: Find the open ports
+    text: |
+      Scan the target with `nmap target`. How many open ports does a normal scan find?
+    answer: open-ports
+    answerFormat: a number
+    hints:
+      - "Run `nmap target` and count the lines that say \"open\"."
+  - id: ssh-version
+    title: Which SSH version is it running?
+    text: |
+      Knowing the exact version tells you which known weaknesses might apply. Ask nmap
+      to identify the services with `-sV`. Which OpenSSH version runs on port 22?
+    answer: ssh-version
+    answerFormat: a version, like 1.2p3
+    hints:
+      - "`nmap -sV -p 22 target`"
+      - "Look for \"OpenSSH\" followed by a version. Type just the version, for example 9.6p1."
+  - id: hidden-port
+    title: Find the hidden service
+    text: |
+      By default nmap checks only the 1000 most common ports, but there are 65535.
+      Something is listening on a high port. Scan them all. Which port is it?
+    answer: hidden-port
+    answerFormat: a port number
+    hints:
+      - "`-p-` means every port: `nmap -p- target`. It takes a little longer."
+  - id: banner-flag
+    title: Read its banner
+    answer: banner-flag
+    text: |
+      Many services greet you with a "banner" when you connect. Connect to the hidden port
+      and read what it says.
+    hints:
+      - "netcat opens a raw connection: `nc target <port>`. Press Ctrl+C to leave."
+      - "No netcat? Bash can do it too: `cat < /dev/tcp/target/<port>`"
+      - "nmap can also show banners: `nmap -sV -p <port> target`"

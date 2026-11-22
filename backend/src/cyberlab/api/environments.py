@@ -93,6 +93,9 @@ def _env_out(e: EnvironmentRecord) -> dict:
             for i in (e.resources or {}).get("installers", [])
         ],
         "desktop": bool((e.spec.get("access") or {}).get("desktop")),
+        "terminal": bool((e.spec.get("access") or {}).get("terminal", True))
+        and e.spec.get("role") != "target",
+        "role": e.spec.get("role", "workstation"),
         # True once the environment runs an image built with its tool packs installed.
         "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,
         "image": e.resources.get("image"),
@@ -101,6 +104,19 @@ def _env_out(e: EnvironmentRecord) -> dict:
         "createdAt": e.created_at.isoformat(),
         "updatedAt": e.updated_at.isoformat(),
     }
+
+
+def _require_workstation(rec: EnvironmentRecord, what: str) -> None:
+    """Practice targets are reached only over the lab network, like a real remote machine:
+    no terminal, desktop, files, installs or snapshots (they would reveal the answers)."""
+    if rec.spec.get("role") == "target":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"{rec.name} is a practice target: no {what}. Reach it over the lab network "
+            "from your own machine instead.",
+        )
+    if what == "terminal" and not (rec.spec.get("access") or {}).get("terminal", True):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"{rec.name} has no terminal access")
 
 
 def _env_owned(db: Session, ws: Workspace, env_id: str) -> EnvironmentRecord:

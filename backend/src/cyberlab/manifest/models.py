@@ -78,6 +78,9 @@ class Environment(_Model):
     network: Network = Field(default_factory=Network)
     access: Access = Field(default_factory=Access)
     lifecycle: Lifecycle = Field(default_factory=Lifecycle)
+    # "target": a lab practice target running CyberLab's built-in practice services,
+    # reachable only by name from the other machines on the private lab network.
+    role: Literal["workstation", "target"] = "workstation"
 
     @field_validator("tool_packs")
     @classmethod

@@ -1,0 +1,13 @@
+id: net-basics
+name: Network Basics
+version: 0.1.0
+category: network-security
+description: Everyday tools for talking to network services by hand. Used by the ready-made labs.
+status: buildable
+risk: low
+compatibleBases: [ubuntu-24-04, debian-12, kali-rolling, parrot-core, blackarch]
+minResources: {cpu: 0.25, memoryMiB: 256, storageGiB: 1}
+tools:
+  - {name: curl, purpose: Fetch web pages and talk to HTTP APIs, homepage: "https://curl.se", package: curl, archPackage: curl, command: curl}
+  - {name: wget, purpose: Download files from the web, homepage: "https://www.gnu.org/software/wget/", package: wget, archPackage: wget, command: wget}
+  - {name: netcat, purpose: Open raw TCP connections and read service banners, package: netcat-openbsd, archPackage: openbsd-netcat, command: nc}

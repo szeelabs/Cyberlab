@@ -20,6 +20,7 @@ from cyberlab.api.environments import (
     _env_out,
     _env_owned,
     _require_provider,
+    _require_workstation,
     _rewrite,
     _workspace_key,
     get_provider,
@@ -54,6 +55,7 @@ def install_package(
 ) -> dict:
     ws = _owned(db, user, ws_id)
     rec = _env_owned(db, ws, env_id)
+    _require_workstation(rec, "software installs")
     adapter = _require_provider(provider)
     if not hasattr(adapter, "install_package"):
         raise HTTPException(

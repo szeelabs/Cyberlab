@@ -19,7 +19,10 @@ CyberLab principal engineer**. Two goals run together:
 * **Wants to understand deeply,** not memorise commands.
 * **Product goal (user, 2026-11):** CyberLab must be *outstanding and very convenient*,
   so people actually want to use it: few steps, clear words, sensible defaults, helpful
-  errors. Weigh every feature against "would a beginner find this easy?".
+  errors. It is **for every level, not only beginners** (user, 2026-11-22): easy by default,
+  expert depth when needed (labs as code, API/CLI, advanced labs, classroom mode for
+  teachers and companies). Weigh every feature against "easy for a newcomer, and still
+  powerful for a professional?".
 * **Wish list (asked to remember, 2026-11):** run VMware-style labs, Kali, Parrot OS,
   Predator-OS, BlackArch, Android and Cisco Packet Tracer smoothly, using **no laptop
   storage**. Honest status per item is in `docs/DEVELOPMENT_STATUS.md` ("Operating system
@@ -134,5 +137,6 @@ Kali in CI + desktop copy/paste (PR #19); ARM servers + install your own .deb (P
 connector; their existing Supabase project (free plan) is used for Auth only. A
 "Cyberlab" cloud environment allows that project's host. Values are not committed.
 **Phase 8 (Ready-made labs):** approved by the user (2026-11-18); step 1, lab format, one-click start,
-answer checking, Labs page, two labs. Plan: `docs/plans/ready-made-labs.md`. Next: target machines.
+answer checking, Labs page, two labs (PR #22); step 2, practice targets + nmap and web labs.
+Plan: `docs/plans/ready-made-labs.md`. Next: more labs at every level, badges, classroom mode.
 Details: `docs/DEVELOPMENT_STATUS.md`.

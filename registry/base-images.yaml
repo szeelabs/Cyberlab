@@ -37,3 +37,11 @@
   minResources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
   supportsDesktop: true
   architectures: [amd64]  # BlackArch publishes x86 images only
+- id: lab-target
+  name: Lab target (practice services)
+  family: debian
+  image: docker.io/library/python:3.13-slim
+  description: Runs CyberLab's built-in practice services inside labs. Not a workstation; used only by machines with role "target".
+  minResources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+  supportsDesktop: false
+  targetOnly: true

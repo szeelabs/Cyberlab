@@ -69,6 +69,14 @@ def desktop_script() -> str:
     return resources.files("cyberlab.execution").joinpath("desktop.sh").read_text("utf-8")
 
 
+# Lab practice targets: CyberLab's practice-services program, run instead of a shell.
+TARGET_COMMAND = "/usr/local/lib/cyberlab/target_services.py"
+
+
+def target_script() -> str:
+    return resources.files("cyberlab.execution").joinpath("target_services.py").read_text("utf-8")
+
+
 _URL = re.compile(r"^https://[a-z0-9.-]+(/[A-Za-z0-9._~-]+)*/?$")
 
 
@@ -78,6 +86,7 @@ def render(
     family: str = "debian",
     source_rewrite: tuple[str, str] | None = None,
     desktop: bool = False,
+    target: bool = False,
 ) -> ImageRecipe:
     """Render the Dockerfile for an environment. Pure function, no Docker needed.
 
@@ -135,6 +144,12 @@ def render(
         encoded = base64.b64encode(desktop_script().encode()).decode()
         lines.append(
             f"RUN echo {encoded} | base64 -d > {DESKTOP_COMMAND} && chmod 755 {DESKTOP_COMMAND}"
+        )
+    if target:
+        encoded = base64.b64encode(target_script().encode()).decode()
+        lines.append(
+            f"RUN mkdir -p /usr/local/lib/cyberlab && echo {encoded} | base64 -d > "
+            f"{TARGET_COMMAND} && chmod 644 {TARGET_COMMAND}"
         )
     dockerfile = "\n".join(lines) + "\n" + USER_SETUP + "USER 1000:1000\nWORKDIR /workspace\n"
     digest = hashlib.sha256(dockerfile.encode()).hexdigest()[:16]
