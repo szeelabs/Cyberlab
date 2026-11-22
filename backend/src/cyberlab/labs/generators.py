@@ -496,6 +496,56 @@ def _chain_target(rng: random.Random, path: str, flag: str | None) -> Generated:
     )
 
 
+# ---------------------------------------------------------------- advanced: pivoting (SSRF)
+def _pivot_jump(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """A web app on two networks with a "link preview" that fetches URLs from its own side:
+    the learner's way into the internal network."""
+    page = (
+        "<!doctype html>\n<html><head><title>LinkCard</title></head><body>\n"
+        "<h1>LinkCard</h1>\n<p>Paste a link, get a preview card.</p>\n"
+        '<form action="/preview"><input name="url" placeholder="http://..."><button>Preview</button>'
+        "</form>\n<!-- staff: internal docs live on http://vault/ -->\n</body></html>\n"
+    )
+    service = {
+        "port": 80,
+        "kind": "http",
+        "server": "nginx/1.24.0",
+        "routes": {"/": {"body": page}},
+        "fetchers": {"/preview": {"param": "url", "allow": ["vault", "jump", "localhost"]}},
+    }
+    return Generated({path: _config(path, [service])})
+
+
+def _pivot_vault(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """The internal server: only on the internal network. Its home page has a flag, and an
+    admin service listens on a port between 8000 and 8099."""
+    internal_flag, admin_flag = _flag(), _flag()
+    admin = rng.randint(8000, 8099)
+    services = [
+        {
+            "port": 80,
+            "kind": "http",
+            "server": "Apache/2.4.58",
+            "routes": {
+                "/": {
+                    "body": "<h1>Vault (internal)</h1><p>Internal only. "
+                    f"Flag: {internal_flag}</p><p>Admin console moved to a port in the 8000s.</p>\n"
+                }
+            },
+        },
+        {
+            "port": admin,
+            "kind": "http",
+            "server": "gunicorn",
+            "routes": {"/": {"body": f"<h1>Vault admin</h1><p>Flag: {admin_flag}</p>\n"}},
+        },
+    ]
+    return Generated(
+        {path: _config(path, services)},
+        {"internal-flag": internal_flag, "admin-port": str(admin), "admin-flag": admin_flag},
+    )
+
+
 GENERATORS: dict[str, Generator] = {
     "maze": Generator(_maze, needs_flag=True),
     "app-log": Generator(_app_log, needs_flag=True),
@@ -523,6 +573,10 @@ GENERATORS: dict[str, Generator] = {
     "wordlist": Generator(_wordlist),
     "chain-target": Generator(
         _chain_target, produces=frozenset({"web-port", "service-user", "chain-flag"})
+    ),
+    "pivot-jump": Generator(_pivot_jump),
+    "pivot-vault": Generator(
+        _pivot_vault, produces=frozenset({"internal-flag", "admin-port", "admin-flag"})
     ),
     "auth-log": Generator(
         _auth_log, produces=frozenset({"attacker-ip", "attacker-user", "failed-count"})

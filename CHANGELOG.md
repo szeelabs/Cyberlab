@@ -6,6 +6,8 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Network segments for labs, and an advanced pivoting lab: reach a hidden server through a
+  web app's link preview (SSRF).
 - Write your own labs in the web app: import a lab file (checked like the built-in labs),
   share it with everyone, download any lab's file to adapt it.
 - Classroom mode: a teacher creates a class for a lab and shares a code; every student

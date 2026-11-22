@@ -70,7 +70,7 @@ images + changelog).
 - [x] 3. Labs at every level (10 labs) and progress badges.
 - [x] 5. Classroom mode.
 - [x] 4. Sharing community labs.
-- [ ] 6. Multi-network pivoting labs.
+- [x] 6. Network segments and a pivoting lab.
 
 ## Phase 9 — Isolation (in progress)
 - [x] 1. Isolation levels per machine: gVisor sandbox and Kata microVM; malware-analysis pack only in an isolated microVM.

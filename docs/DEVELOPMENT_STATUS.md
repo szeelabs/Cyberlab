@@ -285,6 +285,14 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Web app | Labs page: "Write your own labs" (upload or paste, refusals with reasons, Share/Stop sharing, Delete), "yours"/"community" badges, a Lab file link on every built-in and shared lab | `pages/Labs.tsx` |
 | Tests | Private → share → catalog → download → another user starts it → only the author changes it → delete; built-in files download and re-import; 6 unsafe or broken labs refused (internet, path escape, unknown generator, malware pack, oversized field, bad YAML); sign-in and size limit; classes need shared labs. Browser: refusal with reason, import, share, download, delete | `tests/test_custom_labs.py`, `frontend/e2e/app.spec.ts` |
 
+## Implemented (Phase 8, step 6 — network segments and pivoting)
+| Area | What works | Where |
+|---|---|---|
+| Segments | `network.segments` in `lab` mode (up to 4 short names, default one shared network): one internal Docker network per segment (`cyberlab-<key>-lab-<segment>`), the machine joins each with its name as alias; removed with the workspace | `manifest/models.py`, `execution/docker.py` |
+| Link preview (SSRF) practice service | Practice targets can have a fetcher route that fetches a URL from the target's side: plain http only, only hosts listed in its config (lab machines), 3 s timeouts, 64 KiB cap; closed ports answer "could not connect", so learners can scan through it | `execution/target_services.py` |
+| Lab | *Pivoting: reach the hidden network* (advanced): attacker on `dmz`, `jump` on `dmz`+`internal`, `vault` on `internal`; read vault through the preview, find its admin port by scanning through the preview, read the admin flag. Generators `pivot-jump`, `pivot-vault` | `registry/labs/pivot-ssrf.yaml`, `labs/generators.py` |
+| Tests | Segment validation; networks created, joined with aliases, removed; the preview's limits (allowed hosts only, http only, closed port); the route on a target; generators. Real Docker: the attacker can't reach vault (not even its name) but can through jump's preview; segment networks are gone afterwards. CI: the lab solved end to end with curl | `tests/test_pivot.py`, `tests/test_docker_integration.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -297,7 +305,6 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io; the installer builds locally instead); a project website; a public demo | 7 |
-| Multi-network (pivoting) labs | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues

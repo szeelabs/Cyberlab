@@ -29,6 +29,7 @@ in **Environments** to free your resources, or delete the workspace.
 | Web: weak logins and leaked keys | intermediate | wordlists, password guessing, secrets in JavaScript |
 | Forensics: what's hiding in this file? | intermediate | `grep -a`, `binwalk`, carving with `tail`/`dd`, `gunzip` |
 | Recon chain: from a port to admin | advanced | a multi-step chain with checkpoints instead of instructions |
+| Pivoting: reach the hidden network | advanced | network segments, SSRF, scanning an internal server through a vulnerable web app |
 
 The **Labs** page filters by level and topic, marks labs you've completed, and offers
 **Continue** for one you've started.
@@ -99,6 +100,12 @@ content for every run:
 | `web-login-target` | a target: login with a password from the wordlist, an API key in JavaScript | `admin-user`, `login-flag`, `key-flag` |
 | `wordlist` | a small list of common passwords | (none) |
 | `chain-target` | a target: web app on a random port, a backup in a comment, a token API | `web-port`, `service-user`, `chain-flag` |
+| `pivot-jump` | a target: web app with a "link preview" (SSRF) that can fetch from the internal server `vault` | (none) |
+| `pivot-vault` | a target: internal web server with a flag and an admin console on a random port 8000–8099 | `internal-flag`, `admin-port`, `admin-flag` |
+
+**Network segments:** machines in `lab` mode can join named private networks with
+`network: {mode: lab, segments: [dmz, internal]}`. Machines only reach each other through a
+segment they share, so a machine on two segments is the only way between them.
 
 A setup file with `content` can also set `mode: "0755"` (or any permission bits).
 
@@ -124,4 +131,4 @@ A task's `answer` is `flag` (the default) or the name of a generated answer, for
 Check your lab with the tests: `cd backend && pytest tests/test_labs.py`.
 
 ## Coming next
-Multi-network pivoting labs (see `docs/plans/ready-made-labs.md`).
+More labs. Ideas and contributions welcome: write one and share it.

