@@ -6,6 +6,10 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Labs and machines start in the background: the page answers at once and shows each step
+  ("installing the system and its tools…", "starting the machine").
+- Penetration Testing tool pack (Metasploit, sqlmap, Hydra, Nikto, gobuster) for lab
+  networks only, with approval.
 - Network segments for labs, and an advanced pivoting lab: reach a hidden server through a
   web app's link preview (SSRF).
 - Write your own labs in the web app: import a lab file (checked like the built-in labs),

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -29,6 +32,7 @@ from cyberlab.manifest.policy import Plan, Severity, evaluate
 from cyberlab.registry import Registry
 
 router = APIRouter(tags=["environments"])
+log = logging.getLogger("cyberlab")
 ACTIVE = {EnvState.provisioning, EnvState.running, EnvState.stopped}
 
 
@@ -86,6 +90,8 @@ def _env_out(e: EnvironmentRecord) -> dict:
         "provider": e.provider,
         "state": e.state,
         "lastError": e.last_error,
+        # what is happening while the machine is being created (background creation)
+        "progress": (e.resources or {}).get("progress") if e.state == "provisioning" else None,
         "resources": e.resources,
         "toolPacks": e.spec.get("toolPacks", []),
         "installed": [
@@ -302,9 +308,36 @@ def provision_environments(
     reg: Registry = Depends(get_registry),
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
+    wait: bool = Query(default=True, description="false: return at once, create in the background"),
 ) -> dict:
-    """Provision every environment of a validated (and, if required, approved) revision."""
+    """Provision every environment of a validated (and, if required, approved) revision.
+
+    With wait=false the machines are created in the background: the answer comes at once
+    with every machine in state "provisioning", and each one's "progress" says what is
+    happening (the first build of a system can take minutes)."""
     ws = _owned(db, user, ws_id)
+    rev, records = start_provisioning(
+        ws, body.revision, request, user, db, reg, settings, provider, wait=wait
+    )
+    return {"revision": rev, "environments": [_env_out(r) for r in records]}
+
+
+def start_provisioning(
+    ws: Workspace,
+    revision: int | None,
+    request: Request,
+    user: User,
+    db: Session,
+    reg: Registry,
+    settings: Settings,
+    provider: ProviderAdapter | None,
+    *,
+    wait: bool = True,
+    after: Callable[[Session], None] | None = None,
+) -> tuple[int, list[EnvironmentRecord]]:
+    """Check everything, record the machines, then create them (now, or in the background).
+    `after` runs once all machines were attempted (e.g. to place a lab's files)."""
+    body = ProvisionIn(revision=revision)
     rev = _revision(db, ws, body.revision)
     plan = _plan(rev, reg, settings)
     if not plan.valid:
@@ -374,7 +407,7 @@ def provision_environments(
             "add it (docs/guides/isolation.md), or choose isolation 'container' in Setup.",
         )
     proxy_urls, egress_error = _configure_egress(adapter, ws, manifest, settings)
-    created = []
+    records: list[EnvironmentRecord] = []
     for env in manifest.spec.environments:
         rec = EnvironmentRecord(
             workspace_id=ws.id,
@@ -383,6 +416,7 @@ def provision_environments(
             provider=adapter.name,
             state=EnvState.provisioning.value,
             spec=env.model_dump(mode="json", by_alias=True),
+            resources={"progress": "waiting to start"},
             last_activity_at=datetime.now(UTC),
             expires_at=(
                 datetime.now(UTC) + timedelta(hours=env.lifecycle.ttl_hours)
@@ -391,41 +425,83 @@ def provision_environments(
             ),
         )
         db.add(rec)
-        db.commit()  # record intent before touching the provider
-        try:
-            if env.network.mode == NetworkMode.restricted_egress and egress_error:
-                raise ProviderError(egress_error)
-            result = adapter.provision(
-                ProvisionRequest(
-                    workspace_key=_workspace_key(ws),
-                    environment=env,
-                    image=reg.base_images[env.base_image].image,
-                    family=reg.base_images[env.base_image].family,
-                    source_rewrite=_rewrite(reg.base_images[env.base_image]),
-                    tool_packs=tuple(reg.tool_packs[p] for p in env.tool_packs),
-                    internet_approved=env.network.mode == NetworkMode.internet
-                    and "security.internet-egress" in needed,
-                    egress_proxy_url=proxy_urls.get(env.name),
+        records.append(rec)
+    db.commit()  # record intent before touching the provider
+    jobs = [(rec.id, env) for rec, env in zip(records, manifest.spec.environments, strict=True)]
+    ws_key, subject, rev_no = _workspace_key(ws), user.subject, rev.revision
+    req_id = request_id(request)
+    database = request.app.state.db
+
+    def note(rec_id: str, text: str) -> None:
+        with database.new_session() as s:
+            r = s.get(EnvironmentRecord, rec_id)
+            if r is not None and r.state == EnvState.provisioning:
+                r.resources = {**(r.resources or {}), "progress": text}
+                s.commit()
+
+    def work(session: Session) -> None:
+        for rec_id, env in jobs:
+            rec = session.get(EnvironmentRecord, rec_id)
+            try:
+                if env.network.mode == NetworkMode.restricted_egress and egress_error:
+                    raise ProviderError(egress_error)
+                result = adapter.provision(
+                    ProvisionRequest(
+                        workspace_key=ws_key,
+                        environment=env,
+                        image=reg.base_images[env.base_image].image,
+                        family=reg.base_images[env.base_image].family,
+                        source_rewrite=_rewrite(reg.base_images[env.base_image]),
+                        tool_packs=tuple(reg.tool_packs[p] for p in env.tool_packs),
+                        internet_approved=env.network.mode == NetworkMode.internet
+                        and "security.internet-egress" in needed,
+                        egress_proxy_url=proxy_urls.get(env.name),
+                        progress=lambda text, rid=rec_id: note(rid, text),
+                    )
                 )
+                session.refresh(rec)
+                rec.provider_ref = result.provider_ref
+                rec.state = result.state.value
+                rec.resources = result.resource_names
+            except ProviderError as exc:
+                session.refresh(rec)
+                rec.state = EnvState.failed.value
+                rec.last_error = str(exc)
+                rec.resources = {}
+            record_audit(
+                session,
+                actor=subject,
+                action="environment.provision",
+                target_type="environment",
+                target_id=rec.id,
+                detail={"name": env.name, "state": rec.state, "revision": rev_no},
+                request_id=req_id,
             )
-            rec.provider_ref = result.provider_ref
-            rec.state = result.state.value
-            rec.resources = result.resource_names
-        except ProviderError as exc:
-            rec.state = EnvState.failed.value
-            rec.last_error = str(exc)
-        record_audit(
-            db,
-            actor=user.subject,
-            action="environment.provision",
-            target_type="environment",
-            target_id=rec.id,
-            detail={"name": env.name, "state": rec.state, "revision": rev.revision},
-            request_id=request_id(request),
-        )
-        db.commit()
-        created.append(rec)
-    return {"revision": rev.revision, "environments": [_env_out(r) for r in created]}
+            session.commit()
+        if after is not None:
+            after(session)
+
+    if wait:
+        work(db)
+        for r in records:
+            db.refresh(r)
+    else:
+
+        def background() -> None:
+            with database.new_session() as s:
+                try:
+                    work(s)
+                except Exception as exc:  # never leave machines "provisioning" forever
+                    log.exception("background provisioning failed")
+                    s.rollback()
+                    for rec_id, _ in jobs:
+                        r = s.get(EnvironmentRecord, rec_id)
+                        if r is not None and r.state == EnvState.provisioning:
+                            r.state, r.last_error = EnvState.failed.value, f"failed: {exc}"
+                    s.commit()
+
+        threading.Thread(target=background, name=f"provision-{ws_key}", daemon=True).start()
+    return rev.revision, records
 
 
 def _configure_egress(

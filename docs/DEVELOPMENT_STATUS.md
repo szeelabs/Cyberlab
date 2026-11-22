@@ -293,6 +293,14 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Lab | *Pivoting: reach the hidden network* (advanced): attacker on `dmz`, `jump` on `dmz`+`internal`, `vault` on `internal`; read vault through the preview, find its admin port by scanning through the preview, read the admin flag. Generators `pivot-jump`, `pivot-vault` | `registry/labs/pivot-ssrf.yaml`, `labs/generators.py` |
 | Tests | Segment validation; networks created, joined with aliases, removed; the preview's limits (allowed hosts only, http only, closed port); the route on a target; generators. Real Docker: the attacker can't reach vault (not even its name) but can through jump's preview; segment networks are gone afterwards. CI: the lab solved end to end with curl | `tests/test_pivot.py`, `tests/test_docker_integration.py` |
 
+## Implemented (background creation, Penetration Testing pack)
+| Area | What works | Where |
+|---|---|---|
+| Background creation | `POST .../environments?wait=false` and `POST /v1/labs/{id}/start?wait=false` answer at once; machines are created in a background thread, each with a plain-language `progress` ("installing the system and its tools (only the first time…)", "starting the machine"); lab answers are made at once and the lab files placed as soon as the machines run (`ready` on the lab run, migration `0007`). Failures are recorded on the machine and the lab. Machines left "provisioning" by a restart are marked failed at startup | `api/environments.py` (`start_provisioning`), `api/labs.py`, `execution/docker.py`, `main.py` |
+| Web app | Starting a lab opens the Lab tab at once with "Preparing your lab…" and each machine's step, refreshing every 2 s until ready; Environments shows the step under "provisioning" | `components/LabTab.tsx`, `pages/Workspace.tsx` |
+| Penetration Testing pack | Metasploit, sqlmap, Hydra, Nikto, gobuster on Kali, Parrot and BlackArch; high risk (approval), lab or isolated networks only | `registry/toolpacks/penetration-testing.yaml` |
+| Tests | Background lab start (answers at once, progress visible, then running, files placed, flag accepted), background failure reported, background environments, restart recovery; browser suite on real Docker. CI builds and smoke-tests the new pack on each base | `tests/test_background.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -305,7 +313,7 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io; the installer builds locally instead); a project website; a public demo | 7 |
-| Packs for penetration testing, malware analysis, AI security | needs isolation work first |
+| An AI security pack | later |
 
 ## Known issues
 1. **Fixed:** `backend/pyproject.toml` referenced `../README.md` as the package readme.
@@ -325,8 +333,11 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 8. **Fixed in part 3:** the terminal prompt showed `I have no name!`; images now create a real
    `cyberlab` user.
 9. The `/terminal` page is the original test page; the web app at `/app` has its own terminal.
-10. The first provision of a new base/pack combination builds an image, which can take minutes;
-   the request waits for it. Background provisioning is a later improvement.
+10. **Improved:** the first provision of a new base/pack combination builds an image, which
+   can take minutes. The web app now creates machines in the background and shows each step
+   (`wait=false`); the API still waits by default. A restart during creation marks those
+   machines failed with an explanation (CyberLab runs as one process; several server
+   processes sharing one database would need a job queue).
 11. Image builds need internet access to package mirrors on the Docker host.
 12. Found by CI: Suricata is not packaged in Debian 12 (bookworm) main, so the
    detection-engineering pack is offered on Ubuntu 24.04 only.

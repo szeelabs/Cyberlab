@@ -11,7 +11,18 @@ import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine
+from sqlalchemy import (
+    JSON,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+)
+from sqlalchemy import (
+    true as sa_true,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -148,6 +159,8 @@ class LabRun(Base):
     answer_hashes: Mapped[dict] = mapped_column(JSON)  # task id -> sha256(run id + answer)
     solved: Mapped[dict] = mapped_column(JSON, default=dict)  # task id -> ISO time
     setup_error: Mapped[str | None] = mapped_column(Text, default=None)
+    # False while the machines are being prepared in the background
+    ready: Mapped[bool] = mapped_column(default=False, server_default=sa_true())
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 

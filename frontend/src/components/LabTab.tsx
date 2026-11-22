@@ -107,6 +107,19 @@ export function LabTab({ wsId, run, onRun, envs }: { wsId: string; run: LabRun; 
             your resources.
           </div>
         )}
+        {!run.ready && !run.setupError && (
+          <div className="notice" role="status" aria-label="Preparing">
+            <b>Preparing your lab…</b>
+            <ul className="prep">
+              {live.map((e) => (
+                <li key={e.id}>
+                  {e.state === "running" ? "✓" : "⏳"} {e.name}: {e.state === "running" ? "ready" : (e.progress ?? e.state)}
+                </li>
+              ))}
+            </ul>
+            <span className="small muted">The first time a system is used it is installed, which can take a few minutes. You can read the tasks meanwhile.</span>
+          </div>
+        )}
         {run.setupError && (
           <div className="notice error" role="alert">
             The lab could not be fully prepared: {run.setupError}. Try "What's wrong?" in Environments, or start the lab
@@ -121,7 +134,7 @@ export function LabTab({ wsId, run, onRun, envs }: { wsId: string; run: LabRun; 
           ))}
         </div>
         <div className="row">
-          {live.map((e) =>
+          {run.ready && live.map((e) =>
             e.role === "target" ? (
               <span key={e.id} className="small muted">
                 🎯 <b>{e.name}</b>: practice target ({e.state}). Reach it by its name, <code>{e.name}</code>, from your

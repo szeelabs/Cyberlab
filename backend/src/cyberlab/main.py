@@ -39,6 +39,27 @@ from cyberlab.storage import build_store
 
 log = logging.getLogger("cyberlab")
 
+
+def _recover_interrupted(database: Database) -> None:
+    """Machines that were still being created when CyberLab stopped will never finish:
+    mark them failed with a plain explanation instead of "provisioning" forever."""
+    from sqlalchemy import update
+
+    from cyberlab.db import EnvironmentRecord
+
+    with database.new_session() as s:
+        s.execute(
+            update(EnvironmentRecord)
+            .where(EnvironmentRecord.state == "provisioning")
+            .values(
+                state="failed",
+                last_error="CyberLab restarted while this machine was being created. "
+                "Destroy it and create it again.",
+            )
+        )
+        s.commit()
+
+
 # The web app's own scripts and styles only: no inline scripts, no third-party code.
 # 'unsafe-inline' for styles is needed by the terminal widget and progress bars (style
 # attributes); it cannot run code.
@@ -108,6 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         migrations.upgrade(app.state.db.engine)
     elif migrations.current(app.state.db.engine) != migrations.head():
         raise RuntimeError("database schema is out of date: run `cyberlab db upgrade`")
+    _recover_interrupted(app.state.db)
     app.state.provider = build_provider(settings)
     app.state.architect = build_model(settings, app.state.registry)
     app.state.terminal_sessions = {}

@@ -28,6 +28,8 @@ export type Environment = {
   revision: number;
   state: "provisioning" | "running" | "stopped" | "failed" | "destroyed" | "missing";
   lastError: string | null;
+  /** While being created in the background: what is happening right now. */
+  progress: string | null;
   toolPacks: string[];
   toolPacksInstalled: boolean;
   installed: { path: string; sha256: string }[];
@@ -100,6 +102,7 @@ export type LabRun = {
   solved: Record<string, string>;
   progress: { solved: number; total: number };
   setupError: string | null;
+  ready: boolean;
   startedAt: string;
 };
 
@@ -256,7 +259,8 @@ export const api = {
   classRoster: (id: string) => request<Roster>(`/v1/classes/${enc(id)}`),
   setClassOpen: (id: string, open: boolean) => request<ClassInfo>(`/v1/classes/${enc(id)}`, json("PATCH", { open })),
   joinClass: (code: string) => request<{ id: string; name: string; labTitle: string }>("/v1/classes/join", json("POST", { code })),
-  startClassLab: (id: string) => request<{ workspaceId: string; existing: boolean }>(`/v1/classes/${enc(id)}/start`, { method: "POST" }),
+  startClassLab: (id: string) =>
+    request<{ workspaceId: string; existing: boolean }>(`/v1/classes/${enc(id)}/start?wait=false`, { method: "POST" }),
   resetStudent: (id: string, memberId: string) =>
     request<{ reset: boolean }>(`/v1/classes/${enc(id)}/members/${enc(memberId)}/reset`, { method: "POST" }),
   myLabs: () => request<Lab[]>("/v1/labs/mine"),
@@ -266,7 +270,9 @@ export const api = {
   deleteLab: (id: string) => request<void>(`/v1/labs/${enc(id)}`, { method: "DELETE" }),
   labFileUrl: (id: string) => `/v1/labs/${enc(id)}/file`,
   labProgress: () => request<LabProgress>("/v1/labs/progress"),
-  startLab: (labId: string) => request<LabRun & { workspaceId: string }>(`/v1/labs/${enc(labId)}/start`, { method: "POST" }),
+  /** Answers at once; the machines are prepared in the background (see LabRun.ready). */
+  startLab: (labId: string) =>
+    request<LabRun & { workspaceId: string }>(`/v1/labs/${enc(labId)}/start?wait=false`, { method: "POST" }),
   /** The lab running in a workspace, or null if it isn't a lab workspace. */
   workspaceLab: (id: string) =>
     request<LabRun>(`${ws(id)}/lab`).catch((e) => {
@@ -280,7 +286,7 @@ export const api = {
   addVmMedia: (id: string, e: string, url: string, sha256: string | null) =>
     request<VmMedia>(`${env(id, e)}/vm/media`, json("POST", { url, sha256 })),
   environments: (id: string) => request<Environment[]>(`${ws(id)}/environments?refresh=true`),
-  provision: (id: string) => request<{ environments: Environment[] }>(`${ws(id)}/environments`, json("POST", {})),
+  provision: (id: string) => request<{ environments: Environment[] }>(`${ws(id)}/environments?wait=false`, json("POST", {})),
   start: (id: string, e: string) => request<Environment>(`${env(id, e)}/start`, { method: "POST" }),
   stop: (id: string, e: string) => request<Environment>(`${env(id, e)}/stop`, { method: "POST" }),
   destroy: (id: string, e: string, keepData: boolean) =>

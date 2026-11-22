@@ -105,3 +105,4 @@ button.link { background: none; border: none; padding: 0 4px; color: var(--accen
 .join-code.big { font-size: 22px; display: inline-block; margin-top: 4px; }
 .progress-bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
 .progress-bar > div { height: 100%; background: var(--accent); }
+.prep { margin: 6px 0; padding-left: 18px; }

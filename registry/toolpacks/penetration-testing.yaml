@@ -1,0 +1,16 @@
+id: penetration-testing
+name: Penetration Testing
+version: 0.1.0
+category: penetration-testing
+description: Exploitation and attack tools for practice targets and systems you have written permission to test. Lab networks only (never the internet), and only after your approval.
+status: buildable
+risk: high
+requiresIsolation: true
+compatibleBases: [kali-rolling, parrot-core, blackarch]
+minResources: {cpu: 1, memoryMiB: 2048, storageGiB: 6}
+tools:
+  - {name: Metasploit Framework, purpose: Exploit development and testing framework, homepage: "https://www.metasploit.com", package: metasploit-framework, archPackage: metasploit, command: msfconsole}
+  - {name: sqlmap, purpose: Find and confirm SQL injection, homepage: "https://sqlmap.org", package: sqlmap, archPackage: sqlmap, command: sqlmap}
+  - {name: THC Hydra, purpose: Test login services against weak passwords, homepage: "https://github.com/vanhauser-thc/thc-hydra", package: hydra, archPackage: hydra, command: hydra}
+  - {name: Nikto, purpose: Web server misconfiguration scanner, homepage: "https://cirt.net/Nikto2", package: nikto, archPackage: nikto, command: nikto}
+  - {name: gobuster, purpose: Discover hidden web paths and subdomains, homepage: "https://github.com/OJ/gobuster", package: gobuster, archPackage: gobuster, command: gobuster}
