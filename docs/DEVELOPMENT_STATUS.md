@@ -238,6 +238,20 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Web app | Targets marked as "practice target" with no Terminal button; the Lab tab says to reach them by name; Files/Snapshots don't offer targets | `components/LabTab.tsx`, `pages/Workspace.tsx` |
 | Tests | Practice program (banner, HTTP table, traversal is just a 404, HEAD, waiting for config, standard library only); generators match their answers; 5 policy refusals; run args (command, port setting, alias; workstations unchanged); API lockdown (6 endpoints) and `terminal: false`. Real Docker: attacker reaches the target by name on 22/80/31337 with bash only, target unprivileged with no way out. CI (with package downloads): both labs solved end to end with nmap, nc and curl | `tests/test_targets.py`, `tests/test_docker_integration.py` |
 
+## Implemented (Phase 8, step 3 — labs at every level, progress)
+| Area | What works | Where |
+|---|---|---|
+| Labs | 10 labs: 6 beginner, 3 intermediate (*Incident response: a hacked web server*, *Web: weak logins and leaked keys*, *Forensics: what's hiding in this file?*), 1 advanced (*Recon chain*: checkpoints instead of instructions). New generators: `crypto-basics`, `permissions`, `access-log`, `carving`, `web-login-target`, `wordlist`, `chain-target`; setup files can set permission bits; targets can answer unknown addresses on a path with a fixed reply (e.g. 401 for wrong passwords) | `registry/labs/`, `labs/generators.py`, `execution/target_services.py` |
+| Progress | `GET /v1/labs/progress`: the user's best run per lab and how many labs are completed. Labs page: level and topic filters, a "completed" badge, Continue (n/m solved), Start again, and a total | `api/labs.py`, `pages/Labs.tsx` |
+| Tests | Each new generator's answers checked against its content over 5 seeds; permission bits survive the archive. Real Docker: *Encodings*, *Permissions* and *Incident response* solved with exactly the hinted commands on plain Ubuntu. CI (package downloads): *Web logins*, *Recon chain* and *Forensics* solved end to end with curl, nmap and binwalk. Browser: filters and the progress total | `tests/test_more_labs.py`, `tests/test_labs.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
+
+## Implemented (one-command install)
+| Area | What works | Where |
+|---|---|---|
+| Installer | `sudo ./scripts/install.sh`: installs Docker from the distribution if missing, builds CyberLab's image from the checkout, keeps data in the `cyberlab-data` volume, restarts with the server. Private mode listens on 127.0.0.1 only (development sign-in, for SSH tunnels). `--domain` + Supabase values: production mode behind Caddy with automatic HTTPS, CyberLab reachable only through Caddy; refused without sign-in. Settings in `/etc/cyberlab/cyberlab.env` (mode 600). `--mirror`, `--uninstall`, `--purge` | `scripts/install.sh`, `Dockerfile`, `.dockerignore` |
+| Tests | CI job `installer` on a fresh Ubuntu runner: private install, web app, a real lab started through the API, rerun keeps data, public mode (HTTPS with a local certificate, 401 without a token, not reachable around Caddy, settings file mode 600), refusal without sign-in, uninstall with purge | `.github/workflows/ci.yml` |
+| Guide | `docs/guides/install.md` | |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -249,8 +263,8 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
 | Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
-| Container images published to a registry (ghcr.io); a project website | 7 |
-| More labs (intermediate/advanced, pivoting), completed badges, classroom mode | 8 |
+| Container images published to a registry (ghcr.io; the installer builds locally instead); a project website; a public demo | 7 |
+| Multi-network (pivoting) labs, classroom mode, community lab sharing | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues

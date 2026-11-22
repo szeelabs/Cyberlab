@@ -138,5 +138,6 @@ connector; their existing Supabase project (free plan) is used for Auth only. A
 "Cyberlab" cloud environment allows that project's host. Values are not committed.
 **Phase 8 (Ready-made labs):** approved by the user (2026-11-18); step 1, lab format, one-click start,
 answer checking, Labs page, two labs (PR #22); step 2, practice targets + nmap and web labs.
-Plan: `docs/plans/ready-made-labs.md`. Next: more labs at every level, badges, classroom mode.
+Step 3: 10 labs at every level + progress badges; forgot password; one-command installer
+(`scripts/install.sh`). Plan: `docs/plans/ready-made-labs.md`. Next: microVM isolation phase.
 Details: `docs/DEVELOPMENT_STATUS.md`.

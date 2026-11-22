@@ -54,6 +54,38 @@ def list_labs(labs: dict[str, Lab] = Depends(get_labs)) -> list[dict]:
     ]
 
 
+@router.get("/v1/labs/progress")
+def lab_progress(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+    labs: dict[str, Lab] = Depends(get_labs),
+) -> dict:
+    """The signed-in user's progress per lab: the best run (most solved, then newest)."""
+    rows = db.execute(
+        select(LabRun, Workspace.name)
+        .join(Workspace, Workspace.id == LabRun.workspace_id)
+        .where(Workspace.owner_id == user.id)
+    ).all()
+    best: dict[str, dict] = {}
+    for run, ws_name in rows:
+        lab = labs.get(run.lab_id)
+        if lab is None:
+            continue
+        entry = {
+            "workspaceId": run.workspace_id,
+            "workspace": ws_name,
+            "solved": len(run.solved),
+            "total": len(lab.tasks),
+            "completed": len(run.solved) == len(lab.tasks),
+            "startedAt": run.created_at.isoformat(),
+        }
+        old = best.get(run.lab_id)
+        if old is None or (entry["solved"], entry["startedAt"]) > (old["solved"], old["startedAt"]):
+            best[run.lab_id] = entry
+    done = sum(1 for e in best.values() if e["completed"])
+    return {"labs": best, "completed": done, "available": len(labs)}
+
+
 @router.get("/v1/labs/{lab_id}")
 def get_lab(lab_id: str, labs: dict[str, Lab] = Depends(get_labs)) -> dict:
     return _lab(labs, lab_id).public()

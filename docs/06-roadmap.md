@@ -67,7 +67,8 @@ images + changelog).
 ## Phase 8 — Ready-made labs (in progress)
 - [x] 1. Lab format, one-click start, fresh answers, answer checking, Labs page and Lab tab; two labs (Linux basics, log analysis).
 - [x] 2. Practice targets on the private lab network: nmap and web recon labs.
-- [ ] 3. More labs and progress badges. 4. Sharing community labs.
+- [x] 3. Labs at every level (10 labs) and progress badges.
+- [ ] 4. Sharing community labs. 5. Classroom mode. 6. Multi-network pivoting labs.
 
 ## Exact next steps
 1. Merge Phase 1 and enable branch protection on `main` with CI required.

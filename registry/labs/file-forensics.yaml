@@ -49,4 +49,4 @@ tasks:
     answer: carved-flag
     hints:
       - "`tail -c +<offset+1> evidence.png | gunzip` (tail counts from 1, offsets from 0)."
-      - "Or with dd: `dd if=evidence.png bs=1 skip=<offset> | gunzip`. gunzip may warn about trailing garbage; the text still comes out."
+      - "Or with dd: `dd if=evidence.png bs=1 skip=<offset> 2>/dev/null | gunzip`"

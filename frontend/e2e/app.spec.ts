@@ -193,6 +193,16 @@ test("labs catalog: browse, and a clear message when no machines can be created"
   const card = page.getByRole("region", { name: "First steps in Linux" });
   await expect(card.getByText("beginner")).toBeVisible();
   await expect(card.getByText(/4 tasks/)).toBeVisible();
+  // Filters: advanced labs only, then defence only.
+  await page.getByLabel("Level").selectOption("advanced");
+  await expect(page.getByRole("region", { name: /Recon chain/ })).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByLabel("Level").selectOption("all");
+  await page.getByLabel("Topic").selectOption("blue-team");
+  await expect(page.getByRole("region", { name: /Log detective/ })).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByLabel("Topic").selectOption("all");
+  await expect(page.getByLabel("Your progress")).toContainText("0 of");
   await card.getByRole("button", { name: "Start lab" }).click();
   await expect(page.getByRole("alert")).toContainText("no execution provider");
   expect(errors.filter((e) => !/status of 503/.test(e))).toEqual([]);

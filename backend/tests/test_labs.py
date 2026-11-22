@@ -320,3 +320,31 @@ def test_deleting_the_workspace_removes_the_lab_run(client, provider):
         client.delete(f"/v1/workspaces/{ws}/environments/{e['id']}", headers=auth())
     assert client.delete(f"/v1/workspaces/{ws}", headers=auth()).status_code == 204
     assert client.get(f"/v1/workspaces/{ws}/lab", headers=auth()).status_code == 404
+
+
+def test_progress_shows_the_best_run_per_lab(client, provider):
+    assert client.get("/v1/labs/progress", headers=auth()).json()["labs"] == {}
+    first = start(client)
+    second = start(client)
+    files = list(provider.files.values())
+    answer(client, second["workspaceId"], "read-a-file", flag_in(files[1]["welcome.txt"]))
+    p = client.get("/v1/labs/progress", headers=auth()).json()
+    entry = p["labs"]["linux-first-steps"]
+    assert entry["workspaceId"] == second["workspaceId"] and entry["solved"] == 1
+    assert entry["completed"] is False and p["completed"] == 0
+    assert p["available"] >= 2
+    # finish the first run completely: it becomes the best one, and the lab counts as done
+    f = files[0]
+    maze = next(v for k, v in f.items() if k.endswith("treasure.txt"))
+    for task, data in [
+        ("read-a-file", f["welcome.txt"]),
+        ("hidden-file", f[".secret-note.txt"]),
+        ("find-a-file", maze),
+        ("search-a-file", f["logs/app.log"]),
+    ]:
+        assert answer(client, first["workspaceId"], task, flag_in(data))["correct"]
+    p = client.get("/v1/labs/progress", headers=auth()).json()
+    assert p["labs"]["linux-first-steps"]["completed"] is True and p["completed"] == 1
+    # progress is private
+    assert client.get("/v1/labs/progress", headers=auth("user-b")).json()["labs"] == {}
+    assert client.get("/v1/labs/progress").status_code == 401

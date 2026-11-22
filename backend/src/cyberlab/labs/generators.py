@@ -336,14 +336,19 @@ def _access_log(rng: random.Random, path: str, flag: str | None) -> Generated:
 def _carving(rng: random.Random, path: str, flag: str | None) -> Generated:
     """A "photo" with a plain-text note inside it and a compressed file hidden after it."""
     note_flag, hidden_flag = _flag(), _flag()
-    head = b"\x89PNG\r\n\x1a\n" + secrets.token_bytes(rng.randint(3000, 6000))
+
+    def noise(n: int) -> bytes:
+        # Random filler that can't be mistaken for a gzip header (1f 8b) by chance.
+        return secrets.token_bytes(n).replace(b"\x1f\x8b", b"\x1f\x00")
+
+    head = b"\x89PNG\r\n\x1a\n" + noise(rng.randint(3000, 6000))
     note = f"\x00\x00note: {note_flag}\x00\x00".encode()
-    tail = secrets.token_bytes(rng.randint(2000, 4000))
+    tail = noise(rng.randint(2000, 4000))
     hidden = gzip.compress(f"Carved it out! Flag: {hidden_flag}\n".encode(), mtime=0)
     blob = head + note + tail
     offset = len(blob)
     return Generated(
-        {path: blob + hidden + secrets.token_bytes(64)},
+        {path: blob + hidden},
         {"note-flag": note_flag, "gzip-offset": str(offset), "carved-flag": hidden_flag},
     )
 
