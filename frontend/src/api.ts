@@ -189,7 +189,9 @@ export const api = {
   categories: () => request<Category[]>("/v1/registry/categories"),
   toolPacks: () => request<ToolPack[]>("/v1/registry/tool-packs"),
   baseImages: () =>
-    request<{ id: string; name: string; supportsDesktop: boolean; architectures: string[] }[]>("/v1/registry/base-images"),
+    request<{ id: string; name: string; supportsDesktop: boolean; architectures: string[]; targetOnly: boolean }[]>("/v1/registry/base-images")
+      // Practice-target systems only run inside ready-made labs.
+      .then((bases) => bases.filter((b) => !b.targetOnly)),
 
   workspaces: () => request<Workspace[]>("/v1/workspaces"),
   createWorkspace: (name: string, description = "") => request<Workspace>("/v1/workspaces", json("POST", { name, description })),

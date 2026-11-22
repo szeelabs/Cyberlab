@@ -39,6 +39,7 @@ from cyberlab.execution.base import (
 from cyberlab.execution.images import (
     DESKTOP_COMMAND,
     IMAGE_REPOSITORY,
+    TARGET_COMMAND,
     ImageRecipe,
     ImageRecipeError,
     render,
@@ -415,9 +416,18 @@ class DockerAdapter:
             # from the terminal (e.g. `wireshark &`) open on the remote desktop.
             args[2:2] = ["--init"]
             args += ["--env", "DISPLAY=:1"]
+        if network != "none":
+            # Other machines in the workspace reach this one by its manifest name.
+            args += ["--network-alias", env.name]
+        command = ["sleep", "infinity"]
+        if env.role == "target":
+            # Practice services on the usual low ports (21, 22, 80) without any capability:
+            # this setting only affects the container's own network namespace.
+            args += ["--sysctl", "net.ipv4.ip_unprivileged_port_start=0"]
+            command = ["python3", "-B", TARGET_COMMAND]
         for k, v in labels.items():
             args += ["--label", f"{k}={v}"]
-        args += [_check("image", image, _IMAGE), "sleep", "infinity"]
+        args += [_check("image", image, _IMAGE), *command]
         return args
 
     # ------------------------------------------------------------------ interface
@@ -473,6 +483,7 @@ class DockerAdapter:
                     request.family,
                     request.source_rewrite,
                     desktop=request.environment.access.desktop,
+                    target=request.environment.role == "target",
                 )
             except ImageRecipeError as exc:
                 raise ProviderError(str(exc)) from exc

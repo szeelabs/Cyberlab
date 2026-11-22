@@ -168,6 +168,36 @@ def evaluate(manifest: UniverseManifest, registry: Registry, quotas: QuotaSettin
                     )
                 )
 
+        if base and base.target_only != (env.role == "target"):
+            findings.append(
+                Finding(
+                    Severity.error,
+                    "registry.target",
+                    f"base image {base.id!r} is only for lab practice targets (role: target)"
+                    if base.target_only
+                    else "a machine with role 'target' must use a practice-target base image",
+                    f"{p}.role",
+                )
+            )
+        if env.role == "target" and env.network.mode != NetworkMode.lab:
+            findings.append(
+                Finding(
+                    Severity.error,
+                    "security.target-network",
+                    "practice targets must be on the private 'lab' network",
+                    f"{p}.network.mode",
+                )
+            )
+        if env.role == "target" and (env.access.desktop or env.tool_packs):
+            findings.append(
+                Finding(
+                    Severity.error,
+                    "registry.target",
+                    "practice targets take no tool packs or desktop",
+                    p,
+                )
+            )
+
         if env.access.desktop:
             if base and not base.supports_desktop:
                 findings.append(

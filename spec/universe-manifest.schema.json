@@ -52,6 +52,15 @@
         },
         "lifecycle": {
           "$ref": "#/$defs/Lifecycle"
+        },
+        "role": {
+          "default": "workstation",
+          "enum": [
+            "workstation",
+            "target"
+          ],
+          "title": "Role",
+          "type": "string"
         }
       },
       "required": [

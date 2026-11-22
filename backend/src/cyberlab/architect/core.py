@@ -85,7 +85,10 @@ def draft_schema(registry: Registry) -> dict:
         "type": "object",
         "properties": {
             "name": {"type": "string", "description": "lowercase letters, digits, dashes"},
-            "baseImage": {"type": "string", "enum": sorted(registry.base_images)},
+            "baseImage": {
+                "type": "string",
+                "enum": sorted(k for k, b in registry.base_images.items() if not b.target_only),
+            },
             "toolPacks": {
                 "type": "array",
                 "items": {"type": "string", "enum": [p.id for p in _buildable_packs(registry)]},
@@ -138,6 +141,7 @@ def system_prompt(registry: Registry) -> str:
         f"{b.min_resources.memory_mib} MiB RAM; remote desktop: "
         f"{'yes' if b.supports_desktop else 'no'}. {b.description}"
         for b in sorted(registry.base_images.values(), key=lambda b: b.id)
+        if not b.target_only
     )
     packs = "\n".join(
         f"- {p.id} (risk {p.risk.value}; works on {', '.join(p.compatible_bases)}): "
