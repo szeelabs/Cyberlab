@@ -6,6 +6,7 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Forgot password: a reset link by email, then choose a new password in CyberLab.
 - Practice targets for labs: a second machine on the lab's private network to scan and
   test, reached by its name. New labs: *Scan a network with nmap* and *Web recon: find the
   secrets*. New Network Basics tool pack (curl, wget, netcat).

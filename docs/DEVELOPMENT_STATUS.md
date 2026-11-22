@@ -211,7 +211,8 @@ destroyed: creating the environments again from the manifest starts without them
 | Server | `CYBERLAB_AUTH_SUPABASE_URL` + `CYBERLAB_AUTH_SUPABASE_PUBLISHABLE_KEY` turn on Supabase sign-in; the JWKS URL, issuer and algorithms (ES256/RS256) are derived. Public `GET /v1/system/auth` tells the web app; the web app's CSP allows exactly that Supabase address. Guards: Supabase URLs only (or localhost outside production), https in production, the key is required | `config.py`, `api/routes.py`, `main.py` |
 | Web app | Sign-in screen (email + password), create account (with the email-confirmation message), plain-language errors, automatic token refresh shortly before expiry, back to sign-in on a revoked session or any 401, signed-in email and Sign out in the header. Talks to Supabase's REST API directly (no extra library). Development mode is unchanged | `src/auth.ts`, `src/pages/SignIn.tsx`, `src/App.tsx` |
 | Tests | Backend: ES256 tokens checked through a real local JWKS server: valid token, wrong issuer, wrong audience, expired, other key, unknown key id, `alg: none`, and a hand-forged HS256 token using the public key; settings guards; the public config; the real project's key list. Web: 8 unit tests (incl. the real Supabase error format). Browser: a stand-in for Supabase signing real ES256 tokens and a second CyberLab in JWT mode: wrong password, create account, "confirm your email", confirm, sign in, create a workspace, reload, sign out, API refuses without a token | `tests/test_supabase_auth.py`, `src/auth.test.ts`, `e2e/fake-supabase.mjs`, `e2e/app.spec.ts` |
-| Guide | Turning it on, Site URL for confirmation emails, free-plan email limits | `docs/guides/sign-in.md` |
+| Forgotten passwords | **Forgot password?** on the sign-in screen sends a Supabase reset email back to this CyberLab; the link opens **Choose a new password** (token checked with Supabase first, then removed from the address; works in a new tab or one already open); mismatched passwords, reused passwords and expired links get plain messages. Browser test: request, follow the link, set the password, old one refused, new one works, expired link explained | `src/auth.ts`, `src/pages/ResetPassword.tsx`, `src/pages/SignIn.tsx`, `src/App.tsx`, `e2e/fake-supabase.mjs` |
+| Guide | Turning it on, Site URL and Redirect URLs for email links, forgotten passwords, free-plan email limits | `docs/guides/sign-in.md` |
 
 The user's Supabase project is connected to Claude (connector) and its address and public key
 are known; they are **not** committed to the repository (each CyberLab owner sets their own).
@@ -246,7 +247,7 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
-| Forgotten-password flow in the sign-in screen; sign-in providers other than email (GitHub, Google) | 6 |
+| Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io); a project website | 7 |
 | More labs (intermediate/advanced, pivoting), completed badges, classroom mode | 8 |

@@ -56,18 +56,28 @@ export function authMessage(body: unknown, status: number): string {
   if (raw === "Invalid login credentials") return "Wrong email or password.";
   if (raw === "Email not confirmed") return "Please confirm your email first: open the link we sent you, then sign in.";
   if (status === 429) return "Too many attempts. Please wait a minute and try again.";
+  if (raw && /same as the old|should be different/i.test(raw)) return "Choose a password you haven't used before.";
+  if (raw && /expired|invalid/i.test(raw) && /link|otp|token/i.test(raw))
+    return "This link has expired or was already used. Ask for a new one.";
   return raw ?? `Sign-in failed (${status}).`;
 }
 
 type Fetch = typeof fetch;
 
-async function call(cfg: AuthConfig, path: string, body: unknown, f: Fetch, bearer?: string): Promise<Record<string, unknown>> {
+async function call(
+  cfg: AuthConfig,
+  path: string,
+  body: unknown,
+  f: Fetch,
+  bearer?: string,
+  method: "POST" | "PUT" | "GET" = "POST",
+): Promise<Record<string, unknown>> {
   if (!cfg.url || !cfg.publishableKey) throw new AuthError("Sign-in is not configured on this server.");
   const headers: Record<string, string> = { apikey: cfg.publishableKey, "Content-Type": "application/json" };
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
   let res: Response;
   try {
-    res = await f(`${cfg.url}/auth/v1/${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+    res = await f(`${cfg.url}/auth/v1/${path}`, { method, headers, body: method === "GET" ? undefined : JSON.stringify(body) });
   } catch {
     throw new AuthError("Could not reach the sign-in service. Check your connection and try again.");
   }
@@ -126,4 +136,47 @@ export async function signOut(cfg: AuthConfig, f: Fetch = fetch): Promise<void> 
   const current = loadSession();
   saveSession(null);
   if (current) await call(cfg, "logout", {}, f, current.accessToken).catch(() => undefined);
+}
+
+/** Send a password-reset email. Supabase answers the same whether or not the account
+ * exists, so this never reveals who has an account. */
+export async function requestPasswordReset(cfg: AuthConfig, email: string, returnTo: string, f: Fetch = fetch): Promise<void> {
+  await call(cfg, `recover?redirect_to=${encodeURIComponent(returnTo)}`, { email }, f);
+}
+
+export type AuthRedirect =
+  | { kind: "session"; type: string; session: Session }
+  | { kind: "error"; message: string };
+
+/** Links in Supabase emails come back as `#access_token=...&type=recovery...` (or an error).
+ * Returns null when the address is an ordinary page of the app. */
+export async function readAuthRedirect(cfg: AuthConfig, hash: string, f: Fetch = fetch, now = nowS()): Promise<AuthRedirect | null> {
+  const raw = hash.replace(/^#/, "");
+  if (!/(^|&)(access_token|error)=/.test(raw)) return null;
+  const p = new URLSearchParams(raw);
+  if (p.get("error")) {
+    const desc = p.get("error_description") ?? p.get("error") ?? "";
+    return { kind: "error", message: authMessage({ msg: desc.replace(/\+/g, " ") }, 400) };
+  }
+  const access = p.get("access_token");
+  const refresh = p.get("refresh_token");
+  if (!access || !refresh) return { kind: "error", message: "This link is incomplete. Ask for a new one." };
+  let email = "";
+  try {
+    const user = await call(cfg, "user", undefined, f, access, "GET");
+    email = typeof user.email === "string" ? user.email : "";
+  } catch {
+    return { kind: "error", message: "This link has expired or was already used. Ask for a new one." };
+  }
+  const expiresIn = Number(p.get("expires_in") ?? "3600");
+  const session: Session = { accessToken: access, refreshToken: refresh, expiresAt: now + (expiresIn > 0 ? expiresIn : 3600), email };
+  saveSession(session);
+  return { kind: "session", type: p.get("type") ?? "", session };
+}
+
+/** Set a new password for the signed-in user (after following a reset link). */
+export async function updatePassword(cfg: AuthConfig, password: string, f: Fetch = fetch): Promise<void> {
+  const current = loadSession();
+  if (!current) throw new AuthError("Your reset link has expired. Ask for a new one.");
+  await call(cfg, "user", { password }, f, current.accessToken, "PUT");
 }
