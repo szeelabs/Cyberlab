@@ -390,3 +390,11 @@ def test_private_downloads_are_refused_in_production():
             auth_jwt_secret="x" * 40,
             vm_media_allow_private=True,
         )
+
+
+def test_vm_memory_minimum_has_no_desktop_overhead(registry):
+    """The VM's screen comes from QEMU, so the X-desktop memory isn't added."""
+    small = {"cpu": 1, "memoryMiB": 1536, "storageGiB": 8}
+    assert set(codes(registry, resources=small, vm={"boot": "boot.iso", "diskGiB": 2})) == {
+        "security.full-vm"
+    }

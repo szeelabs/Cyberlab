@@ -280,7 +280,8 @@ def evaluate(manifest: UniverseManifest, registry: Registry, quotas: QuotaSettin
                         f"{p}.access",
                     )
                 )
-            need_mem += DESKTOP_OVERHEAD_MIB
+            if env.vm is None:  # a VM's screen comes from QEMU, not from an X desktop
+                need_mem += DESKTOP_OVERHEAD_MIB
 
         r = env.resources
         if r.cpu < need_cpu:

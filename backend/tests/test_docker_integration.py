@@ -942,7 +942,8 @@ spec:
       vm: {boot: boot.iso, diskGiB: 2}
 """
     ws = client.post("/v1/workspaces", json={"name": "it-vm"}, headers=auth()).json()["id"]
-    client.put(f"/v1/workspaces/{ws}/manifest", content=manifest, headers=YAML | auth())
+    r = client.put(f"/v1/workspaces/{ws}/manifest", content=manifest, headers=YAML | auth())
+    assert r.status_code in (200, 201), r.text
     r = client.post(
         f"/v1/workspaces/{ws}/approvals",
         json={"revision": 1, "approve": ["security.full-vm"]},
