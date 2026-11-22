@@ -549,6 +549,14 @@ class DockerAdapter:
         mode = env.network.mode
         if mode == NetworkMode.isolated:
             network = "none"
+        elif mode == NetworkMode.lab and env.network.segments != ["default"]:
+            # Several private segments: the machine joins each one (internal, no internet).
+            segment_nets = [
+                self.segment_network(request.workspace_key, s) for s in env.network.segments
+            ]
+            for net in segment_nets:
+                self._ensure_network(net, internal=True, workspace_key=request.workspace_key)
+            network = segment_nets[0]
         elif mode in (NetworkMode.lab, NetworkMode.restricted_egress):
             # restricted-egress has no proxy yet: fail closed (lab only, no egress).
             network = n["lab_network"]
@@ -581,6 +589,9 @@ class DockerAdapter:
         res = self._docker(*self.build_run_args(request, network, image))
         ref = res.stdout.splitlines()[-1] if res.stdout else ""
         _check("container id", ref, _REF)
+        if mode == NetworkMode.lab and env.network.segments != ["default"]:
+            for net in segment_nets[1:]:
+                self._docker("network", "connect", "--alias", env.name, net, ref)
         return ProvisionResult(
             provider_ref=ref,
             state=self.inspect(ref),
@@ -748,12 +759,28 @@ class DockerAdapter:
                 entries.append(entry)
         return entries
 
+    @staticmethod
+    def segment_network(workspace_key: str, segment: str) -> str:
+        _check("workspace key", workspace_key, _SAFE)
+        _check("segment", segment, _SAFE)
+        return f"cyberlab-{workspace_key}-lab-{segment}"
+
     def remove_workspace_networks(self, workspace_key: str) -> None:
         proxy = self.names(workspace_key, "egress")["egress_proxy"]
         self._docker("rm", "--force", proxy, timeout=60, ok=True)
         for kind in ("lab", "internet", "egress"):
             name = f"cyberlab-{_check('workspace key', workspace_key, _SAFE)}-{kind}"
             self._docker("network", "rm", name, timeout=30, ok=True)
+        # lab segments: cyberlab-<key>-lab-<segment>
+        listed = self._docker(
+            "network", "ls", "--format", "{{.Name}}",
+            "--filter", f"name=cyberlab-{workspace_key}-lab-",
+            "--filter", f"label=dev.cyberlab.workspace={workspace_key}",
+            timeout=30, ok=True,
+        )  # fmt: skip
+        for name in (listed.stdout or "").split():
+            if name.startswith(f"cyberlab-{workspace_key}-lab-"):
+                self._docker("network", "rm", name, timeout=30, ok=True)
 
     def shell_argv(self, provider_ref: str) -> list[str]:
         _check("container id", provider_ref, _REF)

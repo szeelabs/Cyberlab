@@ -247,6 +247,75 @@ test("ready-made lab: one click, read a flag in the terminal, get it checked", a
   expect(errors).toEqual([]);
 });
 
+test("classes: a teacher creates a class, gets a code, and opens or closes it", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/app/#/classes");
+  const teach = page.getByRole("region", { name: "Teach a class" });
+  const name = `Security 101 ${Date.now() % 100000}`;
+  await teach.getByLabel("Class name").fill(name);
+  await teach.getByLabel("Lab for the class").selectOption("log-detective");
+  await teach.getByRole("button", { name: "Create class" }).click();
+  const code = teach.getByLabel(`Code for ${name}`);
+  await expect(code).toHaveText(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  await teach.getByRole("link", { name }).click();
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  const students = page.getByRole("region", { name: "Students" });
+  await expect(students.getByText(/No students yet/)).toBeVisible();
+  await students.getByRole("button", { name: "Close to new students" }).click();
+  await expect(students.getByRole("button", { name: "Open to new students" })).toBeVisible();
+  // The teacher can't join their own class (students join with the code).
+  await page.goto("/app/#/classes");
+  const join = page.getByRole("region", { name: "Join a class" });
+  await join.getByLabel("Class code").fill(await code.innerText());
+  await join.getByRole("button", { name: "Join" }).click();
+  await expect(page.getByRole("alert")).toContainText(/closed|you teach this class/);
+  expect(errors.filter((e) => !/status of 409/.test(e))).toEqual([]);
+});
+
+test("write your own lab: import, share, download", async ({ page, request }) => {
+  const errors = watchConsole(page);
+  const title = `My note lab ${Date.now() % 100000}`;
+  const lab = `id: my-note-lab
+title: ${title}
+level: beginner
+minutes: 10
+topic: linux
+summary: A lab written in the browser test.
+spec:
+  environments:
+    - name: box
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+setup:
+  - {environment: box, path: note.txt, content: "flag: {{flag:read}}"}
+tasks:
+  - {id: read, title: Read it, text: "cat note.txt"}
+`;
+  await page.goto("/app/#/labs");
+  const mine = page.getByRole("region", { name: "Your labs" });
+  await mine.getByRole("button", { name: "Import a lab file" }).click();
+  await mine.getByLabel("Lab YAML").fill(lab.replace("isolated", "internet"));
+  await mine.getByRole("button", { name: "Check and import" }).click();
+  await expect(mine.getByRole("alert")).toContainText("'isolated' or 'lab'"); // refused, with the reason
+  await mine.getByLabel("Lab YAML").fill(lab);
+  await mine.getByRole("button", { name: "Check and import" }).click();
+  await expect(mine.getByText(title)).toBeVisible();
+  await expect(mine.getByText("private")).toBeVisible();
+  const card = page.getByRole("region", { name: title });
+  await expect(card.getByText("yours")).toBeVisible();
+  await mine.getByRole("button", { name: "Share" }).click();
+  await expect(mine.getByText("shared with everyone")).toBeVisible();
+  // the shared lab is in the public catalog, and its file can be downloaded
+  const listed = (await (await request.get("/v1/labs")).json()) as { id: string; title: string; source: string }[];
+  const shared = listed.find((l) => l.title === title)!;
+  expect(shared.source).toBe("community");
+  expect(await (await request.get(`/v1/labs/${shared.id}/file`)).text()).toContain(title);
+  await mine.getByRole("button", { name: "Delete" }).click();
+  await expect(mine.getByText(title)).toHaveCount(0);
+  expect(errors.filter((e) => !/status of 422/.test(e))).toEqual([]);
+});
+
 const DESKTOP = `apiVersion: cyberlab.dev/v1alpha1
 kind: Universe
 metadata: {name: e2e-desktop}

@@ -43,6 +43,20 @@ class Resources(_Model):
 class Network(_Model):
     mode: NetworkMode = NetworkMode.lab
     allowed_egress: list[str] = Field(default_factory=list, alias="allowedEgress", max_length=50)
+    # Lab mode only: which of the workspace's private networks the machine joins. Machines
+    # reach each other only through a segment they share, so a machine on two segments is
+    # the only way between them (a "pivot"). Default: one shared network.
+    segments: list[str] = Field(default_factory=lambda: ["default"], min_length=1, max_length=4)
+
+    @field_validator("segments")
+    @classmethod
+    def _segment_names(cls, segs: list[str]) -> list[str]:
+        if len(set(segs)) != len(segs):
+            raise ValueError("segments must not repeat")
+        for seg in segs:
+            if not re.match(r"^[a-z][a-z0-9-]{0,19}$", seg):
+                raise ValueError(f"segment names are short lowercase words: {seg!r}")
+        return segs
 
     @field_validator("allowed_egress")
     @classmethod
@@ -51,6 +65,12 @@ class Network(_Model):
             if not _HOST.match(host):
                 raise ValueError(f"allowedEgress entries must be exact hostnames: {host!r}")
         return hosts
+
+    @model_validator(mode="after")
+    def _segments_only_in_lab(self) -> Network:
+        if self.segments != ["default"] and self.mode != NetworkMode.lab:
+            raise ValueError("segments are only valid with mode 'lab'")
+        return self
 
     @model_validator(mode="after")
     def _egress_only_when_restricted(self) -> Network:

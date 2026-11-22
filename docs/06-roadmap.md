@@ -68,7 +68,9 @@ images + changelog).
 - [x] 1. Lab format, one-click start, fresh answers, answer checking, Labs page and Lab tab; two labs (Linux basics, log analysis).
 - [x] 2. Practice targets on the private lab network: nmap and web recon labs.
 - [x] 3. Labs at every level (10 labs) and progress badges.
-- [ ] 4. Sharing community labs. 5. Classroom mode. 6. Multi-network pivoting labs.
+- [x] 5. Classroom mode.
+- [x] 4. Sharing community labs.
+- [x] 6. Network segments and a pivoting lab.
 
 ## Phase 9 — Isolation (in progress)
 - [x] 1. Isolation levels per machine: gVisor sandbox and Kata microVM; malware-analysis pack only in an isolated microVM.

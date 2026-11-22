@@ -14,6 +14,7 @@ from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import (
     AuditEvent,
+    ClassMember,
     EnvironmentRecord,
     LabRun,
     ManifestRevision,
@@ -236,6 +237,8 @@ def delete_workspace(
         store.delete(snap.storage_key)  # snapshot data goes with the workspace
     for model in (EnvironmentRecord, PlanApproval, ManifestRevision, Snapshot, LabRun):
         db.query(model).filter(model.workspace_id == ws.id).delete()
+    # A class member's lab workspace: the link goes, the membership stays.
+    db.query(ClassMember).filter(ClassMember.workspace_id == ws.id).update({"workspace_id": None})
     db.delete(ws)
     record_audit(
         db,

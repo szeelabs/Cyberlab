@@ -52,6 +52,8 @@ Development mode has **no sign-in**, so the script only listens on this machine
 
 **Ready-made labs:** open **Labs**, press Start, and practise with tasks and hints: [docs/guides/labs.md](docs/guides/labs.md).
 
+**Teach a class:** one lab for a whole group, with live progress: [docs/guides/classes.md](docs/guides/classes.md).
+
 **Full virtual machines (any ISO, e.g. Android-x86):** [docs/guides/virtual-machines.md](docs/guides/virtual-machines.md).
 
 **Install on a server with one command:** `sudo ./scripts/install.sh` ([docs/guides/install.md](docs/guides/install.md)).

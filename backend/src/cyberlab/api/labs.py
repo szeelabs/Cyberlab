@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
+import secrets
 import tarfile
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +24,7 @@ from cyberlab.api.environments import (
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import (
+    CustomLab,
     EnvironmentRecord,
     LabRun,
     ManifestRevision,
@@ -29,14 +33,57 @@ from cyberlab.db import (
     record_audit,
 )
 from cyberlab.execution import ProviderAdapter, ProviderError
-from cyberlab.labs import Lab, answer_hash, check_answer, manifest_for, new_run
+from cyberlab.labs import (
+    Lab,
+    LabError,
+    answer_hash,
+    check_answer,
+    manifest_for,
+    new_run,
+    parse_lab,
+)
 from cyberlab.registry import Registry
 
 router = APIRouter(tags=["labs"])
+MAX_LABS_PER_USER = 50
 
 
-def get_labs(request: Request) -> dict[str, Lab]:
-    return request.app.state.labs
+def _custom(request: Request, row: CustomLab) -> Lab | None:
+    """A stored user lab, parsed once (re-checked whenever its content changes)."""
+    cache = request.app.state.__dict__.setdefault("custom_lab_cache", {})
+    key = (row.catalog_id, hashlib.sha256(row.content.encode()).hexdigest())
+    if key not in cache:
+        settings: Settings = request.app.state.settings
+        try:
+            lab = parse_lab(row.content, request.app.state.registry, settings.quotas)
+            cache[key] = lab.model_copy(update={"id": row.catalog_id})
+        except LabError:
+            cache[key] = None  # no longer valid with this server's registry
+    return cache[key]
+
+
+def get_labs(request: Request, db: Session = Depends(get_db)) -> dict[str, Lab]:
+    """The public catalog: built-in labs and labs people shared."""
+    labs = dict(request.app.state.labs)
+    for row in db.scalars(select(CustomLab).where(CustomLab.shared.is_(True))):
+        lab = _custom(request, row)
+        if lab is not None:
+            labs[lab.id] = lab
+    return labs
+
+
+def get_user_labs(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Lab]:
+    """Everything this user may start: the public catalog plus their own labs."""
+    labs = get_labs(request, db)
+    for row in db.scalars(select(CustomLab).where(CustomLab.owner_id == user.id)):
+        lab = _custom(request, row)
+        if lab is not None:
+            labs[lab.id] = lab
+    return labs
 
 
 def _lab(labs: dict[str, Lab], lab_id: str) -> Lab:
@@ -46,19 +93,161 @@ def _lab(labs: dict[str, Lab], lab_id: str) -> Lab:
     return lab
 
 
-@router.get("/v1/labs")
-def list_labs(labs: dict[str, Lab] = Depends(get_labs)) -> list[dict]:
+def _sorted(labs) -> list[Lab]:
     order = {"beginner": 0, "intermediate": 1, "advanced": 2}
+    return sorted(labs, key=lambda lab: (order[lab.level], lab.title))
+
+
+@router.get("/v1/labs")
+def list_labs(request: Request, labs: dict[str, Lab] = Depends(get_labs)) -> list[dict]:
+    builtin = request.app.state.labs
     return [
-        lab.public() for lab in sorted(labs.values(), key=lambda lab: (order[lab.level], lab.title))
+        lab.public() | {"source": "built-in" if lab.id in builtin else "community"}
+        for lab in _sorted(labs.values())
     ]
+
+
+# ---------------------------------------------------------------- labs written by users
+
+
+@router.get("/v1/labs/mine")
+def my_labs(
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    out = []
+    for row in db.scalars(
+        select(CustomLab).where(CustomLab.owner_id == user.id).order_by(CustomLab.created_at)
+    ):
+        lab = _custom(request, row)
+        if lab is not None:
+            out.append(lab.public() | {"source": "mine", "shared": row.shared})
+    return out
+
+
+@router.post("/v1/labs/import", status_code=201)
+async def import_lab(
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    reg: Registry = Depends(get_registry),
+) -> dict:
+    """Add a lab file you wrote. It is checked exactly like the built-in labs."""
+    body = await request.body()
+    if len(body) > settings.max_manifest_bytes:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "lab file too large")
+    try:
+        text = body.decode("utf-8")
+        lab = parse_lab(text, reg, settings.quotas)
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "lab files must be UTF-8") from exc
+    except LabError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)[:2000]) from exc
+    mine = list(db.scalars(select(CustomLab.id).where(CustomLab.owner_id == user.id)))
+    if len(mine) >= MAX_LABS_PER_USER:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"you have {MAX_LABS_PER_USER} labs; delete one first"
+        )
+    row = CustomLab(owner_id=user.id, catalog_id=f"c-{secrets.token_hex(6)}", content=text)
+    db.add(row)
+    record_audit(
+        db,
+        actor=user.subject,
+        action="lab.import",
+        target_type="lab",
+        target_id=row.catalog_id,
+        detail={"title": lab.title},
+        request_id=request_id(request),
+    )
+    db.commit()
+    return lab.model_copy(update={"id": row.catalog_id}).public() | {
+        "source": "mine",
+        "shared": False,
+    }
+
+
+def _my_row(db: Session, user: User, lab_id: str) -> CustomLab:
+    row = db.scalar(select(CustomLab).where(CustomLab.catalog_id == lab_id))
+    if row is None or row.owner_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "lab not found")
+    return row
+
+
+class SharePatch(BaseModel):
+    shared: bool
+
+
+@router.patch("/v1/labs/{lab_id}")
+def share_lab(
+    lab_id: str,
+    body: SharePatch,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    row = _my_row(db, user, lab_id)
+    row.shared = body.shared
+    record_audit(
+        db,
+        actor=user.subject,
+        action="lab.share" if body.shared else "lab.unshare",
+        target_type="lab",
+        target_id=lab_id,
+        request_id=request_id(request),
+    )
+    db.commit()
+    return {"id": lab_id, "shared": row.shared}
+
+
+@router.delete("/v1/labs/{lab_id}", status_code=204)
+def delete_lab(
+    lab_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    row = _my_row(db, user, lab_id)
+    db.delete(row)
+    record_audit(
+        db,
+        actor=user.subject,
+        action="lab.delete",
+        target_type="lab",
+        target_id=lab_id,
+        request_id=request_id(request),
+    )
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.get("/v1/labs/{lab_id}/file")
+def lab_file(
+    lab_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    labs: dict[str, Lab] = Depends(get_labs),
+):
+    """The lab file itself, to read, adapt and import elsewhere (built-in and shared labs)."""
+    _lab(labs, lab_id)
+    if lab_id in request.app.state.labs:
+        settings: Settings = request.app.state.settings
+        text = (settings.registry_dir / "labs" / f"{lab_id}.yaml").read_text("utf-8")
+    else:
+        text = db.scalar(select(CustomLab.content).where(CustomLab.catalog_id == lab_id))
+    return PlainTextResponse(
+        text,
+        media_type="application/yaml",
+        headers={"Content-Disposition": f'attachment; filename="{lab_id}.yaml"'},
+    )
 
 
 @router.get("/v1/labs/progress")
 def lab_progress(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     """The signed-in user's progress per lab: the best run (most solved, then newest)."""
     rows = db.execute(
@@ -152,7 +341,7 @@ def start_lab(
     reg: Registry = Depends(get_registry),
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     """One click: a new workspace with the lab's machines running and its files in place."""
     lab = _lab(labs, lab_id)
@@ -239,7 +428,7 @@ def workspace_lab(
     ws_id: str,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     run = _run(db, _owned(db, user, ws_id))
     return run_out(_lab(labs, run.lab_id), run)
@@ -257,7 +446,7 @@ def answer(
     request: Request,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     ws = _owned(db, user, ws_id)
     run = _run(db, ws)

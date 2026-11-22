@@ -40,6 +40,10 @@ spec:
 | `restricted-egress` | `lab` + outbound only to `allowedEgress` hosts via proxy | hostnames must be exact (no wildcards, IPs or schemes) |
 | `internet` | General outbound access | **requires approval** |
 
+In `lab` mode, `network.segments` (default `[default]`, up to 4 names) puts the machine on
+several private networks of the workspace; machines reach each other only through a shared
+segment.
+
 ## Validation rules (beyond the schema)
 | Code | Severity | Rule |
 |---|---|---|

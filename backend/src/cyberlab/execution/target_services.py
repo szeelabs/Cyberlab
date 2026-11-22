@@ -24,12 +24,21 @@ import json
 import os
 import sys
 import time
+from urllib.parse import parse_qs, urlsplit
 
 CONFIG = os.environ.get("CYBERLAB_TARGET_CONFIG", "/workspace/.cyberlab-target.json")
 HOST = os.environ.get("CYBERLAB_TARGET_HOST", "0.0.0.0")  # noqa: S104 - lab network only
 MAX_REQUEST = 16 * 1024
 TIMEOUT = 10
-REASONS = {200: "OK", 301: "Moved Permanently", 403: "Forbidden", 404: "Not Found"}
+REASONS = {
+    200: "OK",
+    301: "Moved Permanently",
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    502: "Bad Gateway",
+}
 NOT_FOUND = "<html><body><h1>404 Not Found</h1></body></html>\n"
 
 
@@ -43,6 +52,21 @@ def load(path: str, wait: float | None = None) -> dict:
     time.sleep(0.2)  # let the writer finish
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+async def respond(service: dict, raw: bytes) -> bytes:
+    line = raw.split(b"\r\n", 1)[0].decode("latin-1")
+    parts = line.split(" ")
+    target = parts[1] if len(parts) >= 2 else "/"
+    path, _, query = target.partition("?")
+    fetcher = service.get("fetchers", {}).get(path)
+    if fetcher:
+        values = parse_qs(query).get(fetcher.get("param", "url"), [])
+        if values:
+            status, text = await fetch(values[0], [h.lower() for h in fetcher.get("allow", [])])
+            route = {"status": status, "type": "text/plain", "body": text}
+            return http_response({**service, "routes": {target: route}}, raw)
+    return http_response(service, raw)
 
 
 def http_response(service: dict, raw: bytes) -> bytes:
@@ -73,6 +97,42 @@ def http_response(service: dict, raw: bytes) -> bytes:
     return out if method == "HEAD" else out + data
 
 
+FETCH_LIMIT = 64 * 1024
+
+
+async def fetch(url: str, allow: list[str]) -> tuple[int, str]:
+    """The deliberately unsafe "link preview" (SSRF) of some practice targets: it fetches a
+    URL *from the target's point of view*. Limited to plain http and to the lab machines
+    named in the config, and the lab network has no internet anyway."""
+    u = urlsplit(url)
+    host = (u.hostname or "").lower()
+    if u.scheme != "http" or host not in allow:
+        return 400, "Preview only works for http links to our own servers.\n"
+    port = u.port or 80
+    path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
+    except (OSError, TimeoutError):
+        return 502, f"Preview failed: could not connect to {host}:{port}\n"
+    try:
+        writer.write(f"GET {path} HTTP/1.0\r\nHost: {host}\r\n\r\n".encode())
+        await writer.drain()
+        raw = b""
+        while len(raw) < FETCH_LIMIT:
+            chunk = await asyncio.wait_for(reader.read(4096), timeout=3)
+            if not chunk:
+                break
+            raw += chunk
+    except (OSError, TimeoutError):
+        return 502, f"Preview failed: {host}:{port} did not answer\n"
+    finally:
+        writer.close()
+    head, _, body = raw.partition(b"\r\n\r\n")
+    if not head.startswith(b"HTTP/"):
+        body = raw  # not a web server: show what it sent
+    return 200, f"Preview of {url}:\n" + body[:FETCH_LIMIT].decode("utf-8", "replace")
+
+
 async def handle(service: dict, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     try:
         if service["kind"] == "banner":
@@ -88,7 +148,7 @@ async def handle(service: dict, reader: asyncio.StreamReader, writer: asyncio.St
                     break
                 raw += chunk
             if raw:
-                writer.write(http_response(service, raw))
+                writer.write(await respond(service, raw))
                 await writer.drain()
     except (TimeoutError, ConnectionError, asyncio.IncompleteReadError):
         pass

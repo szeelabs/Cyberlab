@@ -83,12 +83,14 @@ export function timeAgo(iso: string | null): string {
 }
 
 // ---------------------------------------------------------------- hash router
-export type Route = { page: "dashboard" } | { page: "labs" } | { page: "workspace"; id: string; tab: string } | { page: "tools" } | { page: "settings" };
+export type Route = { page: "dashboard" } | { page: "labs" } | { page: "classes" } | { page: "class"; id: string } | { page: "workspace"; id: string; tab: string } | { page: "tools" } | { page: "settings" };
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   if (parts[0] === "workspace" && parts[1]) return { page: "workspace", id: decodeURIComponent(parts[1]), tab: parts[2] ?? "setup" };
   if (parts[0] === "labs") return { page: "labs" };
+  if (parts[0] === "classes" && parts[1]) return { page: "class", id: decodeURIComponent(parts[1]) };
+  if (parts[0] === "classes") return { page: "classes" };
   if (parts[0] === "tools") return { page: "tools" };
   if (parts[0] === "settings") return { page: "settings" };
   return { page: "dashboard" };

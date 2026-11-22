@@ -55,6 +55,8 @@ export type Lab = {
   introduction: string;
   machines: { name: string; baseImage: string; toolPacks: string[]; desktop: boolean }[];
   tasks: LabTask[];
+  source?: "built-in" | "community" | "mine";
+  shared?: boolean;
 };
 export type VmMedia = {
   state: "none" | "downloading" | "copying" | "ready" | "failed";
@@ -62,6 +64,30 @@ export type VmMedia = {
   total?: number | null;
   error?: string | null;
   sha256?: string | null;
+};
+export type ClassProgress = {
+  started: boolean;
+  solved: number;
+  total: number;
+  completed?: boolean;
+  machines?: { name: string; state: string }[];
+  lastSolvedAt?: string | null;
+};
+export type ClassInfo = {
+  id: string;
+  name: string;
+  labId: string;
+  labTitle: string;
+  joinCode: string;
+  open: boolean;
+  members: number;
+  createdAt: string;
+};
+export type JoinedClass = { id: string; name: string; labId: string; labTitle: string; workspaceId: string | null; open: boolean; progress: ClassProgress };
+export type Roster = ClassInfo & {
+  roster: { memberId: string; student: string; joinedAt: string; progress: ClassProgress }[];
+  completed: number;
+  tasks: { id: string; title: string }[];
 };
 export type LabProgress = {
   labs: Record<string, { workspaceId: string; workspace: string; solved: number; total: number; completed: boolean; startedAt: string }>;
@@ -225,6 +251,20 @@ export const api = {
     request<unknown>(`${ws(id)}/approvals`, json("POST", { revision, approve: codes })),
 
   labs: () => request<Lab[]>("/v1/labs"),
+  classes: () => request<{ teaching: ClassInfo[]; joined: JoinedClass[] }>("/v1/classes"),
+  createClass: (name: string, labId: string) => request<ClassInfo>("/v1/classes", json("POST", { name, labId })),
+  classRoster: (id: string) => request<Roster>(`/v1/classes/${enc(id)}`),
+  setClassOpen: (id: string, open: boolean) => request<ClassInfo>(`/v1/classes/${enc(id)}`, json("PATCH", { open })),
+  joinClass: (code: string) => request<{ id: string; name: string; labTitle: string }>("/v1/classes/join", json("POST", { code })),
+  startClassLab: (id: string) => request<{ workspaceId: string; existing: boolean }>(`/v1/classes/${enc(id)}/start`, { method: "POST" }),
+  resetStudent: (id: string, memberId: string) =>
+    request<{ reset: boolean }>(`/v1/classes/${enc(id)}/members/${enc(memberId)}/reset`, { method: "POST" }),
+  myLabs: () => request<Lab[]>("/v1/labs/mine"),
+  importLab: (text: string) =>
+    request<Lab>("/v1/labs/import", { method: "POST", headers: { "Content-Type": "application/yaml" }, body: text }),
+  shareLab: (id: string, shared: boolean) => request<{ shared: boolean }>(`/v1/labs/${enc(id)}`, json("PATCH", { shared })),
+  deleteLab: (id: string) => request<void>(`/v1/labs/${enc(id)}`, { method: "DELETE" }),
+  labFileUrl: (id: string) => `/v1/labs/${enc(id)}/file`,
   labProgress: () => request<LabProgress>("/v1/labs/progress"),
   startLab: (labId: string) => request<LabRun & { workspaceId: string }>(`/v1/labs/${enc(labId)}/start`, { method: "POST" }),
   /** The lab running in a workspace, or null if it isn't a lab workspace. */
