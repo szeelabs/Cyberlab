@@ -38,12 +38,14 @@ tasks:
   - id: web-port
     title: Find the web server
     text: |
-      Scan the target with `nmap target`. It lists every open port it finds and guesses the
-      service from the port number. Which port runs the web server (http)?
+      Scan the target with `nmap target`. A plain scan only *guesses* each service's name from
+      its port number, and the guess can be wrong. Add `-sV` so nmap talks to each service and
+      reports what really answers. Which port runs the web server (http)?
     answer: web-port
     answerFormat: a port number
     hints:
-      - "Run `nmap target` and look for a line with \"http\" in it."
+      - "Compare `nmap target` with `nmap -sV target`: look at the SERVICE column."
+      - "With `-sV`, the web server's line says \"http\" and nginx."
   - id: ssh-version
     title: Which SSH version is it running?
     text: |

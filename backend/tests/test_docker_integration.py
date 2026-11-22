@@ -693,8 +693,8 @@ def test_target_labs_end_to_end(client, lab):
         sh(attacker, wait, interpreter="bash")
         answers = {}
         if lab == "network-scanning":
-            _, scan = sh(attacker, "nmap -Pn target")
-            answers["web-port"] = re.search(r"^(\d+)/tcp\s+open\s+\S*http", scan, re.M).group(1)
+            _, scan = sh(attacker, "nmap -Pn -sV target")
+            answers["web-port"] = re.search(r"^(\d+)/tcp\s+open\s+http\s", scan, re.M).group(1)
             _, ver = sh(attacker, "nmap -Pn -sV -p 22 target")
             answers["ssh-version"] = re.search(r"OpenSSH[ _]([0-9.]+p\d)", ver).group(1)
             _, full = sh(attacker, "nmap -Pn -p- --min-rate 2000 target")

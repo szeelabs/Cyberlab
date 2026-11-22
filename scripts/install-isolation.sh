@@ -60,10 +60,21 @@ pat = r"kata-static-.*-" + os.environ["KARCH"] + r"\.tar\.(xz|zst)$"
 print(next(a["browser_download_url"] for a in assets if re.match(pat, a["name"])))')"
     TMP="$(mktemp -d)"
     curl -fsSL "$URL" -o "$TMP/kata.tar"
+    # Find the shim inside the release instead of assuming the archive's layout.
+    SHIM_IN_TAR="$(tar -tf "$TMP/kata.tar" | grep -m1 -E '(^|/)containerd-shim-kata-v2$' || true)"
+    if [[ -z "$SHIM_IN_TAR" ]]; then
+      echo "Unexpected Kata release layout; first entries:" >&2
+      tar -tf "$TMP/kata.tar" | head -40 >&2
+      die "couldn't find containerd-shim-kata-v2 in $URL"
+    fi
     tar -C / -xf "$TMP/kata.tar"
     rm -rf "$TMP"
-    ln -sf /opt/kata/bin/containerd-shim-kata-v2 /usr/local/bin/containerd-shim-kata-v2
-    ln -sf /opt/kata/bin/containerd-shim-kata-v2 /usr/bin/containerd-shim-kata-v2
+    KATA_SHIM="/${SHIM_IN_TAR#./}"
+    KATA_SHIM="$(readlink -f "$KATA_SHIM")"
+    [[ -x "$KATA_SHIM" ]] || die "the Kata shim isn't executable at $KATA_SHIM"
+    echo "    Kata shim: $KATA_SHIM"
+    ln -sf "$KATA_SHIM" /usr/local/bin/containerd-shim-kata-v2
+    ln -sf "$KATA_SHIM" /usr/bin/containerd-shim-kata-v2
     # Let the Kata shim open /dev/kvm.
     echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' > /etc/udev/rules.d/99-kvm4all.rules
     udevadm control --reload-rules && udevadm trigger --name-match=kvm || true
@@ -71,7 +82,7 @@ print(next(a["browser_download_url"] for a in assets if re.match(pat, a["name"])
 fi
 
 say "Registering the runtimes with Docker"
-SANDBOX=$WANT_SANDBOX MICROVM=$WANT_MICROVM python3 - <<'PY'
+SANDBOX=$WANT_SANDBOX MICROVM=$WANT_MICROVM SHIM="${KATA_SHIM:-}" python3 - <<'PY'
 import json, os
 path = "/etc/docker/daemon.json"
 conf = json.load(open(path)) if os.path.exists(path) and os.path.getsize(path) else {}
@@ -80,7 +91,7 @@ if os.environ["SANDBOX"] == "1":
     runtimes["runsc"] = {"path": "/usr/bin/runsc"}
 if os.environ["MICROVM"] == "1":
     # The shim's full path, so Docker finds it whatever its search path is.
-    runtimes["kata"] = {"runtimeType": "/opt/kata/bin/containerd-shim-kata-v2"}
+    runtimes["kata"] = {"runtimeType": os.environ["SHIM"]}
 os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w") as f:
     json.dump(conf, f, indent=2)
@@ -90,6 +101,7 @@ for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
 
 say "Checking (host kernel: $(uname -r))"
 FAILED=0
+docker pull -q mirror.gcr.io/library/busybox >/dev/null
 check() { # level runtime
   local kernel
   if kernel="$(docker run --rm --runtime "$2" mirror.gcr.io/library/busybox uname -r 2>&1)" \
