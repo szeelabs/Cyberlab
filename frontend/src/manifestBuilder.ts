@@ -18,6 +18,9 @@ export type EnvDraft = {
   isolation: Isolation;
 };
 
+/** The base image that runs full virtual machines from an ISO (needs KVM on the server). */
+export const VM_BASE = "vm-host";
+
 export type Isolation = "container" | "sandbox" | "microvm";
 export const ISOLATION: Record<Isolation, string> = {
   container: "Container: fast, shares the server's kernel (default)",
@@ -69,6 +72,8 @@ export function formProblems(lab: LabDraft): string[] {
     if (!SLUG.test(e.name)) out.push(`${label}: name must be lowercase letters, digits and dashes.`);
     if (seen.has(e.name)) out.push(`${label}: another machine is already called "${e.name}".`);
     seen.add(e.name);
+    if (e.baseImage === VM_BASE && e.size === "small")
+      out.push(`${label}: a full virtual machine needs Medium or Large (it runs a whole operating system).`);
     if (e.desktop && e.size === "small")
       out.push(`${label}: the remote desktop needs about 1 GiB more memory; choose Medium or Large.`);
     if (e.network === "restricted-egress" && e.allowedEgress.length === 0)
@@ -105,7 +110,12 @@ export function toYaml(lab: LabDraft): string {
     if (e.ttlHours) lc.push(`ttlHours: ${e.ttlHours}`);
     if (e.ephemeral) lc.push("ephemeral: true");
     lines.push(`      lifecycle: {${lc.join(", ")}}`);
-    if (e.desktop) lines.push("      access: {desktop: true}");
+    if (e.baseImage === VM_BASE) {
+      // A full virtual machine: used through its screen, disk = machine storage minus room for the ISO.
+      lines.push("      access: {desktop: true}");
+      lines.push(`      vm: {boot: "boot.iso", diskGiB: ${Math.max(2, size.storageGiB - 4)}}`);
+    } else if (e.desktop) lines.push("      access: {desktop: true}");
+    if (e.baseImage === VM_BASE) continue;
     if (e.isolation !== "container") lines.push(`      isolation: ${e.isolation}`);
   }
   return lines.join("\n") + "\n";

@@ -72,7 +72,7 @@ images + changelog).
 
 ## Phase 9 — Isolation (in progress)
 - [x] 1. Isolation levels per machine: gVisor sandbox and Kata microVM; malware-analysis pack only in an isolated microVM.
-- [ ] 2. Android (needs KVM-backed emulation; see the status page).
+- [x] 2. Full virtual machines from any ISO (QEMU/KVM): the way to run Android-x86 and Predator-OS.
 
 ## Exact next steps
 1. Merge Phase 1 and enable branch protection on `main` with CI required.

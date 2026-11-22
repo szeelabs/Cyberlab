@@ -911,3 +911,93 @@ spec:
             assert "gvisor" in msg.lower() or code != 0
     finally:
         destroy_all(client, ws, [env])
+
+
+@pytest.mark.skipif(
+    os.environ.get("CYBERLAB_VM_TESTS") != "1", reason="set CYBERLAB_VM_TESTS=1 (needs KVM)"
+)
+def test_full_vm_boots_an_iso_from_a_link(client):
+    """The whole path: approval, a VM machine, boot media downloaded by the server from the
+    official Alpine site (checksum verified), QEMU/KVM booting it, and its screen over the
+    remote desktop's VNC channel."""
+    import json as _json
+    import time as _time
+
+    import httpx
+    import yaml
+
+    base = "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/"
+    releases = yaml.safe_load(httpx.get(base + "latest-releases.yaml", timeout=30).text)
+    iso = next(r for r in releases if r["flavor"] == "alpine-virt" and r["file"].endswith(".iso"))
+    manifest = """apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {name: it-vm}
+spec:
+  environments:
+    - name: pc
+      baseImage: vm-host
+      resources: {cpu: 1, memoryMiB: 1536, storageGiB: 8}
+      network: {mode: isolated}
+      access: {desktop: true}
+      vm: {boot: boot.iso, diskGiB: 2}
+"""
+    ws = client.post("/v1/workspaces", json={"name": "it-vm"}, headers=auth()).json()["id"]
+    client.put(f"/v1/workspaces/{ws}/manifest", content=manifest, headers=YAML | auth())
+    r = client.post(
+        f"/v1/workspaces/{ws}/approvals",
+        json={"revision": 1, "approve": ["security.full-vm"]},
+        headers=auth(),
+    )
+    assert r.status_code == 201, r.text
+    r = client.post(f"/v1/workspaces/{ws}/environments", json={}, headers=auth())
+    assert r.status_code == 201, r.text
+    (env,) = r.json()["environments"]
+    try:
+        assert env["state"] == "running", env
+        name = env["resources"]["container"]
+        media = f"/v1/workspaces/{ws}/environments/{env['id']}/vm/media"
+        r = client.post(
+            media, json={"url": base + iso["file"], "sha256": iso["sha256"]}, headers=auth()
+        )
+        assert r.status_code == 202, r.text
+        for _ in range(300):
+            st = client.get(media, headers=auth()).json()
+            if st["state"] in ("ready", "failed"):
+                break
+            _time.sleep(1)
+        assert st["state"] == "ready", st
+        # QEMU starts once the ISO has stopped growing, with KVM, as the unprivileged user
+        for _ in range(60):
+            code, ps = sh(name, "ps -o user=,args= -C qemu-system-x86_64 || true")
+            if "qemu" in ps:
+                break
+            _time.sleep(1)
+        assert "-enable-kvm" in ps and ps.split()[0] in ("cyberlab", "1000"), ps
+        # the VM's screen through the desktop channel (VNC handshake with QEMU)
+        r = client.post(f"/v1/workspaces/{ws}/environments/{env['id']}/desktop", headers=auth())
+        assert r.status_code == 201, r.text
+        with client.websocket_connect("/v1/desktop") as sock:
+            sock.send_text(_json.dumps({"type": "auth", "ticket": r.json()["ticket"]}))
+            assert _json.loads(sock.receive_text())["type"] == "ready"
+            buf = b""
+
+            def need(n):
+                nonlocal buf
+                while len(buf) < n:
+                    buf += sock.receive_bytes()
+                out, buf = buf[:n], buf[n:]
+                return out
+
+            assert need(12).startswith(b"RFB 003.00")
+            sock.send_bytes(b"RFB 003.008\n")
+            count = need(1)[0]
+            assert 1 in need(count)
+            sock.send_bytes(bytes([1]))
+            assert need(4) == b"\0\0\0\0"
+            sock.send_bytes(bytes([1]))
+            width, height = int.from_bytes(need(2), "big"), int.from_bytes(need(2), "big")
+            assert width >= 320 and height >= 200, (width, height)
+        code, files = sh(name, "ls -la /workspace")
+        assert "disk.qcow2" in files and "boot.iso" in files, files
+    finally:
+        destroy_all(client, ws, [env])

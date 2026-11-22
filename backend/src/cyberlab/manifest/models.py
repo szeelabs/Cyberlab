@@ -70,6 +70,13 @@ class Lifecycle(_Model):
     ttl_hours: int | None = Field(default=None, alias="ttlHours", ge=1)
 
 
+class VirtualMachine(_Model):
+    """A full virtual machine (QEMU/KVM) booted from an ISO or disk in /workspace."""
+
+    boot: str = Field(default="boot.iso", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+    disk_gib: int = Field(default=16, alias="diskGiB", ge=1, le=512)
+
+
 class Environment(_Model):
     name: str = Field(pattern=SLUG)
     base_image: str = Field(alias="baseImage", pattern=SLUG)
@@ -85,6 +92,8 @@ class Environment(_Model):
     # container, shares the server's kernel), "sandbox" (gVisor: its own kernel written in
     # Go) or "microvm" (Kata Containers: a real lightweight VM with its own Linux kernel).
     isolation: Literal["container", "sandbox", "microvm"] = "container"
+    # A full virtual machine (base image "vm-host"): boots any OS from an ISO you add.
+    vm: VirtualMachine | None = None
 
     @field_validator("tool_packs")
     @classmethod

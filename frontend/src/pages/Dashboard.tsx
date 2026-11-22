@@ -37,6 +37,12 @@ export function Dashboard() {
             {execution && <Pill kind={execution.status === "CONNECTED" ? "ok" : "bad"}>{execution.status}</Pill>}
           </div>
           {execution && <div className="muted small">{execution.detail}</div>}
+          {execution?.status === "CONNECTED" && (
+            <div className="muted small" aria-label="Machine types">
+              Isolation: {Array.isArray(execution.isolation) ? (execution.isolation as string[]).join(", ") : "container"} · Full
+              virtual machines: {execution.fullVm ? "available" : "not available (needs KVM)"}
+            </div>
+          )}
           <div className="row">
             <span>Snapshot storage</span>
             {storage && <Pill kind={storage.status === "CONNECTED" ? "ok" : "bad"}>{storage.status}</Pill>}

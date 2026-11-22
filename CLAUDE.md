@@ -141,5 +141,6 @@ answer checking, Labs page, two labs (PR #22); step 2, practice targets + nmap a
 Step 3: 10 labs at every level + progress badges; forgot password; one-command installer
 (`scripts/install.sh`). Plan: `docs/plans/ready-made-labs.md`.
 **Phase 9 (Isolation):** step 1, isolation levels container/sandbox (gVisor)/microvm (Kata),
-`scripts/install-isolation.sh`, Malware Analysis pack (isolated microVM only). Next: Android research.
+`scripts/install-isolation.sh`, Malware Analysis pack (isolated microVM only) (PR #24); step 2, full VMs
+from any ISO (`vm-host`, QEMU/KVM, boot media from a link) for Predator-OS/Android-x86. Next: classroom mode.
 Details: `docs/DEVELOPMENT_STATUS.md`.

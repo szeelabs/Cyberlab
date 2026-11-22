@@ -77,3 +77,14 @@ describe("isolation", () => {
     expect(yaml).toContain("      isolation: microvm\n");
   });
 });
+
+describe("full virtual machines", () => {
+  it("writes a vm block with the screen on and no isolation", () => {
+    const env = { ...newEnvironment(0), baseImage: "vm-host", size: "large" as const, isolation: "microvm" as const };
+    const yaml = toYaml({ name: "a", description: "", environments: [env] });
+    expect(yaml).toContain("      access: {desktop: true}\n");
+    expect(yaml).toContain('      vm: {boot: "boot.iso", diskGiB: 12}\n');
+    expect(yaml).not.toContain("isolation");
+    expect(formProblems({ name: "a", description: "", environments: [{ ...env, size: "small" }] }).join(" ")).toContain("Medium or Large");
+  });
+});

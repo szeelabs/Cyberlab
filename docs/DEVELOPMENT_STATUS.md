@@ -261,6 +261,15 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Web app | Isolation choice in the beginner form; levels the server lacks are shown as not installed | `components/ManifestBuilder.tsx`, `manifestBuilder.ts` |
 | Tests | Policy (malware pack refused in container/sandbox and on a network; allowed in an isolated microVM with approval), AI helper excludes it, runtime detection, run args per level with hardening kept, refusal of missing runtimes, validated names, API refusal and success. CI job `isolation`: the install script on a GitHub runner, then real CyberLab machines in gVisor and in Kata report their own kernel, the right runtime, the unprivileged user, a read-only system, and working files | `tests/test_isolation.py`, `tests/test_docker_integration.py`, `.github/workflows/ci.yml` |
 
+## Implemented (Phase 9, step 2 — full virtual machines)
+| Area | What works | Where |
+|---|---|---|
+| Full VMs | Manifest `vm: {boot, diskGiB}` with base `vm-host` (Debian + QEMU). The machine's launcher waits for the ISO to finish arriving, creates `disk.qcow2`, and boots QEMU with KVM, QEMU's seccomp sandbox, no network port (VNC on a Unix socket in `/tmp`); the remote desktop connects to that socket. Only `/dev/kvm` (and its group) is added to the usual hardening. VM network follows the machine's network mode (`isolated` = none). Policy: `vm-host` ⇔ `vm`, no packs/isolation/role, desktop required, enough storage, approval required. KVM detected on the Docker host (cached); missing KVM refused clearly | `manifest/models.py`, `manifest/policy.py`, `execution/vm.sh`, `execution/vm-desktop.sh`, `execution/images.py`, `execution/docker.py` |
+| Boot media from a link | `POST/GET .../vm/media`: the server downloads an ISO into the machine (background, progress), https only, public addresses only with every redirect re-checked, size cap, optional SHA-256, published under its final name only when complete; audited | `api/vm.py` |
+| Web app | Beginner form writes the VM block for "Full virtual machine"; Environments: "full virtual machine" label and an **Operating system** panel (link, checksum, progress) | `manifestBuilder.ts`, `components/VmMedia.tsx`, `pages/Workspace.tsx` |
+| Tests | Policy (6 refusals + approval), image, launcher scripts, run args (only the KVM device added, memory/CPU/network), KVM probe and cache, unsafe links (http, credentials, private, metadata, loopback), checked redirects, size cap, API (approval, no KVM, download → part file → rename, wrong checksum, ownership). CI (`isolation` job, KVM): the official Alpine ISO is downloaded by the server with its checksum, QEMU runs with KVM as the unprivileged user, and its screen answers a VNC handshake through the desktop channel | `tests/test_vm.py`, `tests/test_docker_integration.py` |
+| Guide | `docs/guides/virtual-machines.md` | |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -345,7 +354,7 @@ real limits (for example Codespaces: about 32 GB disk and a monthly free-hours a
 | Kali Linux | **Implemented** (`kali-rolling` base image) | container, browser terminal, remote desktop; all its tool packs (including detection-engineering) are built and smoke-tested in CI |
 | Parrot OS | **Implemented** (`parrot-core` base image) | official `parrotsec/core` image (Parrot Security 7, Debian-based); boot and safe user tested locally, tool-pack builds tested in CI |
 | BlackArch | **Implemented** (`blackarch` base image) | official `blackarchlinux/blackarch` image; recipes use `pacman` (`family: arch`, per-tool `archPackage`); boot and safe user tested locally, tool-pack builds tested in CI |
-| Predator-OS | Unverified | no official container image found yet; would need checking |
-| Android | Planned, later | needs an emulator with KVM (hardware virtualisation), which free cloud hosts usually lack; fits the own-server / microVM work |
+| Predator-OS | **Possible as a full VM, not tested yet** | no container image exists (ISO only); boot its official ISO in a full virtual machine (`vm-host`, needs KVM). Full VMs are tested with Alpine's ISO, not Predator-OS itself |
+| Android | **Possible as a full VM (Android-x86 / BlissOS ISO), not tested yet** | needs KVM on the server; containers (redroid) would need `--privileged` and kernel modules, which CyberLab refuses |
 | Cisco Packet Tracer | **Path built, not tested with Packet Tracer itself** | download the `.deb` with your Cisco NetAcad account, upload it to a machine with a remote desktop (x86 server: Cisco publishes it for amd64 only), click Install. The install feature is tested with a real `.deb`; Packet Tracer itself is not (needs a Cisco account) |
-| VMware | Not planned | it is a commercial hypervisor and cannot run inside a container; CyberLab itself plays VMware's role (machines + lab networks) |
+| VMware-style labs | **Implemented** | multi-machine labs on private networks, microVMs, and full virtual machines from any ISO with their screen in the browser (VMware itself is commercial and isn't needed) |

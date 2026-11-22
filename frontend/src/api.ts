@@ -35,6 +35,8 @@ export type Environment = {
   /** False for practice targets and machines with terminal access turned off. */
   terminal: boolean;
   role: "workstation" | "target";
+  /** Set for full virtual machines (QEMU/KVM booting an ISO). */
+  vm: { boot: string; diskGiB: number } | null;
   image: string | null;
   lastActivityAt: string | null;
   expiresAt: string | null;
@@ -53,6 +55,13 @@ export type Lab = {
   introduction: string;
   machines: { name: string; baseImage: string; toolPacks: string[]; desktop: boolean }[];
   tasks: LabTask[];
+};
+export type VmMedia = {
+  state: "none" | "downloading" | "copying" | "ready" | "failed";
+  bytes?: number;
+  total?: number | null;
+  error?: string | null;
+  sha256?: string | null;
 };
 export type LabProgress = {
   labs: Record<string, { workspaceId: string; workspace: string; solved: number; total: number; completed: boolean; startedAt: string }>;
@@ -227,6 +236,9 @@ export const api = {
   answer: (id: string, task: string, answer: string) =>
     request<LabRun & { correct: boolean }>(`${ws(id)}/lab/answer`, json("POST", { task, answer })),
 
+  vmMedia: (id: string, e: string) => request<VmMedia>(`${env(id, e)}/vm/media`),
+  addVmMedia: (id: string, e: string, url: string, sha256: string | null) =>
+    request<VmMedia>(`${env(id, e)}/vm/media`, json("POST", { url, sha256 })),
   environments: (id: string) => request<Environment[]>(`${ws(id)}/environments?refresh=true`),
   provision: (id: string) => request<{ environments: Environment[] }>(`${ws(id)}/environments`, json("POST", {})),
   start: (id: string, e: string) => request<Environment>(`${env(id, e)}/start`, { method: "POST" }),

@@ -40,6 +40,7 @@ from cyberlab.execution.images import (
     DESKTOP_COMMAND,
     IMAGE_REPOSITORY,
     TARGET_COMMAND,
+    VM_COMMAND,
     ImageRecipe,
     ImageRecipeError,
     render,
@@ -251,6 +252,7 @@ class DockerAdapter:
         sandbox_runtime: str = "runsc",
         microvm_runtime: str = "kata",
     ) -> None:
+        self._kvm: tuple[float, int | None] | None = None  # (checked at, KVM group id)
         self._runtimes = {
             "sandbox": _check("runtime", sandbox_runtime, _RUNTIME),
             "microvm": _check("runtime", microvm_runtime, _RUNTIME),
@@ -429,6 +431,22 @@ class DockerAdapter:
         if env.isolation != "container":
             args += ["--runtime", self._runtimes[env.isolation]]
         command = ["sleep", "infinity"]
+        if env.vm is not None:
+            gid = self.kvm_group()
+            if gid is None:  # pragma: no cover - provision checks first
+                raise ProviderError("this server has no KVM")
+            # Only the KVM device is added; the user, capabilities and read-only system
+            # stay as for every machine. QEMU's user-mode network uses the container's
+            # network, so the machine's network mode still decides what the VM can reach.
+            args += ["--device", "/dev/kvm", "--group-add", str(gid)]
+            args += [
+                "--env", f"CYBERLAB_VM_BOOT={env.vm.boot}",
+                "--env", f"CYBERLAB_VM_DISK_GIB={env.vm.disk_gib}",
+                "--env", f"CYBERLAB_VM_MEMORY_MIB={max(256, env.resources.memory_mib - 384)}",
+                "--env", f"CYBERLAB_VM_CPUS={max(1, int(env.resources.cpu))}",
+                "--env", f"CYBERLAB_VM_NETWORK={'none' if network == 'none' else 'user'}",
+            ]  # fmt: skip
+            command = [VM_COMMAND]
         if env.role == "target":
             # Practice services on the usual low ports (21, 22, 80) without any capability:
             # this setting only affects the container's own network namespace.
@@ -467,7 +485,26 @@ class DockerAdapter:
             cost,
             normalize_arch(arch) or "unknown",
             self.isolation_levels(),
+            self.kvm_group() is not None,
         )
+
+    KVM_PROBE_IMAGE = "docker.io/library/busybox:1.36"
+
+    def kvm_group(self) -> int | None:
+        """The group id of /dev/kvm on the Docker host, or None without KVM. Cached for
+        five minutes: it starts a tiny throwaway container."""
+        now = time.monotonic()
+        if self._kvm is not None and now - self._kvm[0] < 300:
+            return self._kvm[1]
+        res = self._docker(
+            "run", "--rm", "--network", "none", "--device", "/dev/kvm",
+            self.resolve_image(self.KVM_PROBE_IMAGE), "stat", "-c", "%g", "/dev/kvm",
+            timeout=120, ok=True,
+        )  # fmt: skip
+        out = (res.stdout or "").strip()
+        gid = int(out) if res.returncode == 0 and out.isdigit() else None
+        self._kvm = (now, gid)
+        return gid
 
     def isolation_levels(self) -> tuple[str, ...]:
         """Which isolation levels this Docker Engine has a runtime for."""
@@ -481,6 +518,11 @@ class DockerAdapter:
     def provision(self, request: ProvisionRequest) -> ProvisionResult:
         env = request.environment
         n = self.names(request.workspace_key, env.name)
+        if env.vm is not None and self.kvm_group() is None:
+            raise ProviderError(
+                "this server has no KVM (/dev/kvm), which full virtual machines need "
+                "(see docs/guides/virtual-machines.md)"
+            )
         if env.isolation != "container" and env.isolation not in self.isolation_levels():
             what = {"sandbox": "gVisor (runsc)", "microvm": "Kata Containers"}[env.isolation]
             raise ProviderError(
@@ -514,6 +556,7 @@ class DockerAdapter:
                     request.source_rewrite,
                     desktop=request.environment.access.desktop,
                     target=request.environment.role == "target",
+                    vm=request.environment.vm is not None,
                 )
             except ImageRecipeError as exc:
                 raise ProviderError(str(exc)) from exc
@@ -808,6 +851,13 @@ class DockerAdapter:
         res = self._exec(provider_ref, "sh", "-c", 'cat > "$1"', "sh", path, input=data)
         if res.returncode != 0:
             raise _file_error(res.stderr, path)
+
+    def rename_file(self, provider_ref: str, source: str, target: str) -> None:
+        """Rename inside the environment (as its own user), e.g. to publish a finished
+        download under its final name in one step."""
+        res = self._exec(provider_ref, "mv", "-f", "--", source, target)
+        if res.returncode != 0:
+            raise _file_error(res.stderr, target)
 
     def extract_files(self, provider_ref: str, archive: bytes) -> None:
         """Unpack a tar archive into /workspace, as the environment's own user.

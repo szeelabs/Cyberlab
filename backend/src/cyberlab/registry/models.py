@@ -61,6 +61,11 @@ class BaseImage(BaseModel):
     description: str = ""
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     supports_desktop: bool = Field(default=False, alias="supportsDesktop")
+    vm_host: bool = Field(
+        default=False,
+        alias="vmHost",
+        description="Runs a full virtual machine (environments with a 'vm' block); needs KVM",
+    )
     target_only: bool = Field(
         default=False,
         alias="targetOnly",

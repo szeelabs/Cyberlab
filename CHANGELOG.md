@@ -6,6 +6,9 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Full virtual machines: boot any ISO (for example Android-x86 or Predator-OS) with
+  QEMU/KVM and use its screen in the browser; the server downloads the ISO from a link
+  straight into the machine. Needs KVM on the server.
 - Stronger isolation per machine: `sandbox` (gVisor) and `microvm` (Kata Containers, its
   own kernel), set up with `sudo ./scripts/install-isolation.sh`. A Malware Analysis tool
   pack, allowed only in an isolated microVM.
