@@ -53,6 +53,8 @@ class ProviderStatus:
     # Isolation levels this server can run: always "container"; "sandbox" with gVisor,
     # "microvm" with Kata Containers.
     isolation: tuple[str, ...] = ("container",)
+    # Whether the server can run full virtual machines (it has KVM).
+    full_vm: bool = False
 
 
 @dataclass(frozen=True)

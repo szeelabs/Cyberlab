@@ -96,6 +96,7 @@ def _env_out(e: EnvironmentRecord) -> dict:
         "terminal": bool((e.spec.get("access") or {}).get("terminal", True))
         and e.spec.get("role") != "target",
         "role": e.spec.get("role", "workstation"),
+        "vm": e.spec.get("vm"),
         # True once the environment runs an image built with its tool packs installed.
         "toolPacksInstalled": bool(e.resources.get("image")) and e.state != EnvState.failed,
         "image": e.resources.get("image"),
@@ -165,6 +166,7 @@ def execution_status(
         "costClass": st.cost_class.value,
         "architecture": st.architecture,
         "isolation": list(st.isolation),
+        "fullVm": st.full_vm,
     }
 
 
@@ -355,7 +357,14 @@ def provision_environments(
             "Choose another operating system for that machine in Setup.",
         )
 
-    available = adapter.status().isolation
+    st_now = adapter.status()
+    if any(e.vm is not None for e in manifest.spec.environments) and not st_now.full_vm:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This server has no KVM, which full virtual machines need. Run CyberLab on a "
+            "server with KVM (docs/guides/virtual-machines.md).",
+        )
+    available = st_now.isolation
     missing = sorted({e.isolation for e in manifest.spec.environments} - set(available))
     if missing:
         names = {"sandbox": "a sandbox (gVisor)", "microvm": "microVMs (Kata Containers)"}

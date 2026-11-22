@@ -455,8 +455,8 @@ jobs:
         run: sudo docker logs --tail 80 cyberlab || true
 
   isolation:
-    # Stronger isolation on real runtimes: gVisor (sandbox) and Kata Containers (microVM,
-    # which needs KVM; GitHub's Linux runners have it).
+    # Stronger isolation on real runtimes: gVisor (sandbox) and Kata Containers (microVM),
+    # and full virtual machines (QEMU/KVM) booting a real ISO. GitHub's Linux runners have KVM.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: backend
@@ -478,4 +478,5 @@ jobs:
           CYBERLAB_DOCKER_TESTS: "1"
           CYBERLAB_TEST_IMAGE_MIRROR: mirror.gcr.io
           CYBERLAB_ISOLATION_TESTS: sandbox,microvm
-        run: pytest -v tests/test_docker_integration.py -k "stronger_isolation"
+          CYBERLAB_VM_TESTS: "1"
+        run: pytest -v tests/test_docker_integration.py -k "stronger_isolation or full_vm"

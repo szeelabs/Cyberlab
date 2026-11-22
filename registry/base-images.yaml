@@ -45,3 +45,12 @@
   minResources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
   supportsDesktop: false
   targetOnly: true
+- id: vm-host
+  name: Full virtual machine (QEMU/KVM)
+  family: debian
+  image: docker.io/library/debian:12-slim
+  description: Boots any operating system from an ISO you add (for example Android-x86 or Predator-OS), shown on the remote desktop. Needs KVM on the server.
+  minResources: {cpu: 1, memoryMiB: 1536, storageGiB: 8}
+  supportsDesktop: true
+  vmHost: true
+  architectures: [amd64]

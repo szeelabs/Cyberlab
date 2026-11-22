@@ -69,6 +69,20 @@ def desktop_script() -> str:
     return resources.files("cyberlab.execution").joinpath("desktop.sh").read_text("utf-8")
 
 
+# Full virtual machines: QEMU/KVM boots the ISO in /workspace; the desktop command connects to
+# QEMU's VNC socket instead of starting an X desktop.
+VM_PACKAGES = ("qemu-system-x86", "qemu-utils", "socat")
+VM_COMMAND = "/usr/local/bin/cyberlab-vm"
+
+
+def vm_scripts() -> tuple[str, str]:
+    files = resources.files("cyberlab.execution")
+    return (
+        files.joinpath("vm.sh").read_text("utf-8"),
+        files.joinpath("vm-desktop.sh").read_text("utf-8"),
+    )
+
+
 # Lab practice targets: CyberLab's practice-services program, run instead of a shell.
 TARGET_COMMAND = "/usr/local/lib/cyberlab/target_services.py"
 
@@ -87,6 +101,7 @@ def render(
     source_rewrite: tuple[str, str] | None = None,
     desktop: bool = False,
     target: bool = False,
+    vm: bool = False,
 ) -> ImageRecipe:
     """Render the Dockerfile for an environment. Pure function, no Docker needed.
 
@@ -100,7 +115,11 @@ def render(
     if source_rewrite and (family != "debian" or not all(_URL.match(u) for u in source_rewrite)):
         raise ImageRecipeError("source_rewrite needs two https URLs and an apt-based image")
     packages = collect_packages(packs, family)
-    if desktop:
+    if vm:
+        if family != "debian":
+            raise ImageRecipeError("full virtual machines need a Debian-based host image")
+        packages = tuple(sorted(set(packages) | set(VM_PACKAGES)))
+    elif desktop:
         packages = tuple(sorted(set(packages) | set(DESKTOP_PACKAGES[family])))
     pack_refs = tuple(f"{p.id}@{p.version}" for p in packs)
 
@@ -139,7 +158,13 @@ def render(
             " && apt-get clean \\",
             " && rm -rf /var/lib/apt/lists/*",
         ]
-    if desktop:
+    if vm:
+        launcher, screen = (base64.b64encode(t.encode()).decode() for t in vm_scripts())
+        lines.append(
+            f"RUN echo {launcher} | base64 -d > {VM_COMMAND} && chmod 755 {VM_COMMAND} "
+            f"&& echo {screen} | base64 -d > {DESKTOP_COMMAND} && chmod 755 {DESKTOP_COMMAND}"
+        )
+    elif desktop:
         # base64 keeps the script's quotes and newlines intact inside one RUN line.
         encoded = base64.b64encode(desktop_script().encode()).decode()
         lines.append(

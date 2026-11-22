@@ -26,6 +26,7 @@ from cyberlab.api.routes import router
 from cyberlab.api.snapshots import router as snapshots_router
 from cyberlab.api.terminal import router as terminal_router
 from cyberlab.api.troubleshoot import router as troubleshoot_router
+from cyberlab.api.vm import router as vm_router
 from cyberlab.architect import build_model
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import Database
@@ -182,6 +183,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(troubleshoot_router)
     app.include_router(install_router)
     app.include_router(labs_router)
+    app.include_router(vm_router)
     app.include_router(bundles_router)
     app.include_router(env_router)
     app.include_router(files_router)

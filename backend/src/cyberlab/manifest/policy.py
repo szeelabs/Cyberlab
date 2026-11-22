@@ -201,6 +201,56 @@ def evaluate(manifest: UniverseManifest, registry: Registry, quotas: QuotaSettin
                     f"{p}.role",
                 )
             )
+        if base and base.vm_host != (env.vm is not None):
+            findings.append(
+                Finding(
+                    Severity.error,
+                    "registry.vm",
+                    f"base image {base.id!r} runs full virtual machines: add a 'vm' block"
+                    if base.vm_host
+                    else "a 'vm' block needs the full-virtual-machine base image 'vm-host'",
+                    f"{p}.vm",
+                )
+            )
+        if env.vm is not None:
+            if env.tool_packs or env.isolation != "container" or env.role != "workstation":
+                findings.append(
+                    Finding(
+                        Severity.error,
+                        "registry.vm",
+                        "a full virtual machine takes no tool packs, isolation level or role: "
+                        "the operating system you boot brings its own",
+                        p,
+                    )
+                )
+            if not env.access.desktop:
+                findings.append(
+                    Finding(
+                        Severity.error,
+                        "access.desktop",
+                        "a full virtual machine is used through its screen: set access.desktop",
+                        f"{p}.access",
+                    )
+                )
+            if env.vm.disk_gib + 1 > env.resources.storage_gib:
+                findings.append(
+                    Finding(
+                        Severity.error,
+                        "resources.storage",
+                        f"storageGiB must be at least diskGiB + the boot image (about "
+                        f"{env.vm.disk_gib + 4} GiB)",
+                        f"{p}.resources.storageGiB",
+                    )
+                )
+            findings.append(
+                Finding(
+                    Severity.approval,
+                    "security.full-vm",
+                    "a full virtual machine runs any operating system you give it, using the "
+                    "server's KVM device; use images from sources you trust",
+                    f"{p}.vm",
+                )
+            )
         if env.role == "target" and env.network.mode != NetworkMode.lab:
             findings.append(
                 Finding(
@@ -230,7 +280,8 @@ def evaluate(manifest: UniverseManifest, registry: Registry, quotas: QuotaSettin
                         f"{p}.access",
                     )
                 )
-            need_mem += DESKTOP_OVERHEAD_MIB
+            if env.vm is None:  # a VM's screen comes from QEMU, not from an X desktop
+                need_mem += DESKTOP_OVERHEAD_MIB
 
         r = env.resources
         if r.cpu < need_cpu:

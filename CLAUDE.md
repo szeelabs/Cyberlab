@@ -22,7 +22,10 @@ CyberLab principal engineer**. Two goals run together:
   errors. It is **for every level, not only beginners** (user, 2026-11-22): easy by default,
   expert depth when needed (labs as code, API/CLI, advanced labs, classroom mode for
   teachers and companies). Weigh every feature against "easy for a newcomer, and still
-  powerful for a professional?".
+  powerful for a professional?". **Ambition (user, 2026-11-22): CyberLab should be
+  outstanding, unlike anything that existed before.** Order of work (user): finish
+  Claude's own tasks first; leave the user's tasks (Cisco download, sign-up test,
+  hosting) for the end.
 * **Wish list (asked to remember, 2026-11):** run VMware-style labs, Kali, Parrot OS,
   Predator-OS, BlackArch, Android and Cisco Packet Tracer smoothly, using **no laptop
   storage**. Honest status per item is in `docs/DEVELOPMENT_STATUS.md` ("Operating system
@@ -141,5 +144,6 @@ answer checking, Labs page, two labs (PR #22); step 2, practice targets + nmap a
 Step 3: 10 labs at every level + progress badges; forgot password; one-command installer
 (`scripts/install.sh`). Plan: `docs/plans/ready-made-labs.md`.
 **Phase 9 (Isolation):** step 1, isolation levels container/sandbox (gVisor)/microvm (Kata),
-`scripts/install-isolation.sh`, Malware Analysis pack (isolated microVM only). Next: Android research.
+`scripts/install-isolation.sh`, Malware Analysis pack (isolated microVM only) (PR #24); step 2, full VMs
+from any ISO (`vm-host`, QEMU/KVM, boot media from a link) for Predator-OS/Android-x86. Next: classroom mode.
 Details: `docs/DEVELOPMENT_STATUS.md`.

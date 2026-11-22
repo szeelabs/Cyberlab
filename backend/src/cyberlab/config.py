@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     egress_proxy_image: str = "docker.io/library/python:3.13-slim"
     # Lets allow-listed names resolve to private addresses. Tests only; refused in production.
     egress_allow_private: bool = False
+    # Boot media for full virtual machines, downloaded by the server from a link.
+    max_vm_media_bytes: int = Field(default=8 * 1024**3, gt=0)
+    vm_media_allow_private: bool = False  # tests only: allow downloads from private addresses
 
     # --- Resource intelligence ---------------------------------------------------
     # How often the reaper enforces idle timeouts, TTLs and ephemeral cleanup. 0 = off.
@@ -187,6 +190,8 @@ class Settings(BaseSettings):
             from cyberlab.storage.crypto import parse_key
 
             parse_key(self.snapshot_encryption_key.get_secret_value())  # fail fast if malformed
+        if self.environment == "production" and self.vm_media_allow_private:
+            raise ValueError("CYBERLAB_VM_MEDIA_ALLOW_PRIVATE is not allowed in production")
         if self.environment == "production" and self.egress_allow_private:
             raise ValueError("CYBERLAB_EGRESS_ALLOW_PRIVATE is for local testing only")
         if self.ai_provider == "anthropic":

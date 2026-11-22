@@ -71,6 +71,17 @@
           ],
           "title": "Isolation",
           "type": "string"
+        },
+        "vm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VirtualMachine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -271,6 +282,27 @@
         "environments"
       ],
       "title": "UniverseSpec",
+      "type": "object"
+    },
+    "VirtualMachine": {
+      "additionalProperties": false,
+      "description": "A full virtual machine (QEMU/KVM) booted from an ISO or disk in /workspace.",
+      "properties": {
+        "boot": {
+          "default": "boot.iso",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+          "title": "Boot",
+          "type": "string"
+        },
+        "diskGiB": {
+          "default": 16,
+          "maximum": 512,
+          "minimum": 1,
+          "title": "Diskgib",
+          "type": "integer"
+        }
+      },
+      "title": "VirtualMachine",
       "type": "object"
     },
     "Workspace": {

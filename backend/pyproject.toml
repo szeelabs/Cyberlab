@@ -10,6 +10,7 @@ license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
+  "httpx>=0.27",
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
   "pyyaml>=6.0",
@@ -38,6 +39,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 cyberlab = [
   "static/*", "static/vendor/xterm/*", "migrations/script.py.mako", "execution/desktop.sh",
+  "execution/vm.sh", "execution/vm-desktop.sh",
   "architect/eval_prompts.yaml",
 ]
 

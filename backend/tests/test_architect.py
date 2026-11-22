@@ -103,7 +103,7 @@ def test_refused_before_the_model_is_called(registry):
 def test_schema_limits_choices_to_the_registry(registry):
     schema = draft_schema(registry)
     m = schema["properties"]["environments"]["items"]["properties"]
-    assert set(m["baseImage"]["enum"]) == set(registry.base_images) - {"lab-target"}
+    assert set(m["baseImage"]["enum"]) == set(registry.base_images) - {"lab-target", "vm-host"}
     assert "network-analysis" in m["toolPacks"]["items"]["enum"]
     assert m["network"]["enum"] == ["isolated", "lab", "restricted-egress", "internet"]
     assert schema["additionalProperties"] is False  # needed for structured outputs
