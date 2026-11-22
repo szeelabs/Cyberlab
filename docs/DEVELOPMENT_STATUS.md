@@ -270,6 +270,14 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Tests | Policy (6 refusals + approval), image, launcher scripts, run args (only the KVM device added, memory/CPU/network), KVM probe and cache, unsafe links (http, credentials, private, metadata, loopback), checked redirects, size cap, API (approval, no KVM, download → part file → rename, wrong checksum, ownership). CI (`isolation` job, KVM): the official Alpine ISO is downloaded by the server with its checksum, QEMU runs with KVM as the unprivileged user, and its screen answers a VNC handshake through the desktop channel | `tests/test_vm.py`, `tests/test_docker_integration.py` |
 | Guide | `docs/guides/virtual-machines.md` | |
 
+## Implemented (Phase 8, step 5 — classroom mode)
+| Area | What works | Where |
+|---|---|---|
+| Classes | A teacher creates a class for a lab and gets a join code (8 characters without look-alikes, any case and dash accepted). Students join (idempotent; refused when closed, or for the teacher), then **Start my lab**: their own workspace, machines and answers (starting again returns the same one). Teacher's roster: solved/total, completed, machines, last answer; close/open; reset a student's lab (machines and data destroyed, membership kept, fresh start). Teachers never get access to students' workspaces. Deleting a student's workspace keeps the membership. Audited. Migration `0005` | `api/classes.py`, `db.py`, `migrations/versions/0005_classrooms.py` |
+| Web app | **Classes** page: join with a code, list of joined classes with progress and Start/Continue; create a class, codes listed; class page with the code, a live student table (refreshes every 10 s), open/close and reset with confirmation | `pages/Classes.tsx`, `App.tsx` |
+| Tests | Codes (format, alphabet, uniqueness); whole flow with two students (separate workspaces and answers, a classmate's flag refused, the teacher's roster, the teacher refused from students' workspaces, reset and fresh start, audit); only the teacher manages; closed class, bad code, teacher joining; deleting a student's workspace. Browser: create a class, code, roster, close/open | `tests/test_classes.py`, `frontend/e2e/app.spec.ts` |
+| Guide | `docs/guides/classes.md` | |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -282,7 +290,7 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io; the installer builds locally instead); a project website; a public demo | 7 |
-| Multi-network (pivoting) labs, classroom mode, community lab sharing | 8 |
+| Multi-network (pivoting) labs, community lab sharing | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues

@@ -151,6 +151,34 @@ class LabRun(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class Classroom(Base):
+    """A teacher's class: everyone who joins with the code gets their own copy of one lab."""
+
+    __tablename__ = "classrooms"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    lab_id: Mapped[str] = mapped_column(String(63))
+    join_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    open: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class ClassMember(Base):
+    __tablename__ = "class_members"
+    __table_args__ = (UniqueConstraint("classroom_id", "user_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    classroom_id: Mapped[str] = mapped_column(
+        ForeignKey("classrooms.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # The student's own lab workspace, once started.
+    workspace_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="SET NULL"), default=None
+    )
+    joined_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

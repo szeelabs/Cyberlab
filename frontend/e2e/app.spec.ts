@@ -247,6 +247,31 @@ test("ready-made lab: one click, read a flag in the terminal, get it checked", a
   expect(errors).toEqual([]);
 });
 
+test("classes: a teacher creates a class, gets a code, and opens or closes it", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/app/#/classes");
+  const teach = page.getByRole("region", { name: "Teach a class" });
+  const name = `Security 101 ${Date.now() % 100000}`;
+  await teach.getByLabel("Class name").fill(name);
+  await teach.getByLabel("Lab for the class").selectOption("log-detective");
+  await teach.getByRole("button", { name: "Create class" }).click();
+  const code = teach.getByLabel(`Code for ${name}`);
+  await expect(code).toHaveText(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  await teach.getByRole("link", { name }).click();
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  const students = page.getByRole("region", { name: "Students" });
+  await expect(students.getByText(/No students yet/)).toBeVisible();
+  await students.getByRole("button", { name: "Close to new students" }).click();
+  await expect(students.getByRole("button", { name: "Open to new students" })).toBeVisible();
+  // The teacher can't join their own class (students join with the code).
+  await page.goto("/app/#/classes");
+  const join = page.getByRole("region", { name: "Join a class" });
+  await join.getByLabel("Class code").fill(await code.innerText());
+  await join.getByRole("button", { name: "Join" }).click();
+  await expect(page.getByRole("alert")).toContainText(/closed|you teach this class/);
+  expect(errors.filter((e) => !/status of 409/.test(e))).toEqual([]);
+});
+
 const DESKTOP = `apiVersion: cyberlab.dev/v1alpha1
 kind: Universe
 metadata: {name: e2e-desktop}

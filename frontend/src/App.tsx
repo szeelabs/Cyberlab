@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, setAuthHooks } from "./api";
 import { freshSession, loadSession, readAuthRedirect, saveSession, signOut, type AuthConfig, type Session } from "./auth";
 import { Dashboard } from "./pages/Dashboard";
+import { ClassRoster, Classes } from "./pages/Classes";
 import { Labs } from "./pages/Labs";
 import { Settings } from "./pages/Settings";
 import { ResetPassword } from "./pages/ResetPassword";
@@ -86,6 +87,7 @@ export function App() {
         <nav className="nav" aria-label="Main">
           {link("#/", "Workspaces", route.page === "dashboard" || route.page === "workspace")}
           {link("#/labs", "Labs", route.page === "labs")}
+          {link("#/classes", "Classes", route.page === "classes" || route.page === "class")}
           {link("#/tools", "Tool universe", route.page === "tools")}
           {link("#/settings", "Settings", route.page === "settings")}
         </nav>
@@ -100,6 +102,8 @@ export function App() {
         {route.page === "dashboard" && <Dashboard />}
         {route.page === "workspace" && <WorkspacePage key={route.id} id={route.id} tab={route.tab} />}
         {route.page === "labs" && <Labs />}
+        {route.page === "classes" && <Classes />}
+        {route.page === "class" && <ClassRoster key={route.id} id={route.id} />}
         {route.page === "tools" && <Tools />}
         {route.page === "settings" && <Settings />}
       </main>

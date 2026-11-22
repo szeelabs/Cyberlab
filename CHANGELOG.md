@@ -6,6 +6,8 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Classroom mode: a teacher creates a class for a lab and shares a code; every student
+  gets their own copy, and the teacher follows progress live and can reset a student's lab.
 - Full virtual machines: boot any ISO (for example Android-x86 or Predator-OS) with
   QEMU/KVM and use its screen in the browser; the server downloads the ISO from a link
   straight into the machine. Needs KVM on the server.

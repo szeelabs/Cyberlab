@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from cyberlab import __version__, migrations, reaper
 from cyberlab.api.architect import router as architect_router
 from cyberlab.api.bundles import router as bundles_router
+from cyberlab.api.classes import router as classes_router
 from cyberlab.api.desktop import router as desktop_router
 from cyberlab.api.environments import router as env_router
 from cyberlab.api.files import router as files_router
@@ -183,6 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(troubleshoot_router)
     app.include_router(install_router)
     app.include_router(labs_router)
+    app.include_router(classes_router)
     app.include_router(vm_router)
     app.include_router(bundles_router)
     app.include_router(env_router)
