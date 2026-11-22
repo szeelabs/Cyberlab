@@ -6,6 +6,8 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Write your own labs in the web app: import a lab file (checked like the built-in labs),
+  share it with everyone, download any lab's file to adapt it.
 - Classroom mode: a teacher creates a class for a lab and shares a code; every student
   gets their own copy, and the teacher follows progress live and can reset a student's lab.
 - Full virtual machines: boot any ISO (for example Android-x86 or Predator-OS) with

@@ -278,6 +278,13 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Tests | Codes (format, alphabet, uniqueness); whole flow with two students (separate workspaces and answers, a classmate's flag refused, the teacher's roster, the teacher refused from students' workspaces, reset and fresh start, audit); only the teacher manages; closed class, bad code, teacher joining; deleting a student's workspace. Browser: create a class, code, roster, close/open | `tests/test_classes.py`, `frontend/e2e/app.spec.ts` |
 | Guide | `docs/guides/classes.md` | |
 
+## Implemented (Phase 8, step 4 — labs written by users)
+| Area | What works | Where |
+|---|---|---|
+| Import and share | `POST /v1/labs/import` (YAML, size-limited, 50 per user) runs the same checks as built-in labs (`parse_lab`: model, policy without approvals, `isolated`/`lab` networks only, safe paths, known generators only) and stores it under its own id (`c-…`). Private by default; `PATCH /v1/labs/{id}` shares it (public catalog, marked `community`); `DELETE` removes it; only the author can change it. `GET /v1/labs/{id}/file` downloads any built-in or shared lab file. Classes accept only built-in or shared labs. Audited | `api/labs.py`, `labs/__init__.py`, `db.py`, `migrations/versions/0006_custom_labs.py` |
+| Web app | Labs page: "Write your own labs" (upload or paste, refusals with reasons, Share/Stop sharing, Delete), "yours"/"community" badges, a Lab file link on every built-in and shared lab | `pages/Labs.tsx` |
+| Tests | Private → share → catalog → download → another user starts it → only the author changes it → delete; built-in files download and re-import; 6 unsafe or broken labs refused (internet, path escape, unknown generator, malware pack, oversized field, bad YAML); sign-in and size limit; classes need shared labs. Browser: refusal with reason, import, share, download, delete | `tests/test_custom_labs.py`, `frontend/e2e/app.spec.ts` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -290,7 +297,7 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
 | Container images published to a registry (ghcr.io; the installer builds locally instead); a project website; a public demo | 7 |
-| Multi-network (pivoting) labs, community lab sharing | 8 |
+| Multi-network (pivoting) labs | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues

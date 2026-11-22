@@ -179,6 +179,19 @@ class ClassMember(Base):
     joined_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class CustomLab(Base):
+    """A lab written by a user and imported (checked like the built-in labs). Shared labs
+    appear in everyone's catalog."""
+
+    __tablename__ = "custom_labs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    catalog_id: Mapped[str] = mapped_column(String(63), unique=True)
+    content: Mapped[str] = mapped_column(Text)  # the lab file as imported (YAML)
+    shared: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

@@ -46,8 +46,14 @@ a terminal, desktop or files on a target, just like a real remote computer: you 
 over the lab network from your own machine.
 
 ## Write your own lab
-A lab is one YAML file in `registry/labs/<id>.yaml`. CyberLab checks every lab when it
-starts and refuses broken ones with a clear message.
+Every lab is one YAML file. Two ways to add yours:
+* **In the web app** (no server access needed): **Labs → Write your own labs → Import a lab
+  file**. Your lab is checked exactly like the built-in ones and refused with the reason if
+  something is wrong. It stays private; **Share** puts it in everyone's catalog (marked
+  "community"), and shared labs can be used for classes. Any built-in or shared lab has a
+  **Lab file** link: download it, change it, import your version.
+* **For the server's own catalog:** put it in `registry/labs/<id>.yaml`. CyberLab checks
+  every lab when it starts and refuses broken ones with a clear message.
 
 ```yaml
 id: my-first-lab                 # must match the file name
@@ -118,5 +124,4 @@ A task's `answer` is `flag` (the default) or the name of a generated answer, for
 Check your lab with the tests: `cd backend && pytest tests/test_labs.py`.
 
 ## Coming next
-Multi-network pivoting labs, classroom mode, and sharing community labs (see
-`docs/plans/ready-made-labs.md`).
+Multi-network pivoting labs (see `docs/plans/ready-made-labs.md`).

@@ -69,7 +69,8 @@ images + changelog).
 - [x] 2. Practice targets on the private lab network: nmap and web recon labs.
 - [x] 3. Labs at every level (10 labs) and progress badges.
 - [x] 5. Classroom mode.
-- [ ] 4. Sharing community labs. 6. Multi-network pivoting labs.
+- [x] 4. Sharing community labs.
+- [ ] 6. Multi-network pivoting labs.
 
 ## Phase 9 — Isolation (in progress)
 - [x] 1. Isolation levels per machine: gVisor sandbox and Kata microVM; malware-analysis pack only in an isolated microVM.

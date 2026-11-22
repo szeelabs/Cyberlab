@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.api.environments import ACTIVE, _workspace_key, get_provider
-from cyberlab.api.labs import _lab, get_labs, start_lab
+from cyberlab.api.labs import _lab, get_labs, get_user_labs, start_lab
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import (
     ClassMember,
@@ -109,9 +109,14 @@ def create_class(
     request: Request,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     lab = _lab(labs, body.lab_id)
+    if body.lab_id not in get_labs(request, db):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "share this lab first: students can only start built-in or shared labs",
+        )
     for _ in range(5):  # a clash of random codes is very unlikely; retry anyway
         c = Classroom(owner_id=user.id, name=body.name.strip(), lab_id=lab.id, join_code=new_code())
         db.add(c)
@@ -139,7 +144,7 @@ def create_class(
 def my_classes(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     teaching = [
         _class_out(c, labs.get(c.lab_id), db)
@@ -174,7 +179,7 @@ def class_roster(
     class_id: str,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     """The teacher's view: who joined and how far each student got (never their files)."""
     c = _owned_class(db, user, class_id)
@@ -209,7 +214,7 @@ def update_class(
     request: Request,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     c = _owned_class(db, user, class_id)
     c.open = body.open
@@ -231,7 +236,7 @@ def join_class(
     request: Request,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     c = db.scalar(select(Classroom).where(Classroom.join_code == _normalize_code(body.code)))
     if c is None:
@@ -268,7 +273,7 @@ def start_class_lab(
     reg: Registry = Depends(get_registry),
     settings: Settings = Depends(get_settings),
     provider: ProviderAdapter | None = Depends(get_provider),
-    labs: dict[str, Lab] = Depends(get_labs),
+    labs: dict[str, Lab] = Depends(get_user_labs),
 ) -> dict:
     """A student starts their own copy of the class's lab (or gets the one they have)."""
     c = db.get(Classroom, class_id)

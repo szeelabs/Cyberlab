@@ -55,6 +55,8 @@ export type Lab = {
   introduction: string;
   machines: { name: string; baseImage: string; toolPacks: string[]; desktop: boolean }[];
   tasks: LabTask[];
+  source?: "built-in" | "community" | "mine";
+  shared?: boolean;
 };
 export type VmMedia = {
   state: "none" | "downloading" | "copying" | "ready" | "failed";
@@ -257,6 +259,12 @@ export const api = {
   startClassLab: (id: string) => request<{ workspaceId: string; existing: boolean }>(`/v1/classes/${enc(id)}/start`, { method: "POST" }),
   resetStudent: (id: string, memberId: string) =>
     request<{ reset: boolean }>(`/v1/classes/${enc(id)}/members/${enc(memberId)}/reset`, { method: "POST" }),
+  myLabs: () => request<Lab[]>("/v1/labs/mine"),
+  importLab: (text: string) =>
+    request<Lab>("/v1/labs/import", { method: "POST", headers: { "Content-Type": "application/yaml" }, body: text }),
+  shareLab: (id: string, shared: boolean) => request<{ shared: boolean }>(`/v1/labs/${enc(id)}`, json("PATCH", { shared })),
+  deleteLab: (id: string) => request<void>(`/v1/labs/${enc(id)}`, { method: "DELETE" }),
+  labFileUrl: (id: string) => `/v1/labs/${enc(id)}/file`,
   labProgress: () => request<LabProgress>("/v1/labs/progress"),
   startLab: (labId: string) => request<LabRun & { workspaceId: string }>(`/v1/labs/${enc(labId)}/start`, { method: "POST" }),
   /** The lab running in a workspace, or null if it isn't a lab workspace. */

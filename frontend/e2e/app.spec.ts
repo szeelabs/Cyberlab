@@ -272,6 +272,50 @@ test("classes: a teacher creates a class, gets a code, and opens or closes it", 
   expect(errors.filter((e) => !/status of 409/.test(e))).toEqual([]);
 });
 
+test("write your own lab: import, share, download", async ({ page, request }) => {
+  const errors = watchConsole(page);
+  const title = `My note lab ${Date.now() % 100000}`;
+  const lab = `id: my-note-lab
+title: ${title}
+level: beginner
+minutes: 10
+topic: linux
+summary: A lab written in the browser test.
+spec:
+  environments:
+    - name: box
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+setup:
+  - {environment: box, path: note.txt, content: "flag: {{flag:read}}"}
+tasks:
+  - {id: read, title: Read it, text: "cat note.txt"}
+`;
+  await page.goto("/app/#/labs");
+  const mine = page.getByRole("region", { name: "Your labs" });
+  await mine.getByRole("button", { name: "Import a lab file" }).click();
+  await mine.getByLabel("Lab YAML").fill(lab.replace("isolated", "internet"));
+  await mine.getByRole("button", { name: "Check and import" }).click();
+  await expect(mine.getByRole("alert")).toContainText("'isolated' or 'lab'"); // refused, with the reason
+  await mine.getByLabel("Lab YAML").fill(lab);
+  await mine.getByRole("button", { name: "Check and import" }).click();
+  await expect(mine.getByText(title)).toBeVisible();
+  await expect(mine.getByText("private")).toBeVisible();
+  const card = page.getByRole("region", { name: title });
+  await expect(card.getByText("yours")).toBeVisible();
+  await mine.getByRole("button", { name: "Share" }).click();
+  await expect(mine.getByText("shared with everyone")).toBeVisible();
+  // the shared lab is in the public catalog, and its file can be downloaded
+  const listed = (await (await request.get("/v1/labs")).json()) as { id: string; title: string; source: string }[];
+  const shared = listed.find((l) => l.title === title)!;
+  expect(shared.source).toBe("community");
+  expect(await (await request.get(`/v1/labs/${shared.id}/file`)).text()).toContain(title);
+  await mine.getByRole("button", { name: "Delete" }).click();
+  await expect(mine.getByText(title)).toHaveCount(0);
+  expect(errors.filter((e) => !/status of 422/.test(e))).toEqual([]);
+});
+
 const DESKTOP = `apiVersion: cyberlab.dev/v1alpha1
 kind: Universe
 metadata: {name: e2e-desktop}

@@ -19,7 +19,15 @@ from cyberlab.manifest.policy import Severity, evaluate
 from cyberlab.registry import Registry
 from cyberlab.yaml_safe import load_yaml_text
 
-__all__ = ["Lab", "LabError", "LabRunContent", "check_answer", "load_labs", "new_run"]
+__all__ = [
+    "Lab",
+    "LabError",
+    "LabRunContent",
+    "check_answer",
+    "load_labs",
+    "new_run",
+    "parse_lab",
+]
 
 
 class LabError(Exception):
@@ -70,6 +78,19 @@ def _problems(lab: Lab, reg: Registry, quotas: QuotaSettings) -> list[str]:
         if t.answer != "flag" and t.answer not in produced:
             out.append(f"task {t.id!r}: no generator produces the answer {t.answer!r}")
     return out
+
+
+def parse_lab(text: str, reg: Registry, quotas: QuotaSettings, source: str = "lab") -> Lab:
+    """Parse and fully check one lab file (the same rules as the built-in labs).
+    Raises LabError with every problem found."""
+    try:
+        lab = Lab.model_validate(load_yaml_text(text, source=source))
+    except (ValidationError, ValueError) as exc:
+        raise LabError(str(exc)) from exc
+    problems = _problems(lab, reg, quotas)
+    if problems:
+        raise LabError("; ".join(problems))
+    return lab
 
 
 def load_labs(root: Path, reg: Registry, quotas: QuotaSettings) -> dict[str, Lab]:
