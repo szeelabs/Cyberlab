@@ -14,6 +14,7 @@ is tested with a fake clock. The app runs it every ``CYBERLAB_REAPER_INTERVAL_SE
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -74,6 +75,7 @@ def run_once(
     *,
     now: datetime | None = None,
     active: set[str] | None = None,
+    on_stopped: Callable[[Session, EnvironmentRecord], object] | None = None,
 ) -> list[ReapAction]:
     if provider is None:
         return []
@@ -110,6 +112,8 @@ def run_once(
             },
         )
         db.commit()
+        if act.ok and act.action == "stop" and on_stopped is not None:
+            on_stopped(db, rec)  # e.g. the on-stop snapshot policy
         if act.ok and act.action == "destroy":
             _cleanup_workspace_networks(db, provider, rec.workspace_id)
         actions.append(act)

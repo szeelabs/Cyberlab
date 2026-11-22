@@ -301,6 +301,12 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Penetration Testing pack | Metasploit, sqlmap, Hydra, Nikto, gobuster on Kali, Parrot and BlackArch; high risk (approval), lab or isolated networks only | `registry/toolpacks/penetration-testing.yaml` |
 | Tests | Background lab start (answers at once, progress visible, then running, files placed, flag accepted), background failure reported, background environments, restart recovery; browser suite on real Docker. CI builds and smoke-tests the new pack on each base | `tests/test_background.py` |
 
+## Implemented (automatic snapshots)
+| Area | What works | Where |
+|---|---|---|
+| Snapshot policy | `workspace.snapshotPolicy` is acted on. `on-stop`: a snapshot right after each stop, by the user or by the idle timer (consistent: the machine is stopped). `daily`: the periodic job (reaper loop) takes one per machine per day. Labelled "automatic: ...", only the newest 3 automatic ones per machine are kept, and at the workspace limit the oldest automatic one makes room; the user's own snapshots are never removed. A failed automatic snapshot never breaks the stop: it is logged and audited (`snapshot.failed`, actor `system:snapshots`) | `autosnap.py`, `api/environments.py`, `reaper.py`, `main.py`, `api/snapshots.py` |
+| Tests | manual takes nothing; on-stop keeps the newest 3 and the user's own; room at the limit; idle stop by the reaper; daily once a day; a failed snapshot doesn't break the stop | `tests/test_autosnap.py` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|
@@ -308,7 +314,6 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Image vulnerability scanning, SBOMs, signing, publishing to ghcr.io; cleanup of old images | 2 |
 | Storage size limits (`storageGiB` is validated but not enforced by Docker) | 3 |
 | Encryption key rotation | 3-4 |
-| Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
 | Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |

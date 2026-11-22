@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from cyberlab import quotas
+from cyberlab import autosnap, quotas
 from cyberlab.api.deps import current_user, get_db, get_registry, request_id
 from cyberlab.api.routes import _owned
 from cyberlab.config import Settings, get_settings
@@ -566,6 +566,7 @@ def _lifecycle(action: str):
     ) -> dict:
         ws = _owned(db, user, ws_id)
         rec = _env_owned(db, ws, env_id)
+        stopped = False
         if rec.state == EnvState.destroyed:
             raise HTTPException(status.HTTP_409_CONFLICT, "environment is destroyed")
         if rec.provider_ref is None:
@@ -596,6 +597,7 @@ def _lifecycle(action: str):
                     rec.last_activity_at = datetime.now(UTC)  # restart the idle timer
                 elif action == "stop":
                     rec.state = adapter.stop(rec.provider_ref).value
+                    stopped = rec.state == EnvState.stopped.value
                 else:
                     rec.state = adapter.destroy(
                         rec.provider_ref, remove_workspace_volume=not keep_workspace
@@ -625,6 +627,11 @@ def _lifecycle(action: str):
             request_id=request_id(request),
         )
         db.commit()
+        if action == "stop" and stopped:
+            # workspace.snapshotPolicy: on-stop keeps a consistent copy after each stop
+            store = getattr(request.app.state, "snapshot_store", None)
+            if store is not None:
+                autosnap.after_stop(db, rec, settings, adapter, store)
         return _env_out(rec)
 
     return handler

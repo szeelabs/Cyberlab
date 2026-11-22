@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import tempfile
-import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from cyberlab.api.deps import current_user, get_db, request_id
@@ -26,6 +25,7 @@ from cyberlab.api.environments import (
     get_provider,
 )
 from cyberlab.api.routes import _owned
+from cyberlab.autosnap import SnapshotRefused, take_snapshot
 from cyberlab.config import Settings, get_settings
 from cyberlab.db import EnvironmentRecord, Snapshot, User, Workspace, record_audit
 from cyberlab.execution import EnvState, ProviderAdapter, ProviderError
@@ -123,53 +123,19 @@ def create_snapshot(
     ws = _owned(db, user, ws_id)
     rec = _env_owned(db, ws, env_id)
     _require_workstation(rec, "snapshots")
-    volume, image = _volume_and_image(rec)
     adapter = _adapter(provider)
-    count = (
-        db.scalar(select(func.count()).select_from(Snapshot).where(Snapshot.workspace_id == ws.id))
-        or 0
-    )
-    if count >= settings.max_snapshots_per_workspace:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"snapshot limit reached ({settings.max_snapshots_per_workspace}); "
-            "delete an old snapshot first",
+    try:
+        snap = take_snapshot(
+            db, rec, body.label, user.subject, settings, adapter, store, request_id(request)
         )
-    snap = Snapshot(
-        id=str(uuid.uuid4()),  # needed now: the storage key is built from it before saving
-        workspace_id=ws.id,
-        environment_name=rec.name,
-        label=body.label,
-        size_bytes=0,
-        sha256="",
-        store=store.name,
-        storage_key="",
-        created_by=user.subject,
-    )
-    snap.storage_key = f"{ws.id}/{snap.id}.tar.gz"
-    with tempfile.NamedTemporaryFile(dir=_tmpdir(settings), suffix=".tar.gz") as tmp:
-        try:
-            snap.size_bytes = adapter.export_workspace(
-                volume, image, tmp.name, settings.max_snapshot_bytes
-            )
-            snap.sha256 = _sha256(Path(tmp.name))
-            store.put(snap.storage_key, Path(tmp.name))
-        except FileOpError as exc:
-            code = 413 if exc.kind == "too_large" else 502
-            raise HTTPException(code, str(exc)) from exc
-        except (ProviderError, StorageError) as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
-    db.add(snap)
+    except SnapshotRefused as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
+    except FileOpError as exc:
+        code = 413 if exc.kind == "too_large" else 502
+        raise HTTPException(code, str(exc)) from exc
+    except (ProviderError, StorageError) as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
     touch(db, rec.id)
-    record_audit(
-        db,
-        actor=user.subject,
-        action="snapshot.create",
-        target_type="snapshot",
-        target_id=snap.id,
-        detail={"environment": rec.name, "bytes": snap.size_bytes, "label": body.label},
-        request_id=request_id(request),
-    )
     db.commit()
     return _out(snap)
 
