@@ -12,7 +12,8 @@ Config::
     {"services": [
       {"port": 22, "kind": "banner", "banner": "SSH-2.0-OpenSSH_9.6"},
       {"port": 80, "kind": "http", "server": "nginx", "routes": {
-          "/": {"status": 200, "type": "text/html", "body": "<h1>hi</h1>"}}}
+          "/": {"status": 200, "type": "text/html", "body": "<h1>hi</h1>"}},
+       "fallbacks": {"/login": {"status": 401, "body": "wrong password"}}}
     ]}
 """
 
@@ -49,6 +50,9 @@ def http_response(service: dict, raw: bytes) -> bytes:
     parts = line.split(" ")
     method, target = (parts[0], parts[1]) if len(parts) >= 2 else ("GET", "/")
     route = service.get("routes", {}).get(target)
+    if route is None and target.split("?")[0] in service.get("fallbacks", {}):
+        # e.g. a login page answering "wrong password" for every guess but the right one
+        route = service["fallbacks"][target.split("?")[0]]
     if route is None:
         status, ctype, body = 404, "text/html", NOT_FOUND
     else:

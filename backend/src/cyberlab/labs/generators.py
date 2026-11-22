@@ -9,6 +9,9 @@ returns the files to write (path relative to /workspace -> bytes) plus any answe
 
 from __future__ import annotations
 
+import base64
+import gzip
+import hashlib
 import json
 import random
 import secrets
@@ -21,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 class Generated:
     files: dict[str, bytes]
     answers: dict[str, str] = field(default_factory=dict)
+    modes: dict[str, int] = field(default_factory=dict)  # path -> permission bits (default 644)
 
 
 @dataclass(frozen=True)
@@ -137,16 +141,19 @@ def _config(path: str, services: list[dict]) -> bytes:
 
 
 def _scan_target(rng: random.Random, path: str, flag: str | None) -> Generated:
-    """Practice services for a port-scanning lab: three common services, and one on a
-    high port that a default nmap scan (top 1000 ports) misses."""
+    """Practice services for a port-scanning lab: FTP and SSH, a web server on one of the
+    usual alternative web ports, and a service on a high port (above 10000) for an
+    every-port scan. (A random high port can be in nmap's top 1000, so no answer depends
+    on whether a quick scan sees it.)"""
     ssh_version = rng.choice(("8.9p1", "9.2p1", "9.6p1", "9.7p1"))
+    web = rng.choice((3000, 5000, 8000, 8080, 8888))
     hidden = rng.randint(20000, 40000)
     secret = _flag()
     services = [
         {"port": 21, "kind": "banner", "banner": "220 (vsFTPd 3.0.5)"},
         {"port": 22, "kind": "banner", "banner": f"SSH-2.0-OpenSSH_{ssh_version} Ubuntu-3ubuntu13"},
         {
-            "port": 80,
+            "port": web,
             "kind": "http",
             "server": "nginx/1.24.0",
             "routes": {"/": {"body": "<html><body><h1>Coming soon</h1></body></html>\n"}},
@@ -160,7 +167,7 @@ def _scan_target(rng: random.Random, path: str, flag: str | None) -> Generated:
     return Generated(
         {path: _config(path, services)},
         {
-            "open-ports": "3",
+            "web-port": str(web),
             "ssh-version": ssh_version,
             "hidden-port": str(hidden),
             "banner-flag": secret,
@@ -213,15 +220,309 @@ def _web_target(rng: random.Random, path: str, flag: str | None) -> Generated:
     )
 
 
+# ---------------------------------------------------------------- crypto and encodings
+def _rot13(text: str) -> str:
+    out = []
+    for ch in text:
+        if "a" <= ch <= "z":
+            out.append(chr((ord(ch) - 97 + 13) % 26 + 97))
+        elif "A" <= ch <= "Z":
+            out.append(chr((ord(ch) - 65 + 13) % 26 + 65))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _crypto_basics(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """Encodings and hashes: base64, hex, ROT13, and finding a file by its SHA-256."""
+    b64_flag, hex_flag, rot_flag = _flag(), _flag(), _flag()
+    files = {
+        f"{path}/message.b64": base64.b64encode(f"The flag is {b64_flag}\n".encode()) + b"\n",
+        f"{path}/message.hex": (f"The flag is {hex_flag}\n".encode().hex().upper() + "\n").encode(),
+        f"{path}/message.rot13": (_rot13(f"The flag is {rot_flag}") + "\n").encode(),
+    }
+    names = [f"{rng.choice(_WORDS)}-{i:02d}.txt" for i in range(40)]
+    contents = {n: f"report {n} {secrets.token_hex(12)}\n".encode() for n in names}
+    wanted = rng.choice(names)
+    digest = hashlib.sha256(contents[wanted]).hexdigest()
+    for n, data in contents.items():
+        files[f"{path}/reports/{n}"] = data
+    files[f"{path}/WANTED.txt"] = (
+        f"One report was leaked. Its SHA-256 fingerprint is:\n{digest}\n"
+    ).encode()
+    return Generated(
+        files,
+        {
+            "base64-flag": b64_flag,
+            "hex-flag": hex_flag,
+            "rot13-flag": rot_flag,
+            "leaked-file": wanted,
+        },
+    )
+
+
+# ---------------------------------------------------------------- permissions
+def _permissions(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """A script that isn't executable yet, a locked file, and a world-writable file."""
+    run_flag, locked_flag = _flag(), _flag()
+    names = [f"{w}.conf" for w in rng.sample(_WORDS, 8)]
+    risky = rng.choice(names)
+    files = {
+        f"{path}/hello.sh": f"#!/bin/sh\necho 'It runs! Flag: {run_flag}'\n".encode(),
+        f"{path}/locked.txt": f"You unlocked it. Flag: {locked_flag}\n".encode(),
+    }
+    modes = {f"{path}/hello.sh": 0o644, f"{path}/locked.txt": 0o000}
+    for n in names:
+        files[f"{path}/configs/{n}"] = f"# settings for {n}\nenabled=true\n".encode()
+        modes[f"{path}/configs/{n}"] = 0o666 if n == risky else 0o640
+    return Generated(
+        files, {"run-flag": run_flag, "locked-flag": locked_flag, "risky-file": risky}, modes
+    )
+
+
+# ---------------------------------------------------------------- incident response
+def _access_log(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """A web server access log with normal traffic, a scanner, a SQL injection attempt and
+    a web shell upload followed by its use."""
+    start = datetime(2026, 5, 2, 9, 0, tzinfo=UTC)
+    visitors = [_ip(rng) for _ in range(12)]
+    attacker = _ip(rng)
+    while attacker in visitors:
+        attacker = _ip(rng)
+    scanner_agent = rng.choice(("sqlmap/1.8.2#stable", "Nikto/2.5.0", "masscan/1.3"))
+    shell = f"/uploads/{rng.choice(_WORDS)}-{secrets.token_hex(2)}.php"
+    pages = ["/", "/about", "/products", "/products?id=3", "/contact", "/login", "/static/app.css"]
+    agents = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Mozilla/5.0 (X11; Linux x86_64)"]
+    lines: list[tuple[datetime, str]] = []
+
+    def hit(t: datetime, ip: str, req: str, status: int, agent: str) -> None:
+        stamp = t.strftime("%d/%b/%Y:%H:%M:%S +0000")
+        lines.append(
+            (
+                t,
+                f'{ip} - - [{stamp}] "{req} HTTP/1.1" {status} '
+                f'{rng.randint(200, 9000)} "-" "{agent}"',
+            )
+        )
+
+    for _ in range(400):
+        hit(
+            start + timedelta(seconds=rng.randint(0, 6 * 3600)),
+            rng.choice(visitors),
+            f"GET {rng.choice(pages)}",
+            200,
+            rng.choice(agents),
+        )
+    t = start + timedelta(hours=2, minutes=rng.randint(0, 50))
+    for i, probe in enumerate(
+        ("/admin", "/.git/config", "/wp-login.php", "/backup.zip", "/phpinfo.php")
+    ):
+        hit(t + timedelta(seconds=i), attacker, f"GET {probe}", 404, scanner_agent)
+    hit(
+        t + timedelta(minutes=3), attacker, "GET /products?id=3%27%20OR%201=1--", 500, scanner_agent
+    )
+    hit(t + timedelta(minutes=9), attacker, "POST /upload", 200, agents[0])
+    hit(t + timedelta(minutes=10), attacker, f"GET {shell}?cmd=id", 200, agents[0])
+    hit(t + timedelta(minutes=11), attacker, f"GET {shell}?cmd=cat%20/etc/passwd", 200, agents[0])
+    lines.sort()
+    return Generated(
+        {path: ("\n".join(text for _, text in lines) + "\n").encode()},
+        {
+            "scanner-ip": attacker,
+            "scanner-tool": scanner_agent.split("/")[0],
+            "webshell-path": shell,
+        },
+    )
+
+
+# ---------------------------------------------------------------- forensics
+def _carving(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """A "photo" with a plain-text note inside it and a compressed file hidden after it."""
+    note_flag, hidden_flag = _flag(), _flag()
+
+    def noise(n: int) -> bytes:
+        # Random filler that can't be mistaken for a gzip header (1f 8b) by chance.
+        return secrets.token_bytes(n).replace(b"\x1f\x8b", b"\x1f\x00")
+
+    head = b"\x89PNG\r\n\x1a\n" + noise(rng.randint(3000, 6000))
+    note = f"\x00\x00note: {note_flag}\x00\x00".encode()
+    tail = noise(rng.randint(2000, 4000))
+    hidden = gzip.compress(f"Carved it out! Flag: {hidden_flag}\n".encode(), mtime=0)
+    blob = head + note + tail
+    offset = len(blob)
+    return Generated(
+        {path: blob + hidden},
+        {"note-flag": note_flag, "gzip-offset": str(offset), "carved-flag": hidden_flag},
+    )
+
+
+# ---------------------------------------------------------------- web: logins and keys
+def _web_login_target(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """A login with a default password from a wordlist, and an API key leaked in JavaScript."""
+    admin = rng.choice(("admin", "administrator", "root", "operator"))
+    words = [
+        "123456",
+        "password",
+        "admin",
+        "letmein",
+        "qwerty",
+        "welcome",
+        "monkey",
+        "dragon",
+        "changeme",
+        "default",
+        "summer2026",
+        "passw0rd",
+        "secret",
+        "trustno1",
+    ]
+    password = rng.choice(words[2:])
+    login_flag, key_flag = _flag(), _flag()
+    api_key = secrets.token_hex(12)
+    page = (
+        "<!doctype html>\n<html><head><title>FleetDesk</title>"
+        '<script src="/static/app.js"></script></head><body>\n'
+        "<h1>FleetDesk</h1>\n<p>Login: GET /login?user=NAME&amp;password=PASS</p>\n"
+        f"<p>Questions? Ask our {admin} at support@fleetdesk.test</p>\n</body></html>\n"
+    )
+    js = (
+        "// FleetDesk front end\n"
+        f"const API_KEY = '{api_key}'; // TODO move to the server\n"
+        "fetch('/api/fleet?key=' + API_KEY);\n"
+    )
+    routes = {
+        "/": {"body": page},
+        "/static/app.js": {"type": "application/javascript", "body": js},
+        f"/login?user={admin}&password={password}": {
+            "body": f"<h1>Welcome back, {admin}</h1><p>Flag: {login_flag}</p>\n"
+        },
+        f"/api/fleet?key={api_key}": {
+            "type": "application/json",
+            "body": json.dumps({"vehicles": 42, "flag": key_flag}),
+        },
+    }
+    service = {
+        "port": 80,
+        "kind": "http",
+        "server": "nginx/1.24.0",
+        "routes": routes,
+        "fallbacks": {
+            "/login": {"status": 401, "body": "<h1>Wrong user name or password</h1>\n"},
+            "/api/fleet": {
+                "status": 403,
+                "type": "application/json",
+                "body": '{"error": "bad key"}',
+            },
+        },
+    }
+    return Generated(
+        {path: _config(path, [service])},
+        {"admin-user": admin, "login-flag": login_flag, "key-flag": key_flag},
+    )
+
+
+def _wordlist(rng: random.Random, path: str, flag: str | None) -> Generated:
+    words = [
+        "123456",
+        "password",
+        "admin",
+        "letmein",
+        "qwerty",
+        "welcome",
+        "monkey",
+        "dragon",
+        "changeme",
+        "default",
+        "summer2026",
+        "passw0rd",
+        "secret",
+        "trustno1",
+    ]
+    return Generated({path: ("\n".join(words) + "\n").encode()})
+
+
+# ---------------------------------------------------------------- advanced: a chain
+def _chain_target(rng: random.Random, path: str, flag: str | None) -> Generated:
+    """Several steps, each giving the next clue: a web app on an unusual port, a backup file
+    named in a comment, credentials inside it, and an admin API that needs them."""
+    port = rng.randint(8000, 9999)
+    backup = f"/{rng.choice(_WORDS)}-backup-{secrets.token_hex(2)}.txt"
+    user = rng.choice(("deploy", "svc-backup", "ops"))
+    password = f"{rng.choice(_WORDS).capitalize()}{rng.randint(10, 99)}!"
+    token = secrets.token_hex(10)
+    final = _flag()
+    routes = {
+        "/": {
+            "body": "<html><body><h1>Internal tools</h1>\n"
+            f"<!-- nightly backup moved to {backup} -->\n</body></html>\n"
+        },
+        backup: {
+            "type": "text/plain",
+            "body": f"# config backup\nservice_user={user}\nservice_password={password}\n",
+        },
+        f"/api/token?user={user}&password={password}": {
+            "type": "application/json",
+            "body": json.dumps({"token": token, "expires": 3600}),
+        },
+        f"/api/admin/flag?token={token}": {
+            "type": "application/json",
+            "body": json.dumps({"flag": final}),
+        },
+    }
+    services = [
+        {"port": 22, "kind": "banner", "banner": "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13"},
+        {
+            "port": port,
+            "kind": "http",
+            "server": "gunicorn",
+            "routes": routes,
+            "fallbacks": {
+                "/api/token": {
+                    "status": 401,
+                    "type": "application/json",
+                    "body": '{"error": "bad credentials"}',
+                },
+                "/api/admin/flag": {
+                    "status": 401,
+                    "type": "application/json",
+                    "body": '{"error": "token required"}',
+                },
+            },
+        },
+    ]
+    return Generated(
+        {path: _config(path, services)},
+        {"web-port": str(port), "service-user": user, "chain-flag": final},
+    )
+
+
 GENERATORS: dict[str, Generator] = {
     "maze": Generator(_maze, needs_flag=True),
     "app-log": Generator(_app_log, needs_flag=True),
     "scan-target": Generator(
         _scan_target,
-        produces=frozenset({"open-ports", "ssh-version", "hidden-port", "banner-flag"}),
+        produces=frozenset({"web-port", "ssh-version", "hidden-port", "banner-flag"}),
     ),
     "web-target": Generator(
         _web_target, produces=frozenset({"source-flag", "robots-flag", "idor-flag"})
+    ),
+    "crypto-basics": Generator(
+        _crypto_basics,
+        produces=frozenset({"base64-flag", "hex-flag", "rot13-flag", "leaked-file"}),
+    ),
+    "permissions": Generator(
+        _permissions, produces=frozenset({"run-flag", "locked-flag", "risky-file"})
+    ),
+    "access-log": Generator(
+        _access_log, produces=frozenset({"scanner-ip", "scanner-tool", "webshell-path"})
+    ),
+    "carving": Generator(_carving, produces=frozenset({"note-flag", "gzip-offset", "carved-flag"})),
+    "web-login-target": Generator(
+        _web_login_target, produces=frozenset({"admin-user", "login-flag", "key-flag"})
+    ),
+    "wordlist": Generator(_wordlist),
+    "chain-target": Generator(
+        _chain_target, produces=frozenset({"web-port", "service-user", "chain-flag"})
     ),
     "auth-log": Generator(
         _auth_log, produces=frozenset({"attacker-ip", "attacker-user", "failed-count"})

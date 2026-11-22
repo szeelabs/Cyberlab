@@ -73,7 +73,13 @@ class DraftPlan(_Strict):
 
 def _buildable_packs(registry: Registry) -> list:
     return sorted(
-        (p for p in registry.tool_packs.values() if p.status != "metadata-only"),
+        # Packs that need stronger isolation (malware analysis) are set up by hand, on
+        # purpose: the AI helper never drafts them.
+        (
+            p
+            for p in registry.tool_packs.values()
+            if p.status != "metadata-only" and p.min_isolation == "container"
+        ),
         key=lambda p: p.id,
     )
 

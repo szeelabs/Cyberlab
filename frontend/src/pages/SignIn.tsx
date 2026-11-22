@@ -1,16 +1,16 @@
 import { useState } from "react";
 
-import { AuthError, signIn, signUp, type AuthConfig, type Session } from "../auth";
+import { AuthError, requestPasswordReset, signIn, signUp, type AuthConfig, type Session } from "../auth";
 
-type Props = { cfg: AuthConfig; onSignedIn: (s: Session) => void };
+type Props = { cfg: AuthConfig; onSignedIn: (s: Session) => void; initialError?: string | null };
 
 /** Email + password sign-in and account creation (Supabase Auth). */
-export function SignIn({ cfg, onSignedIn }: Props) {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+export function SignIn({ cfg, onSignedIn, initialError = null }: Props) {
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [notice, setNotice] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
@@ -19,7 +19,11 @@ export function SignIn({ cfg, onSignedIn }: Props) {
     setError(null);
     setNotice(null);
     try {
-      if (mode === "signin") {
+      if (mode === "forgot") {
+        await requestPasswordReset(cfg, email.trim(), `${window.location.origin}${window.location.pathname}`);
+        setNotice(`If an account exists for ${email.trim()}, we sent it a link to choose a new password. Check your inbox (and spam).`);
+        setMode("signin");
+      } else if (mode === "signin") {
         onSignedIn(await signIn(cfg, email.trim(), password));
       } else {
         const s = await signUp(cfg, email.trim(), password);
@@ -38,9 +42,9 @@ export function SignIn({ cfg, onSignedIn }: Props) {
 
   return (
     <div className="signin">
-      <section className="panel" aria-label={mode === "signin" ? "Sign in" : "Create account"}>
+      <section className="panel" aria-label={mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Reset password"}>
         <div className="brand" style={{ fontSize: 22 }}>Cyber<span>Lab</span></div>
-        <h1>{mode === "signin" ? "Sign in" : "Create your account"}</h1>
+        <h1>{mode === "signin" ? "Sign in" : mode === "signup" ? "Create your account" : "Forgot your password?"}</h1>
         <p className="muted small">
           Your own Linux machines for ethical hacking practice, in the browser. Nothing is installed on your computer.
         </p>
@@ -49,7 +53,7 @@ export function SignIn({ cfg, onSignedIn }: Props) {
             Email
             <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <label className="field">
+          {mode !== "forgot" && <label className="field">
             Password
             <input
               type="password"
@@ -59,17 +63,22 @@ export function SignIn({ cfg, onSignedIn }: Props) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-          </label>
+          </label>}
+          {mode === "forgot" && <span className="muted small">We'll email you a link to choose a new password.</span>}
           {mode === "signup" && <span className="muted small">At least 8 characters.</span>}
           <button className="primary" type="submit" disabled={busy}>
-            {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+            {busy ? "Please wait…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
           </button>
         </form>
         {error && <div className="notice error" role="alert">{error}</div>}
         {notice && <div className="notice ok" role="status">{notice}</div>}
         <div className="row small">
           {mode === "signin" ? (
-            <>New here? <button className="link" onClick={() => { setMode("signup"); setError(null); }}>Create an account</button></>
+            <>
+              New here? <button className="link" onClick={() => { setMode("signup"); setError(null); }}>Create an account</button>
+              <span className="spacer" />
+              <button className="link" onClick={() => { setMode("forgot"); setError(null); setNotice(null); }}>Forgot password?</button>
+            </>
           ) : (
             <>Already have an account? <button className="link" onClick={() => { setMode("signin"); setError(null); }}>Sign in</button></>
           )}

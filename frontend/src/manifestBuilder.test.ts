@@ -68,3 +68,12 @@ describe("remote desktop in the form", () => {
     expect(formProblems(lab({ environments: [{ ...e, size: "medium" }] }))).toEqual([]);
   });
 });
+
+describe("isolation", () => {
+  it("writes isolation only when stronger than a container", () => {
+    const env = newEnvironment(0);
+    expect(toYaml({ name: "a", description: "", environments: [env] })).not.toContain("isolation");
+    const yaml = toYaml({ name: "a", description: "", environments: [{ ...env, isolation: "microvm" }] });
+    expect(yaml).toContain("      isolation: microvm\n");
+  });
+});

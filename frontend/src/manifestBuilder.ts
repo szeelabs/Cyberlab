@@ -15,6 +15,14 @@ export type EnvDraft = {
   ttlHours: number | null;
   ephemeral: boolean;
   desktop: boolean;
+  isolation: Isolation;
+};
+
+export type Isolation = "container" | "sandbox" | "microvm";
+export const ISOLATION: Record<Isolation, string> = {
+  container: "Container: fast, shares the server's kernel (default)",
+  sandbox: "Sandbox (gVisor): its own kernel layer, stronger",
+  microvm: "MicroVM (Kata): a real small VM with its own kernel, strongest",
 };
 
 export type LabDraft = { name: string; description: string; environments: EnvDraft[] };
@@ -46,6 +54,7 @@ export function newEnvironment(index: number): EnvDraft {
     ttlHours: null,
     ephemeral: false,
     desktop: false,
+    isolation: "container",
   };
 }
 
@@ -97,6 +106,7 @@ export function toYaml(lab: LabDraft): string {
     if (e.ephemeral) lc.push("ephemeral: true");
     lines.push(`      lifecycle: {${lc.join(", ")}}`);
     if (e.desktop) lines.push("      access: {desktop: true}");
+    if (e.isolation !== "container") lines.push(`      isolation: ${e.isolation}`);
   }
   return lines.join("\n") + "\n";
 }

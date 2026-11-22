@@ -50,6 +50,9 @@ class ProviderStatus:
     detail: str
     cost_class: CostClass
     architecture: str | None = None  # the host's processor type: amd64, arm64 or unknown
+    # Isolation levels this server can run: always "container"; "sandbox" with gVisor,
+    # "microvm" with Kata Containers.
+    isolation: tuple[str, ...] = ("container",)
 
 
 @dataclass(frozen=True)

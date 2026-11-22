@@ -1,0 +1,35 @@
+# CyberLab's control plane (API + web app) as one image. Built locally by
+# scripts/install.sh; it starts lab machines through the host's Docker Engine.
+
+FROM node:22-slim AS web
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+FROM python:3.13-slim
+# docker CLI: CyberLab drives the host's Docker Engine through the mounted socket.
+# openssh-client: for running lab machines on another server (ssh:// Docker hosts).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssh-client ca-certificates \
+ && (apt-get install -y --no-install-recommends docker-cli \
+     || apt-get install -y --no-install-recommends docker.io) \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/cyberlab
+COPY backend/ backend/
+RUN pip install --no-cache-dir ./backend
+COPY registry/ registry/
+COPY --from=web /src/frontend/dist/ frontend/dist/
+ENV CYBERLAB_REGISTRY_DIR=/opt/cyberlab/registry \
+    CYBERLAB_WEBAPP_DIR=/opt/cyberlab/frontend/dist \
+    CYBERLAB_DATABASE_URL=sqlite:////data/cyberlab.db \
+    CYBERLAB_SNAPSHOT_DIR=/data/snapshots \
+    CYBERLAB_EXECUTION_PROVIDER=docker \
+    PYTHONDONTWRITEBYTECODE=1
+VOLUME /data
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"
+CMD ["uvicorn", "--factory", "cyberlab.main:app_factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

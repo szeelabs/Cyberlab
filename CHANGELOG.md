@@ -6,6 +6,15 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Stronger isolation per machine: `sandbox` (gVisor) and `microvm` (Kata Containers, its
+  own kernel), set up with `sudo ./scripts/install-isolation.sh`. A Malware Analysis tool
+  pack, allowed only in an isolated microVM.
+- Six more labs, from beginner to advanced: encodings and hashes, Linux permissions,
+  incident response on a web server, weak logins and leaked keys, file forensics, and a
+  multi-step recon chain. The Labs page filters by level and topic and shows your progress.
+- One-command install on a server: `sudo ./scripts/install.sh` (private, or public with
+  HTTPS and sign-in).
+- Forgot password: a reset link by email, then choose a new password in CyberLab.
 - Practice targets for labs: a second machine on the lab's private network to scan and
   test, reached by its name. New labs: *Scan a network with nmap* and *Web recon: find the
   secrets*. New Network Basics tool pack (curl, wget, netcat).

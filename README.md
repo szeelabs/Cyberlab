@@ -52,6 +52,8 @@ Development mode has **no sign-in**, so the script only listens on this machine
 
 **Ready-made labs:** open **Labs**, press Start, and practise with tasks and hints: [docs/guides/labs.md](docs/guides/labs.md).
 
+**Install on a server with one command:** `sudo ./scripts/install.sh` ([docs/guides/install.md](docs/guides/install.md)).
+
 **Run environments on your own server:** [docs/guides/own-server.md](docs/guides/own-server.md).
 
 ## Documentation

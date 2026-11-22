@@ -21,6 +21,9 @@ from cyberlab.yaml_safe import ManifestParseError, load_yaml_text
 DESKTOP_OVERHEAD_MIB = 1024
 
 
+ISOLATION_RANK = {"container": 0, "sandbox": 1, "microvm": 2}
+
+
 class Severity(StrEnum):
     error = "error"
     approval = "approval"  # allowed, but only after explicit user approval
@@ -155,6 +158,25 @@ def evaluate(manifest: UniverseManifest, registry: Registry, quotas: QuotaSettin
                         "security.isolation",
                         f"tool pack {pack_id!r} requires network mode 'isolated' or 'lab'",
                         f"{p}.network.mode",
+                    )
+                )
+            if pack.min_isolation == "microvm" and env.network.mode != NetworkMode.isolated:
+                findings.append(
+                    Finding(
+                        Severity.error,
+                        "security.isolation",
+                        f"tool pack {pack_id!r} requires network mode 'isolated' (no network)",
+                        f"{p}.network.mode",
+                    )
+                )
+            if ISOLATION_RANK[env.isolation] < ISOLATION_RANK[pack.min_isolation]:
+                findings.append(
+                    Finding(
+                        Severity.error,
+                        "security.isolation-level",
+                        f"tool pack {pack_id!r} must run in isolation '{pack.min_isolation}' "
+                        f"or stronger (this machine: '{env.isolation}')",
+                        f"{p}.isolation",
                     )
                 )
             if pack.risk == RiskLevel.high:

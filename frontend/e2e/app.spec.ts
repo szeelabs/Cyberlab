@@ -193,6 +193,16 @@ test("labs catalog: browse, and a clear message when no machines can be created"
   const card = page.getByRole("region", { name: "First steps in Linux" });
   await expect(card.getByText("beginner")).toBeVisible();
   await expect(card.getByText(/4 tasks/)).toBeVisible();
+  // Filters: advanced labs only, then defence only.
+  await page.getByLabel("Level").selectOption("advanced");
+  await expect(page.getByRole("region", { name: /Recon chain/ })).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByLabel("Level").selectOption("all");
+  await page.getByLabel("Topic").selectOption("blue-team");
+  await expect(page.getByRole("region", { name: /Log detective/ })).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByLabel("Topic").selectOption("all");
+  await expect(page.getByLabel("Your progress")).toContainText("0 of");
   await card.getByRole("button", { name: "Start lab" }).click();
   await expect(page.getByRole("alert")).toContainText("no execution provider");
   expect(errors.filter((e) => !/status of 503/.test(e))).toEqual([]);
@@ -420,6 +430,40 @@ test.describe("real sign-in (Supabase Auth stand-in, ES256 tokens)", () => {
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.getByRole("region", { name: "Sign in" })).toBeVisible();
     expect((await request.get(`http://127.0.0.1:${port - 2}/v1/workspaces`)).status()).toBe(401);
-    expect(errors).toEqual([]);
+
+    // Forgot the password: ask for a reset email, follow its link, choose a new password.
+    await page.getByRole("button", { name: "Forgot password?" }).click();
+    const reset = page.getByRole("region", { name: "Reset password" });
+    await reset.getByLabel("Email").fill(email);
+    await reset.getByRole("button", { name: "Send reset link" }).click();
+    await expect(page.getByRole("status")).toContainText("link to choose a new password");
+    const { link } = await (await request.get(`${auth}/__reset_link?email=${encodeURIComponent(email)}`)).json();
+    expect(link.startsWith(app)).toBe(true); // the email brings people back to this CyberLab
+    await page.goto(link);
+    const choose = page.getByRole("region", { name: "Choose a new password" });
+    await choose.getByLabel("New password", { exact: true }).fill("a-new-long-password");
+    await choose.getByLabel("New password again").fill("a-different-one");
+    await choose.getByRole("button", { name: "Save new password" }).click();
+    await expect(page.getByRole("alert")).toContainText("don't match");
+    await choose.getByLabel("New password again").fill("a-new-long-password");
+    await choose.getByRole("button", { name: "Save new password" }).click();
+    await expect(page.getByLabel("Signed in as")).toHaveText(email);
+    expect(page.url()).not.toContain("access_token"); // the token is removed from the address
+
+    // The old password no longer works; the new one does.
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await form.getByLabel("Email").fill(email);
+    await form.getByLabel("Password").fill("a-long-password");
+    await form.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("alert")).toContainText("Wrong email or password.");
+    await form.getByLabel("Password").fill("a-new-long-password");
+    await form.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByLabel("Signed in as")).toHaveText(email);
+
+    // An expired link explains itself instead of failing silently.
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.goto(`${app}#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired`);
+    await expect(page.getByRole("alert")).toContainText("expired or was already used");
+    expect(errors.filter((e) => !/status of 4\d\d/.test(e))).toEqual([]);
   });
 });

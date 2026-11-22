@@ -48,5 +48,7 @@ def build_provider(settings) -> ProviderAdapter | None:
             env=env,
             cost_class=CostClass(settings.execution_cost_class),
             allow_paid=settings.allow_paid_providers,
+            sandbox_runtime=settings.sandbox_runtime,
+            microvm_runtime=settings.microvm_runtime,
         )
     return None

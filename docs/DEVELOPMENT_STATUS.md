@@ -211,7 +211,8 @@ destroyed: creating the environments again from the manifest starts without them
 | Server | `CYBERLAB_AUTH_SUPABASE_URL` + `CYBERLAB_AUTH_SUPABASE_PUBLISHABLE_KEY` turn on Supabase sign-in; the JWKS URL, issuer and algorithms (ES256/RS256) are derived. Public `GET /v1/system/auth` tells the web app; the web app's CSP allows exactly that Supabase address. Guards: Supabase URLs only (or localhost outside production), https in production, the key is required | `config.py`, `api/routes.py`, `main.py` |
 | Web app | Sign-in screen (email + password), create account (with the email-confirmation message), plain-language errors, automatic token refresh shortly before expiry, back to sign-in on a revoked session or any 401, signed-in email and Sign out in the header. Talks to Supabase's REST API directly (no extra library). Development mode is unchanged | `src/auth.ts`, `src/pages/SignIn.tsx`, `src/App.tsx` |
 | Tests | Backend: ES256 tokens checked through a real local JWKS server: valid token, wrong issuer, wrong audience, expired, other key, unknown key id, `alg: none`, and a hand-forged HS256 token using the public key; settings guards; the public config; the real project's key list. Web: 8 unit tests (incl. the real Supabase error format). Browser: a stand-in for Supabase signing real ES256 tokens and a second CyberLab in JWT mode: wrong password, create account, "confirm your email", confirm, sign in, create a workspace, reload, sign out, API refuses without a token | `tests/test_supabase_auth.py`, `src/auth.test.ts`, `e2e/fake-supabase.mjs`, `e2e/app.spec.ts` |
-| Guide | Turning it on, Site URL for confirmation emails, free-plan email limits | `docs/guides/sign-in.md` |
+| Forgotten passwords | **Forgot password?** on the sign-in screen sends a Supabase reset email back to this CyberLab; the link opens **Choose a new password** (token checked with Supabase first, then removed from the address; works in a new tab or one already open); mismatched passwords, reused passwords and expired links get plain messages. Browser test: request, follow the link, set the password, old one refused, new one works, expired link explained | `src/auth.ts`, `src/pages/ResetPassword.tsx`, `src/pages/SignIn.tsx`, `src/App.tsx`, `e2e/fake-supabase.mjs` |
+| Guide | Turning it on, Site URL and Redirect URLs for email links, forgotten passwords, free-plan email limits | `docs/guides/sign-in.md` |
 
 The user's Supabase project is connected to Claude (connector) and its address and public key
 are known; they are **not** committed to the repository (each CyberLab owner sets their own).
@@ -233,9 +234,32 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Practice targets | Manifest `role: target` with the `lab-target` base (`python:3.13-slim`, no package downloads). The image carries CyberLab's practice program (standard-library Python) instead of a shell; it waits for its config, then answers on its ports from a fixed table (banners; HTTP routes incl. query strings, redirects, HEAD, 404). Low ports via the per-container `ip_unprivileged_port_start=0` setting, otherwise the usual hardening. Policy: `lab-target` only for targets, targets only on `lab`, no packs or desktop. The architect and the beginner form never offer `lab-target` | `execution/target_services.py`, `execution/images.py`, `execution/docker.py`, `manifest/models.py`, `manifest/policy.py`, `registry/base-images.yaml` |
 | Names on the lab network | Every machine on a network gets its manifest name as a network alias, so `nmap target` / `curl http://target` work | `execution/docker.py` |
 | Lockdown | Terminal, desktop, files, snapshots and installs are refused (403) for practice targets; `access.terminal: false` is now honoured for any machine | `api/environments.py` (`_require_workstation`), `api/terminal.py`, `api/files.py`, `api/snapshots.py`, `api/install.py` |
-| Labs | *Scan a network with nmap* (open ports, SSH version with `-sV`, a hidden high port with `-p-`, its banner) and *Web recon: find the secrets* (page source, `robots.txt`, IDOR); generators `scan-target`, `web-target`; new **Network Basics** tool pack (curl, wget, netcat) | `registry/labs/`, `labs/generators.py`, `registry/toolpacks/net-basics.yaml` |
+| Labs | *Scan a network with nmap* (the web server's port, SSH version with `-sV`, a hidden high port with `-p-`, its banner) and *Web recon: find the secrets* (page source, `robots.txt`, IDOR); generators `scan-target`, `web-target`; new **Network Basics** tool pack (curl, wget, netcat) | `registry/labs/`, `labs/generators.py`, `registry/toolpacks/net-basics.yaml` |
 | Web app | Targets marked as "practice target" with no Terminal button; the Lab tab says to reach them by name; Files/Snapshots don't offer targets | `components/LabTab.tsx`, `pages/Workspace.tsx` |
 | Tests | Practice program (banner, HTTP table, traversal is just a 404, HEAD, waiting for config, standard library only); generators match their answers; 5 policy refusals; run args (command, port setting, alias; workstations unchanged); API lockdown (6 endpoints) and `terminal: false`. Real Docker: attacker reaches the target by name on 22/80/31337 with bash only, target unprivileged with no way out. CI (with package downloads): both labs solved end to end with nmap, nc and curl | `tests/test_targets.py`, `tests/test_docker_integration.py` |
+
+## Implemented (Phase 8, step 3 — labs at every level, progress)
+| Area | What works | Where |
+|---|---|---|
+| Labs | 10 labs: 6 beginner, 3 intermediate (*Incident response: a hacked web server*, *Web: weak logins and leaked keys*, *Forensics: what's hiding in this file?*), 1 advanced (*Recon chain*: checkpoints instead of instructions). New generators: `crypto-basics`, `permissions`, `access-log`, `carving`, `web-login-target`, `wordlist`, `chain-target`; setup files can set permission bits; targets can answer unknown addresses on a path with a fixed reply (e.g. 401 for wrong passwords) | `registry/labs/`, `labs/generators.py`, `execution/target_services.py` |
+| Progress | `GET /v1/labs/progress`: the user's best run per lab and how many labs are completed. Labs page: level and topic filters, a "completed" badge, Continue (n/m solved), Start again, and a total | `api/labs.py`, `pages/Labs.tsx` |
+| Tests | Each new generator's answers checked against its content over 5 seeds; permission bits survive the archive. Real Docker: *Encodings*, *Permissions* and *Incident response* solved with exactly the hinted commands on plain Ubuntu. CI (package downloads): *Web logins*, *Recon chain* and *Forensics* solved end to end with curl, nmap and binwalk. Browser: filters and the progress total | `tests/test_more_labs.py`, `tests/test_labs.py`, `tests/test_docker_integration.py`, `frontend/e2e/app.spec.ts` |
+
+## Implemented (one-command install)
+| Area | What works | Where |
+|---|---|---|
+| Installer | `sudo ./scripts/install.sh`: installs Docker from the distribution if missing, builds CyberLab's image from the checkout, keeps data in the `cyberlab-data` volume, restarts with the server. Private mode listens on 127.0.0.1 only (development sign-in, for SSH tunnels). `--domain` + Supabase values: production mode behind Caddy with automatic HTTPS, CyberLab reachable only through Caddy; refused without sign-in. Settings in `/etc/cyberlab/cyberlab.env` (mode 600). `--mirror`, `--uninstall`, `--purge` | `scripts/install.sh`, `Dockerfile`, `.dockerignore` |
+| Tests | CI job `installer` on a fresh Ubuntu runner: private install, web app, a real lab started through the API, rerun keeps data, public mode (HTTPS with a local certificate, 401 without a token, not reachable around Caddy, settings file mode 600), refusal without sign-in, uninstall with purge | `.github/workflows/ci.yml` |
+| Guide | `docs/guides/install.md` | |
+
+## Implemented (Phase 9, step 1 — stronger isolation)
+| Area | What works | Where |
+|---|---|---|
+| Isolation levels | Manifest `isolation: container \| sandbox \| microvm`. `sandbox` runs the machine with gVisor (`--runtime runsc`), `microvm` with Kata Containers (`--runtime kata`); all other hardening stays. The Docker adapter reads the engine's runtimes and reports the levels it can run (`/v1/system/execution` → `isolation`); asking for a missing level is refused before anything is created, with a plain message. Runtime names configurable (`CYBERLAB_SANDBOX_RUNTIME`, `CYBERLAB_MICROVM_RUNTIME`) and validated | `manifest/models.py`, `execution/docker.py`, `api/environments.py`, `config.py` |
+| Malware Analysis pack | radare2, YARA, UPX, ssdeep on Ubuntu/Kali. Tool packs can declare `minIsolation`; this one needs `microvm` **and** network `isolated`, is high-risk (needs approval), and is never drafted by the AI helper. No samples are shipped | `registry/toolpacks/malware-analysis.yaml`, `manifest/policy.py`, `architect/core.py` |
+| Setup | `scripts/install-isolation.sh`: gVisor from its signed apt repository, Kata from its latest official release when KVM exists, registers both with Docker, prints each level's kernel | `scripts/install-isolation.sh`, `docs/guides/isolation.md` |
+| Web app | Isolation choice in the beginner form; levels the server lacks are shown as not installed | `components/ManifestBuilder.tsx`, `manifestBuilder.ts` |
+| Tests | Policy (malware pack refused in container/sandbox and on a network; allowed in an isolated microVM with approval), AI helper excludes it, runtime detection, run args per level with hardening kept, refusal of missing runtimes, validated names, API refusal and success. CI job `isolation`: the install script on a GitHub runner, then real CyberLab machines in gVisor and in Kata report their own kernel, the right runtime, the unprivileged user, a read-only system, and working files | `tests/test_isolation.py`, `tests/test_docker_integration.py`, `.github/workflows/ci.yml` |
 
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
@@ -246,10 +270,10 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Encryption key rotation | 3-4 |
 | Scheduled snapshots (`snapshotPolicy: daily` / `on-stop` in the manifest are not acted on yet) | 3-4 |
 | AI Lab Architect extras: other model providers (OpenAI-compatible, Ollama); reading program logs inside machines; scoring Claude on the evaluation set (needs a key) | 5 |
-| Forgotten-password flow in the sign-in screen; sign-in providers other than email (GitHub, Google) | 6 |
+| Sign-in providers other than email (GitHub, Google) | 6 |
 | Remote desktop extras: resizing the screen to the browser, sound, a fuller desktop (panel, file manager) | 6 |
-| Container images published to a registry (ghcr.io); a project website | 7 |
-| More labs (intermediate/advanced, pivoting), completed badges, classroom mode | 8 |
+| Container images published to a registry (ghcr.io; the installer builds locally instead); a project website; a public demo | 7 |
+| Multi-network (pivoting) labs, classroom mode, community lab sharing | 8 |
 | Packs for penetration testing, malware analysis, AI security | needs isolation work first |
 
 ## Known issues

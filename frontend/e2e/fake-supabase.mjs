@@ -10,6 +10,8 @@ const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256
 const kid = randomUUID();
 const users = new Map(); // email -> { id, password, confirmed }
 const refresh = new Map(); // refresh token -> email
+const issued = new Map(); // access token -> email (tokens this stand-in handed out)
+const resetLinks = new Map(); // email -> the link a reset email would contain
 
 const b64 = (b) => Buffer.from(b).toString("base64url");
 function jwtFor(user, email) {
@@ -22,14 +24,17 @@ function jwtFor(user, email) {
 function session(email) {
   const rt = randomBytes(16).toString("hex");
   refresh.set(rt, email);
-  return { access_token: jwtFor(users.get(email), email), refresh_token: rt, expires_in: 3600, token_type: "bearer", user: { id: users.get(email).id, email } };
+  const at = jwtFor(users.get(email), email);
+  issued.set(at, email);
+  return { access_token: at, refresh_token: rt, expires_in: 3600, token_type: "bearer", user: { id: users.get(email).id, email } };
 }
+const bearer = (req) => issued.get((req.headers.authorization ?? "").replace(/^Bearer /, ""));
 
 createServer(async (req, res) => {
   const cors = {
     "Access-Control-Allow-Origin": req.headers.origin ?? "*",
     "Access-Control-Allow-Headers": "apikey, authorization, content-type, x-client-info",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
   };
   const send = (status, body) => {
     res.writeHead(status, { ...cors, "Content-Type": "application/json" });
@@ -38,7 +43,7 @@ createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(204);
   const url = new URL(req.url, base);
   let data = {};
-  if (req.method === "POST") {
+  if (req.method === "POST" || req.method === "PUT") {
     let raw = "";
     for await (const chunk of req) raw += chunk;
     data = raw ? JSON.parse(raw) : {};
@@ -52,7 +57,31 @@ createServer(async (req, res) => {
     u.confirmed = true;
     return send(200, {});
   }
-  if (req.method === "POST" && !req.headers.apikey) return send(401, { message: "No API key found in request" });
+  if (url.pathname === "/__reset_link") {
+    // test helper: the link inside the password-reset email
+    const link = resetLinks.get(url.searchParams.get("email"));
+    return link ? send(200, { link }) : send(404, { message: "no reset email" });
+  }
+  if (req.method !== "OPTIONS" && url.pathname.startsWith("/auth/v1/") && !url.pathname.includes("jwks") && !req.headers.apikey)
+    return send(401, { message: "No API key found in request" });
+  if (url.pathname === "/auth/v1/recover") {
+    // Same answer whether or not the account exists, like Supabase.
+    if (users.has(data.email)) {
+      const s = session(data.email);
+      const back = url.searchParams.get("redirect_to") ?? base;
+      resetLinks.set(data.email, `${back}#access_token=${s.access_token}&expires_in=3600&refresh_token=${s.refresh_token}&token_type=bearer&type=recovery`);
+    }
+    return send(200, {});
+  }
+  if (url.pathname === "/auth/v1/user") {
+    const email = bearer(req);
+    if (!email) return send(401, { msg: "invalid JWT" });
+    if (req.method === "PUT") {
+      if (data.password === users.get(email).password) return send(422, { msg: "New password should be different from the old password." });
+      users.get(email).password = data.password;
+    }
+    return send(200, { id: users.get(email).id, email });
+  }
   if (url.pathname === "/auth/v1/signup") {
     if (users.has(data.email)) return send(422, { msg: "User already registered" });
     users.set(data.email, { id: randomUUID(), password: data.password, confirmed: false });

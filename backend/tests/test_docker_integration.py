@@ -688,18 +688,18 @@ def test_target_labs_end_to_end(client, lab):
         attacker = next(e for e in envs if e["name"] == "attacker")["resources"]["container"]
         wait = (
             "for i in $(seq 1 60); do "
-            "(exec 3<>/dev/tcp/target/80) 2>/dev/null && break; sleep 0.5; done"
+            "(exec 3<>/dev/tcp/target/22) 2>/dev/null && break; sleep 0.5; done"
         )
         sh(attacker, wait, interpreter="bash")
         answers = {}
         if lab == "network-scanning":
-            _, scan = sh(attacker, "nmap -Pn target")
-            answers["open-ports"] = str(len(re.findall(r"^\d+/tcp\s+open", scan, re.M)))
+            _, scan = sh(attacker, "nmap -Pn -sV target")
+            answers["web-port"] = re.search(r"^(\d+)/tcp\s+open\s+http\s", scan, re.M).group(1)
             _, ver = sh(attacker, "nmap -Pn -sV -p 22 target")
             answers["ssh-version"] = re.search(r"OpenSSH[ _]([0-9.]+p\d)", ver).group(1)
             _, full = sh(attacker, "nmap -Pn -p- --min-rate 2000 target")
             ports = re.findall(r"^(\d+)/tcp\s+open", full, re.M)
-            hidden = next(p for p in ports if p not in ("21", "22", "80"))
+            hidden = next(p for p in ports if int(p) > 10000)
             answers["hidden-port"] = hidden
             _, banner = sh(attacker, f"timeout 5 nc target {hidden} </dev/null")
             answers["banner-flag"] = re.search(r"CL\{[0-9a-f]{16}\}", banner).group()
@@ -726,3 +726,188 @@ def test_target_labs_end_to_end(client, lab):
         assert r["progress"]["solved"] == r["progress"]["total"]
     finally:
         destroy_all(client, ws, envs)
+
+
+def _solve(client, lab, solver):
+    """Start a lab, let `solver(sh_in_machine)` find the answers, check them all."""
+    out = client.post(f"/v1/labs/{lab}/start", headers=auth()).json()
+    ws = out["workspaceId"]
+    envs = client.get(f"/v1/workspaces/{ws}/environments", headers=auth()).json()
+    try:
+        assert out.get("setupError") is None, out
+        boxes = {e["name"]: e["resources"]["container"] for e in envs}
+        me = next(n for n in boxes if n != "target")
+
+        def run(cmd):
+            code, text = sh(boxes[me], cmd, interpreter="bash")
+            return text
+
+        answers = solver(run)
+        for task, value in answers.items():
+            r = client.post(
+                f"/v1/workspaces/{ws}/lab/answer",
+                json={"task": task, "answer": value},
+                headers=auth(),
+            ).json()
+            assert r["correct"] is True, (lab, task, value)
+        assert r["progress"]["solved"] == r["progress"]["total"]
+    finally:
+        destroy_all(client, ws, envs)
+
+
+FLAG = r"CL\{[0-9a-f]{16}\}"
+
+
+def test_linux_labs_solved_with_the_hinted_commands(client):
+    """No tool packs needed: the hints' commands work on a plain Ubuntu machine."""
+    import re
+
+    def crypto(run):
+        wanted = run("tail -1 puzzles/WANTED.txt")
+        leaked = run(f"sha256sum puzzles/reports/* | grep {wanted}").split("/")[-1]
+        return {
+            "base64-flag": re.search(FLAG, run("base64 -d puzzles/message.b64")).group(),
+            "hex-flag": re.search(FLAG, run("basenc --base16 -d puzzles/message.hex")).group(),
+            "rot13-flag": re.search(
+                FLAG, run("tr 'A-Za-z' 'N-ZA-Mn-za-m' < puzzles/message.rot13")
+            ).group(),
+            "leaked-file": leaked,
+        }
+
+    def perms(run):
+        assert "Permission denied" in run("./perms/hello.sh")
+        assert "Permission denied" in run("cat perms/locked.txt")
+        # exact bits survive unpacking, whatever the umask
+        assert run("stat -c %a perms/locked.txt perms/hello.sh").split() == ["0", "644"]
+        assert "666" in run("stat -c %a perms/configs/*").split()
+        return {
+            "run-flag": re.search(FLAG, run("chmod +x perms/hello.sh && ./perms/hello.sh")).group(),
+            "locked-flag": re.search(
+                FLAG, run("chmod u+r perms/locked.txt && cat perms/locked.txt")
+            ).group(),
+            "risky-file": run("find perms/configs -perm -o+w").split("/")[-1],
+        }
+
+    def incident(run):
+        ip = run("awk '$9 == 404 {print $1}' access.log | sort | uniq -c | sort -n | tail -1")
+        ip = ip.split()[-1]
+        tool = run(f"grep '^{ip} ' access.log | awk -F'\"' '{{print $6}}' | sort | uniq -c")
+        tool = next(line.split()[-1] for line in tool.splitlines() if "/" in line.split()[-1])
+        shell = run("grep 'cmd=' access.log | head -1 | awk '{print $7}'").split("?")[0]
+        return {"scanner-ip": ip, "scanner-tool": tool.split("/")[0], "webshell-path": shell}
+
+    _solve(client, "crypto-basics", crypto)
+    _solve(client, "linux-permissions", perms)
+    _solve(client, "incident-response-web", incident)
+
+
+@pytest.mark.skipif(
+    os.environ.get("CYBERLAB_DOCKER_BUILD_TESTS") != "1",
+    reason="installs curl, nmap and binwalk; needs internet access during image builds",
+)
+def test_intermediate_and_advanced_labs_end_to_end(client):
+    import re
+
+    wait = (
+        "for i in $(seq 1 60); do (exec 3<>/dev/tcp/target/22) 2>/dev/null && break; "
+        "(exec 3<>/dev/tcp/target/80) 2>/dev/null && break; sleep 0.5; done"
+    )
+
+    def logins(run):
+        run(wait)
+        admin = re.search(r"Ask our (\w+) at", run("curl -s http://target/")).group(1)
+        loop = (
+            'while read p; do echo "PASS $p"; '
+            f'curl -s "http://target/login?user={admin}&password=$p"; echo; '
+            "done < passwords.txt | grep -B1 Welcome"
+        )
+        key = re.search(r"API_KEY = '(\w+)'", run("curl -s http://target/static/app.js")).group(1)
+        return {
+            "admin-user": admin,
+            "login-flag": re.search(FLAG, run(loop)).group(),
+            "key-flag": re.search(
+                FLAG, run(f'curl -s "http://target/api/fleet?key={key}"')
+            ).group(),
+        }
+
+    def chain(run):
+        run(wait)
+        scan = run("nmap -Pn -p- --min-rate 2000 target")
+        port = next(p for p in re.findall(r"^(\d+)/tcp\s+open", scan, re.M) if p != "22")
+        backup = re.search(r"moved to (\S+)", run(f"curl -s http://target:{port}/")).group(1)
+        creds = dict(
+            line.split("=", 1)
+            for line in run(f"curl -s http://target:{port}{backup}").splitlines()
+            if "=" in line
+        )
+        u, p = creds["service_user"], creds["service_password"]
+        token = re.search(
+            r'"token": "(\w+)"',
+            run(f'curl -s "http://target:{port}/api/token?user={u}&password={p}"'),
+        ).group(1)
+        flag = re.search(FLAG, run(f'curl -s "http://target:{port}/api/admin/flag?token={token}"'))
+        return {"web-port": port, "service-user": u, "chain-flag": flag.group()}
+
+    def forensics(run):
+        note = re.search(FLAG, run("grep -a -o 'note: CL{[0-9a-f]*}' evidence.png")).group()
+        scan = run("binwalk evidence.png")
+        offset = re.search(r"^(\d+)\s+0x[0-9A-F]+\s+gzip", scan, re.M | re.I).group(1)
+        carved = run(f"tail -c +{int(offset) + 1} evidence.png | gunzip")
+        return {
+            "note-flag": note,
+            "gzip-offset": offset,
+            "carved-flag": re.search(FLAG, carved).group(),
+        }
+
+    _solve(client, "web-logins", logins)
+    _solve(client, "recon-chain", chain)
+    _solve(client, "file-forensics", forensics)
+
+
+ISOLATION_LEVELS = [
+    lvl for lvl in os.environ.get("CYBERLAB_ISOLATION_TESTS", "").split(",") if lvl.strip()
+]
+
+
+@pytest.mark.skipif(not ISOLATION_LEVELS, reason="set CYBERLAB_ISOLATION_TESTS=sandbox,microvm")
+@pytest.mark.parametrize("level", ISOLATION_LEVELS or ["none"])
+def test_stronger_isolation_on_real_runtimes(client, level):
+    """The machine really runs on its own kernel, still hardened, and still usable: files,
+    a terminal-style command, and lab files placed by the lab engine."""
+    import platform
+
+    st = client.get("/v1/system/execution", headers=auth()).json()
+    assert level in st["isolation"], st
+    manifest = f"""apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {{name: it-{level}}}
+spec:
+  environments:
+    - name: box
+      baseImage: ubuntu-24-04
+      resources: {{cpu: 1, memoryMiB: 1024, storageGiB: 2}}
+      network: {{mode: isolated}}
+      isolation: {level}
+"""
+    ws, (env,) = provision(client, manifest, f"it-{level}")
+    name = env["resources"]["container"]
+    try:
+        code, kernel = sh(name, "uname -r")
+        assert code == 0 and kernel and kernel != platform.release(), (kernel, platform.release())
+        runtime = docker("inspect", "--format", "{{.HostConfig.Runtime}}", name).stdout
+        assert runtime.strip() in ("runsc", "kata"), runtime
+        code, who = sh(name, "id -u")
+        assert who == "1000"
+        ro = docker("inspect", "--format", "{{.HostConfig.ReadonlyRootfs}}", name).stdout
+        assert ro.strip() == "true"
+        code, out = sh(name, "echo hi > /workspace/f && cat /workspace/f")
+        assert out == "hi", out
+        r = client.get(
+            f"/v1/workspaces/{ws}/environments/{env['id']}/files?path=.", headers=auth()
+        ).json()
+        assert "f" in [e["name"] for e in r["entries"]]
+        if level == "sandbox":
+            code, msg = sh(name, "dmesg 2>/dev/null | head -3 || true")
+            assert "gvisor" in msg.lower() or code != 0
+    finally:
+        destroy_all(client, ws, [env])

@@ -105,6 +105,9 @@ class Settings(BaseSettings):
     execution_cost_class: Literal["free", "user-owned", "paid"] = "user-owned"
     allow_paid_providers: bool = False
     docker_binary: str = "docker"
+    # Docker runtime names for the stronger isolation levels (see docs/guides/isolation.md).
+    sandbox_runtime: str = Field(default="runsc", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+    microvm_runtime: str = Field(default="kata", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
     image_mirror: str | None = None  # e.g. mirror.gcr.io, replaces the docker.io/ prefix
 
     # --- Egress proxy (restricted-egress) -------------------------------------

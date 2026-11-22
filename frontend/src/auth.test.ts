@@ -1,7 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { getToken } from "./api";
-import { authMessage, freshSession, loadSession, signIn, signOut, signUp, type AuthConfig } from "./auth";
+import {
+  authMessage,
+  freshSession,
+  loadSession,
+  readAuthRedirect,
+  requestPasswordReset,
+  signIn,
+  signOut,
+  signUp,
+  updatePassword,
+  type AuthConfig,
+} from "./auth";
 
 // A tiny sessionStorage for the node test environment.
 const mem = new Map<string, string>();
@@ -95,5 +106,54 @@ describe("sign out", () => {
     expect(getToken()).toBe("");
     expect(calls[0].url).toBe("https://abc.supabase.co/auth/v1/logout");
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBe("Bearer at-1");
+  });
+});
+
+describe("forgotten passwords", () => {
+  it("asks Supabase for a reset email that comes back to this app", async () => {
+    const calls: Call[] = [];
+    await requestPasswordReset(cfg, "me@example.com", "https://lab.example.org/app/", fakeFetch(200, {}, calls));
+    expect(calls[0].url).toBe("https://abc.supabase.co/auth/v1/recover?redirect_to=https%3A%2F%2Flab.example.org%2Fapp%2F");
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ email: "me@example.com" });
+  });
+
+  it("ignores ordinary app addresses", async () => {
+    expect(await readAuthRedirect(cfg, "#/workspace/abc/lab", fakeFetch(500, {}))).toBeNull();
+    expect(await readAuthRedirect(cfg, "", fakeFetch(500, {}))).toBeNull();
+  });
+
+  it("turns a recovery link into a session, checking the token with Supabase first", async () => {
+    const calls: Call[] = [];
+    const r = await readAuthRedirect(
+      cfg,
+      "#access_token=at-9&expires_in=600&refresh_token=rt-9&token_type=bearer&type=recovery",
+      fakeFetch(200, { email: "me@example.com" }, calls),
+      1000,
+    );
+    expect(r).toEqual({ kind: "session", type: "recovery", session: { accessToken: "at-9", refreshToken: "rt-9", expiresAt: 1600, email: "me@example.com" } });
+    expect(calls[0].url).toBe("https://abc.supabase.co/auth/v1/user");
+    expect(calls[0].init.method).toBe("GET");
+    expect((calls[0].init.headers as Record<string, string>).Authorization).toBe("Bearer at-9");
+    expect(getToken()).toBe("at-9");
+  });
+
+  it("explains expired links and refuses tokens Supabase doesn't accept", async () => {
+    const expired = await readAuthRedirect(cfg, "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired", fakeFetch(500, {}));
+    expect(expired).toEqual({ kind: "error", message: "This link has expired or was already used. Ask for a new one." });
+    const forged = await readAuthRedirect(cfg, "#access_token=forged&refresh_token=x&type=recovery", fakeFetch(401, { msg: "invalid JWT" }));
+    expect(forged?.kind).toBe("error");
+    expect(loadSession()).toBeNull();
+  });
+
+  it("sets the new password with the session from the link", async () => {
+    await readAuthRedirect(cfg, "#access_token=at-9&refresh_token=rt-9&type=recovery", fakeFetch(200, { email: "me@example.com" }));
+    const calls: Call[] = [];
+    await updatePassword(cfg, "new-password-123", fakeFetch(200, {}, calls));
+    expect(calls[0].url).toBe("https://abc.supabase.co/auth/v1/user");
+    expect(calls[0].init.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ password: "new-password-123" });
+    await expect(updatePassword(cfg, "same", fakeFetch(422, { msg: "New password should be different from the old password." }))).rejects.toThrow(
+      "Choose a password you haven't used before.",
+    );
   });
 });

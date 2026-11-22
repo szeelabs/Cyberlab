@@ -407,3 +407,75 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm run e2e
+
+  installer:
+    # scripts/install.sh on a fresh Ubuntu server: private mode, a real lab, an update that
+    # keeps data, public mode behind Caddy with HTTPS and sign-in required, then uninstall.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install (private, this machine only)
+        run: sudo ./scripts/install.sh --mirror mirror.gcr.io
+      - name: The web app, the API and a real lab work
+        run: |
+          curl -fsS http://127.0.0.1:8000/healthz
+          curl -fsS http://127.0.0.1:8000/app/ | grep -q '<div id="root">'
+          curl -fsS -X POST http://127.0.0.1:8000/v1/labs/linux-first-steps/start > lab.json
+          python3 -c 'import json; d=json.load(open("lab.json")); assert d["setupError"] is None, d; print("lab", d["workspaceId"])'
+          test -n "$(sudo docker ps -q --filter label=dev.cyberlab.managed=true)"
+          # private mode is not reachable from other machines
+          ! curl -s --max-time 3 "http://$(hostname -I | awk '{print $1}'):8000/healthz"
+      - name: Running it again updates CyberLab and keeps the data
+        run: |
+          sudo ./scripts/install.sh --mirror mirror.gcr.io
+          curl -fsS http://127.0.0.1:8000/v1/workspaces | grep -q linux-first-steps
+      - name: Public mode (HTTPS through Caddy, sign-in required)
+        run: |
+          sudo ./scripts/install.sh --mirror mirror.gcr.io --domain localhost \
+            --supabase-url https://abcdefghijklmnopqrst.supabase.co \
+            --supabase-key sb_publishable_ci_placeholder_key_0123
+          for i in $(seq 1 30); do curl -ksf https://localhost/healthz && break; sleep 2; done
+          curl -ksf https://localhost/healthz
+          test "$(curl -ks -o /dev/null -w '%{http_code}' https://localhost/v1/workspaces)" = 401
+          curl -ksf https://localhost/v1/system/auth | grep -q supabase
+          ! curl -s --max-time 3 http://127.0.0.1:8000/healthz  # only reachable through Caddy
+          sudo stat -c '%a' /etc/cyberlab/cyberlab.env | grep -qx 600
+      - name: Refuses public mode without sign-in
+        run: "! sudo ./scripts/install.sh --domain example.org"
+      - name: Uninstall
+        run: |
+          sudo ./scripts/install.sh --uninstall --purge
+          test -z "$(sudo docker ps -aq --filter name=cyberlab)"
+          test -z "$(sudo docker ps -aq --filter label=dev.cyberlab.managed=true)"
+          ! sudo docker volume inspect cyberlab-data
+      - name: Logs on failure
+        if: failure()
+        run: sudo docker logs --tail 80 cyberlab || true
+
+  isolation:
+    # Stronger isolation on real runtimes: gVisor (sandbox) and Kata Containers (microVM,
+    # which needs KVM; GitHub's Linux runners have it).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e './backend[dev]'
+      - name: Install gVisor and Kata Containers with CyberLab's script
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: sudo -E ./scripts/install-isolation.sh
+      - name: CyberLab machines in a sandbox and in a microVM
+        working-directory: backend
+        env:
+          CYBERLAB_DOCKER_TESTS: "1"
+          CYBERLAB_TEST_IMAGE_MIRROR: mirror.gcr.io
+          CYBERLAB_ISOLATION_TESTS: sandbox,microvm
+        run: pytest -v tests/test_docker_integration.py -k "stronger_isolation"

@@ -29,15 +29,25 @@ Everything else is derived: the public key list
 algorithms (ES256/RS256). Restart CyberLab: the web app now shows a **Sign in** screen with
 **Create an account**.
 
-## 3. Set where confirmation emails send people
-New accounts get a confirmation email. In Supabase: **Authentication → URL Configuration**,
-set **Site URL** to your CyberLab address followed by `/app/` (for example
-`https://your-server.example.org/app/`). Without it, the link still confirms the account but
-then opens Supabase's default page; people can simply come back and sign in.
+## 3. Set where email links send people
+New accounts get a confirmation email, and **Forgot password?** sends a reset email. In
+Supabase: **Authentication → URL Configuration**:
+* set **Site URL** to your CyberLab address followed by `/app/` (for example
+  `https://your-server.example.org/app/`), and
+* add the same address under **Redirect URLs** (reset links are only sent back to
+  addresses on that list).
+
+Without it, confirmation links still confirm the account but open Supabase's default page,
+and reset links can't bring people back to CyberLab to choose a new password.
+
+## Forgotten passwords
+On the sign-in screen, **Forgot password?** asks for an email address and sends a link
+(Supabase answers the same whether or not an account exists, so this never reveals who has
+an account). The link opens CyberLab on **Choose a new password**; the token in the link is
+checked with Supabase and then removed from the address bar. Expired or used links say so
+and ask for a new one.
 
 ## Good to know
 * Supabase's built-in email sender is limited to a few emails per hour on the free plan.
   For more sign-ups, connect your own SMTP in **Authentication → Emails** (free options exist).
 * Sessions last for the browser tab: closing the tab signs you out.
-* Forgotten passwords: not in CyberLab's screen yet; reset them from the Supabase dashboard
-  (**Authentication → Users**).

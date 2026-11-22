@@ -54,6 +54,38 @@ def list_labs(labs: dict[str, Lab] = Depends(get_labs)) -> list[dict]:
     ]
 
 
+@router.get("/v1/labs/progress")
+def lab_progress(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+    labs: dict[str, Lab] = Depends(get_labs),
+) -> dict:
+    """The signed-in user's progress per lab: the best run (most solved, then newest)."""
+    rows = db.execute(
+        select(LabRun, Workspace.name)
+        .join(Workspace, Workspace.id == LabRun.workspace_id)
+        .where(Workspace.owner_id == user.id)
+    ).all()
+    best: dict[str, dict] = {}
+    for run, ws_name in rows:
+        lab = labs.get(run.lab_id)
+        if lab is None:
+            continue
+        entry = {
+            "workspaceId": run.workspace_id,
+            "workspace": ws_name,
+            "solved": len(run.solved),
+            "total": len(lab.tasks),
+            "completed": len(run.solved) == len(lab.tasks),
+            "startedAt": run.created_at.isoformat(),
+        }
+        old = best.get(run.lab_id)
+        if old is None or (entry["solved"], entry["startedAt"]) > (old["solved"], old["startedAt"]):
+            best[run.lab_id] = entry
+    done = sum(1 for e in best.values() if e["completed"])
+    return {"labs": best, "completed": done, "available": len(labs)}
+
+
 @router.get("/v1/labs/{lab_id}")
 def get_lab(lab_id: str, labs: dict[str, Lab] = Depends(get_labs)) -> dict:
     return _lab(labs, lab_id).public()
@@ -69,7 +101,7 @@ def _free_name(db: Session, user: User, base: str) -> str:
     return f"{base}-{n}"
 
 
-def _archive(files: dict[str, bytes]) -> bytes:
+def _archive(files: dict[str, bytes], modes: dict[str, int] | None = None) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         dirs: set[str] = set()
@@ -83,15 +115,18 @@ def _archive(files: dict[str, bytes]) -> bytes:
                     info.type, info.mode = tarfile.DIRTYPE, 0o755
                     tar.addfile(info)
             info = tarfile.TarInfo(path)
-            info.size, info.mode = len(files[path]), 0o644
+            # plain rwx bits only: never setuid, setgid or sticky
+            info.size, info.mode = len(files[path]), (modes or {}).get(path, 0o644) & 0o777
             tar.addfile(info, io.BytesIO(files[path]))
     return buf.getvalue()
 
 
-def _place(provider: ProviderAdapter, ref: str, files: dict[str, bytes]) -> None:
+def _place(
+    provider: ProviderAdapter, ref: str, files: dict[str, bytes], modes: dict[str, int]
+) -> None:
     extract = getattr(provider, "extract_files", None)
     if extract is not None:
-        extract(ref, _archive(files))
+        extract(ref, _archive(files, modes))
         return
     for path, data in files.items():  # providers without archive support
         provider.write_file(ref, f"/workspace/{path}", data)
@@ -175,7 +210,7 @@ def start_lab(
             )
             continue
         try:
-            _place(adapter, env.provider_ref, files)
+            _place(adapter, env.provider_ref, files, content.modes.get(name, {}))
         except ProviderError as exc:
             errors.append(f"{name}: lab files could not be placed ({exc})")
     run.setup_error = "; ".join(errors) or None

@@ -1,0 +1,53 @@
+id: linux-permissions
+title: Linux file permissions
+level: beginner
+minutes: 20
+topic: linux
+summary: Read rwx permissions, make a script executable, unlock a file, and spot a dangerously writable config.
+skills: [ls -l, chmod, rwx, find -perm]
+introduction: |
+  Every file in Linux has permissions: who may read (r), write (w) and execute (x) it, for
+  its owner, its group and everyone else. Wrong permissions are one of the most common
+  security problems on real servers.
+
+  Open the Terminal of "student". Look in the folder `perms` with `ls -l perms`.
+spec:
+  environments:
+    - name: student
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: student
+    path: perms
+    generator: permissions
+tasks:
+  - id: run-flag
+    title: Run the script
+    text: |
+      `perms/hello.sh` is a script, but `./perms/hello.sh` says "Permission denied". Look at
+      its permissions, give it execute permission, and run it.
+    answer: run-flag
+    hints:
+      - "`ls -l perms/hello.sh` shows `-rw-r--r--`: no x, so it can't run."
+      - "`chmod +x perms/hello.sh`, then `./perms/hello.sh`"
+  - id: locked-flag
+    title: Unlock a file
+    text: |
+      `perms/locked.txt` can't even be read. It's yours, so you may change its permissions.
+    answer: locked-flag
+    hints:
+      - "`ls -l` shows `----------`: nobody may read it."
+      - "`chmod u+r perms/locked.txt` gives you (u = user/owner) read permission."
+  - id: risky-file
+    title: Find the dangerous config
+    text: |
+      One file in `perms/configs` can be changed by every user on the system
+      ("world-writable"). On a real server, an attacker could edit it. Which one?
+    answer: risky-file
+    answerFormat: a file name
+    hints:
+      - "World-writable means the last `w` in `-rw-rw-rw-`. Look at `ls -l perms/configs`."
+      - "Or let find look: `find perms/configs -perm -o+w`"

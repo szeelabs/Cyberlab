@@ -3,12 +3,14 @@ import { useState } from "react";
 import { api, type ToolPack } from "../api";
 import {
   formProblems,
+  ISOLATION,
   NETWORKS,
   newEnvironment,
   parseHosts,
   SIZES,
   toYaml,
   type EnvDraft,
+  type Isolation,
   type LabDraft,
   type NetworkMode,
 } from "../manifestBuilder";
@@ -25,7 +27,7 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
       api.baseImages(),
       api.toolPacks(),
       // The server's processor type (amd64/arm64), so systems that can't run there are shown as such.
-      api.execution().then((s) => (typeof s.architecture === "string" ? s.architecture : null)).catch(() => null),
+      api.execution().catch(() => null),
     ]),
   );
   const [lab, setLab] = useState<LabDraft>({ name: "my-lab", description: "", environments: [newEnvironment(0)] });
@@ -37,7 +39,9 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
 
   if (registry.error) return <ErrorNotice error={registry.error} />;
   if (!registry.data) return <div className="muted">Loading the tool catalogue…</div>;
-  const [bases, packs, arch] = registry.data;
+  const [bases, packs, exec] = registry.data;
+  const arch = typeof exec?.architecture === "string" ? exec.architecture : null;
+  const levels: string[] = Array.isArray(exec?.isolation) ? (exec.isolation as string[]) : ["container"];
   const runsHere = (b: { architectures: string[] }) => !arch || !["amd64", "arm64"].includes(arch) || b.architectures.includes(arch);
 
   return (
@@ -177,6 +181,16 @@ export function ManifestBuilder({ onUse, onCancel }: Props) {
               ) : (
                 <span className="muted">No remote desktop on this system yet.</span>
               )}
+              <label className="row">
+                Isolation
+                <select aria-label="Isolation" value={env.isolation} onChange={(e) => update(i, { isolation: e.target.value as Isolation })}>
+                  {(Object.keys(ISOLATION) as Isolation[]).map((lvl) => (
+                    <option key={lvl} value={lvl} disabled={!levels.includes(lvl)}>
+                      {ISOLATION[lvl]}{levels.includes(lvl) ? "" : " (not installed on this server)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
         );
