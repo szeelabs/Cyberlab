@@ -6,6 +6,9 @@ heading matches the pushed tag.
 
 ## [Unreleased]
 ### Added
+- Stronger isolation per machine: `sandbox` (gVisor) and `microvm` (Kata Containers, its
+  own kernel), set up with `sudo ./scripts/install-isolation.sh`. A Malware Analysis tool
+  pack, allowed only in an isolated microVM.
 - Six more labs, from beginner to advanced: encodings and hashes, Linux permissions,
   incident response on a web server, weak logins and leaked keys, file forensics, and a
   multi-step recon chain. The Labs page filters by level and topic and shows your progress.

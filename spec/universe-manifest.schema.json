@@ -61,6 +61,16 @@
           ],
           "title": "Role",
           "type": "string"
+        },
+        "isolation": {
+          "default": "container",
+          "enum": [
+            "container",
+            "sandbox",
+            "microvm"
+          ],
+          "title": "Isolation",
+          "type": "string"
         }
       },
       "required": [

@@ -123,6 +123,11 @@ class ToolPack(BaseModel):
         description="Environment must not have internet egress",
     )
     compatible_bases: list[str] = Field(alias="compatibleBases", min_length=1)
+    min_isolation: Literal["container", "sandbox", "microvm"] = Field(
+        default="container",
+        alias="minIsolation",
+        description="Weakest machine isolation this pack may run in",
+    )
     min_resources: MinResources = Field(default_factory=MinResources, alias="minResources")
     tools: list[ToolInfo] = Field(min_length=1)
     status: str = Field(default="metadata-only", pattern=r"^(metadata-only|buildable|published)$")

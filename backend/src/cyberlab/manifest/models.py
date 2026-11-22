@@ -81,6 +81,10 @@ class Environment(_Model):
     # "target": a lab practice target running CyberLab's built-in practice services,
     # reachable only by name from the other machines on the private lab network.
     role: Literal["workstation", "target"] = "workstation"
+    # How strongly the machine is separated from the server: "container" (hardened
+    # container, shares the server's kernel), "sandbox" (gVisor: its own kernel written in
+    # Go) or "microvm" (Kata Containers: a real lightweight VM with its own Linux kernel).
+    isolation: Literal["container", "sandbox", "microvm"] = "container"
 
     @field_validator("tool_packs")
     @classmethod

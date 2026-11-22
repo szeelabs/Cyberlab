@@ -777,6 +777,9 @@ def test_linux_labs_solved_with_the_hinted_commands(client):
     def perms(run):
         assert "Permission denied" in run("./perms/hello.sh")
         assert "Permission denied" in run("cat perms/locked.txt")
+        # exact bits survive unpacking, whatever the umask
+        assert run("stat -c %a perms/locked.txt perms/hello.sh").split() == ["0", "644"]
+        assert "666" in run("stat -c %a perms/configs/*").split()
         return {
             "run-flag": re.search(FLAG, run("chmod +x perms/hello.sh && ./perms/hello.sh")).group(),
             "locked-flag": re.search(
@@ -859,3 +862,51 @@ def test_intermediate_and_advanced_labs_end_to_end(client):
     _solve(client, "web-logins", logins)
     _solve(client, "recon-chain", chain)
     _solve(client, "file-forensics", forensics)
+
+
+ISOLATION_LEVELS = [
+    lvl for lvl in os.environ.get("CYBERLAB_ISOLATION_TESTS", "").split(",") if lvl.strip()
+]
+
+
+@pytest.mark.skipif(not ISOLATION_LEVELS, reason="set CYBERLAB_ISOLATION_TESTS=sandbox,microvm")
+@pytest.mark.parametrize("level", ISOLATION_LEVELS or ["none"])
+def test_stronger_isolation_on_real_runtimes(client, level):
+    """The machine really runs on its own kernel, still hardened, and still usable: files,
+    a terminal-style command, and lab files placed by the lab engine."""
+    import platform
+
+    st = client.get("/v1/system/execution", headers=auth()).json()
+    assert level in st["isolation"], st
+    manifest = f"""apiVersion: cyberlab.dev/v1alpha1
+kind: Universe
+metadata: {{name: it-{level}}}
+spec:
+  environments:
+    - name: box
+      baseImage: ubuntu-24-04
+      resources: {{cpu: 1, memoryMiB: 1024, storageGiB: 2}}
+      network: {{mode: isolated}}
+      isolation: {level}
+"""
+    ws, (env,) = provision(client, manifest, f"it-{level}")
+    name = env["resources"]["container"]
+    try:
+        code, kernel = sh(name, "uname -r")
+        assert code == 0 and kernel and kernel != platform.release(), (kernel, platform.release())
+        runtime = docker("inspect", "--format", "{{.HostConfig.Runtime}}", name).stdout
+        assert runtime.strip() in ("runsc", "kata"), runtime
+        code, who = sh(name, "id -u")
+        assert who == "1000"
+        code, out = sh(name, "touch /etc/x 2>&1; echo hi > /workspace/f && cat /workspace/f")
+        assert "Read-only" in out or "read-only" in out.lower(), out
+        assert out.endswith("hi")
+        r = client.get(
+            f"/v1/workspaces/{ws}/environments/{env['id']}/files?path=.", headers=auth()
+        ).json()
+        assert "f" in [e["name"] for e in r["entries"]]
+        if level == "sandbox":
+            code, msg = sh(name, "dmesg 2>/dev/null | head -3 || true")
+            assert "gvisor" in msg.lower() or code != 0
+    finally:
+        destroy_all(client, ws, [env])

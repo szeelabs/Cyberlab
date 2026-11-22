@@ -48,6 +48,7 @@ from cyberlab.execution.shell import PipeSession, PtyShellSession, ShellSession,
 from cyberlab.manifest.models import NetworkMode
 
 _SAFE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+_RUNTIME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _REF = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 _IMAGE = re.compile(r"^[a-z0-9][a-z0-9._/:@-]{0,254}$")
 
@@ -247,7 +248,13 @@ class DockerAdapter:
         env: dict | None = None,
         cost_class: CostClass = CostClass.user_owned,
         allow_paid: bool = False,
+        sandbox_runtime: str = "runsc",
+        microvm_runtime: str = "kata",
     ) -> None:
+        self._runtimes = {
+            "sandbox": _check("runtime", sandbox_runtime, _RUNTIME),
+            "microvm": _check("runtime", microvm_runtime, _RUNTIME),
+        }
         self._stream = streamer
         self._egress_ready_timeout = egress_ready_timeout
         self._egress_image = egress_image
@@ -419,6 +426,8 @@ class DockerAdapter:
         if network != "none":
             # Other machines in the workspace reach this one by its manifest name.
             args += ["--network-alias", env.name]
+        if env.isolation != "container":
+            args += ["--runtime", self._runtimes[env.isolation]]
         command = ["sleep", "infinity"]
         if env.role == "target":
             # Practice services on the usual low ports (21, 22, 80) without any capability:
@@ -452,12 +461,33 @@ class DockerAdapter:
             return ProviderStatus(self.name, False, f"not connected: {detail}", cost)
         version, _, arch = res.stdout.partition(" ")
         return ProviderStatus(
-            self.name, True, f"Docker Engine {version}", cost, normalize_arch(arch) or "unknown"
+            self.name,
+            True,
+            f"Docker Engine {version}",
+            cost,
+            normalize_arch(arch) or "unknown",
+            self.isolation_levels(),
         )
+
+    def isolation_levels(self) -> tuple[str, ...]:
+        """Which isolation levels this Docker Engine has a runtime for."""
+        res = self._docker("info", "--format", "{{json .Runtimes}}", timeout=15, ok=True)
+        try:
+            names = set(json.loads(res.stdout or "{}")) if res.returncode == 0 else set()
+        except ValueError:
+            names = set()
+        return ("container", *(lvl for lvl, rt in self._runtimes.items() if rt in names))
 
     def provision(self, request: ProvisionRequest) -> ProvisionResult:
         env = request.environment
         n = self.names(request.workspace_key, env.name)
+        if env.isolation != "container" and env.isolation not in self.isolation_levels():
+            what = {"sandbox": "gVisor (runsc)", "microvm": "Kata Containers"}[env.isolation]
+            raise ProviderError(
+                f"this server can't run isolation '{env.isolation}': it needs {what} "
+                f"installed as the Docker runtime {self._runtimes[env.isolation]!r} "
+                "(see docs/guides/isolation.md)"
+            )
         mode = env.network.mode
         if mode == NetworkMode.isolated:
             network = "none"
@@ -780,7 +810,12 @@ class DockerAdapter:
             raise _file_error(res.stderr, path)
 
     def extract_files(self, provider_ref: str, archive: bytes) -> None:
-        """Unpack a tar archive into /workspace, as the environment's own user."""
+        """Unpack a tar archive into /workspace, as the environment's own user.
+
+        Permission bits are kept exactly (a lab may need a file that everyone can write, which
+        the default umask would remove); the archive is built by CyberLab with plain rwx bits
+        only (no setuid/setgid/sticky), and the files belong to the unprivileged user anyway.
+        """
         res = self._exec(
             provider_ref,
             "tar",
@@ -789,7 +824,7 @@ class DockerAdapter:
             "-C",
             "/workspace",
             "--no-same-owner",
-            "--no-same-permissions",
+            "--same-permissions",
             input=archive,
         )
         if res.returncode != 0:

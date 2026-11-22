@@ -164,6 +164,7 @@ def execution_status(
         "detail": st.detail,
         "costClass": st.cost_class.value,
         "architecture": st.architecture,
+        "isolation": list(st.isolation),
     }
 
 
@@ -354,6 +355,15 @@ def provision_environments(
             "Choose another operating system for that machine in Setup.",
         )
 
+    available = adapter.status().isolation
+    missing = sorted({e.isolation for e in manifest.spec.environments} - set(available))
+    if missing:
+        names = {"sandbox": "a sandbox (gVisor)", "microvm": "microVMs (Kata Containers)"}
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This server can't run {' or '.join(names[m] for m in missing)} yet. Its owner can "
+            "add it (docs/guides/isolation.md), or choose isolation 'container' in Setup.",
+        )
     proxy_urls, egress_error = _configure_egress(adapter, ws, manifest, settings)
     created = []
     for env in manifest.spec.environments:

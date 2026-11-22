@@ -132,3 +132,9 @@ def test_chain_target(seed):
     token_route = f"/api/token?user={creds['service_user']}&password={creds['service_password']}"
     token = json.loads(web["routes"][token_route]["body"])["token"]
     assert a["chain-flag"] in web["routes"][f"/api/admin/flag?token={token}"]["body"]
+
+
+def test_archive_never_carries_special_bits():
+    with tarfile.open(fileobj=io.BytesIO(_archive({"a": b"x"}, {"a": 0o4755}))) as tar:
+        (m,) = tar.getmembers()
+    assert m.mode == 0o755

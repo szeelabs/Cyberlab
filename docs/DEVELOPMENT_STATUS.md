@@ -252,6 +252,15 @@ are known; they are **not** committed to the repository (each CyberLab owner set
 | Tests | CI job `installer` on a fresh Ubuntu runner: private install, web app, a real lab started through the API, rerun keeps data, public mode (HTTPS with a local certificate, 401 without a token, not reachable around Caddy, settings file mode 600), refusal without sign-in, uninstall with purge | `.github/workflows/ci.yml` |
 | Guide | `docs/guides/install.md` | |
 
+## Implemented (Phase 9, step 1 — stronger isolation)
+| Area | What works | Where |
+|---|---|---|
+| Isolation levels | Manifest `isolation: container \| sandbox \| microvm`. `sandbox` runs the machine with gVisor (`--runtime runsc`), `microvm` with Kata Containers (`--runtime kata`); all other hardening stays. The Docker adapter reads the engine's runtimes and reports the levels it can run (`/v1/system/execution` → `isolation`); asking for a missing level is refused before anything is created, with a plain message. Runtime names configurable (`CYBERLAB_SANDBOX_RUNTIME`, `CYBERLAB_MICROVM_RUNTIME`) and validated | `manifest/models.py`, `execution/docker.py`, `api/environments.py`, `config.py` |
+| Malware Analysis pack | radare2, YARA, UPX, ssdeep on Ubuntu/Kali. Tool packs can declare `minIsolation`; this one needs `microvm` **and** network `isolated`, is high-risk (needs approval), and is never drafted by the AI helper. No samples are shipped | `registry/toolpacks/malware-analysis.yaml`, `manifest/policy.py`, `architect/core.py` |
+| Setup | `scripts/install-isolation.sh`: gVisor from its signed apt repository, Kata from its latest official release when KVM exists, registers both with Docker, prints each level's kernel | `scripts/install-isolation.sh`, `docs/guides/isolation.md` |
+| Web app | Isolation choice in the beginner form; levels the server lacks are shown as not installed | `components/ManifestBuilder.tsx`, `manifestBuilder.ts` |
+| Tests | Policy (malware pack refused in container/sandbox and on a network; allowed in an isolated microVM with approval), AI helper excludes it, runtime detection, run args per level with hardening kept, refusal of missing runtimes, validated names, API refusal and success. CI job `isolation`: the install script on a GitHub runner, then real CyberLab machines in gVisor and in Kata report their own kernel, the right runtime, the unprivileged user, a read-only system, and working files | `tests/test_isolation.py`, `tests/test_docker_integration.py`, `.github/workflows/ci.yml` |
+
 ## Not built yet (do not describe these as working)
 | Feature | Planned phase |
 |---|---|

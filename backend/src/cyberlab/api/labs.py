@@ -115,7 +115,8 @@ def _archive(files: dict[str, bytes], modes: dict[str, int] | None = None) -> by
                     info.type, info.mode = tarfile.DIRTYPE, 0o755
                     tar.addfile(info)
             info = tarfile.TarInfo(path)
-            info.size, info.mode = len(files[path]), (modes or {}).get(path, 0o644)
+            # plain rwx bits only: never setuid, setgid or sticky
+            info.size, info.mode = len(files[path]), (modes or {}).get(path, 0o644) & 0o777
             tar.addfile(info, io.BytesIO(files[path]))
     return buf.getvalue()
 

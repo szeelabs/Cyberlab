@@ -453,3 +453,29 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: sudo docker logs --tail 80 cyberlab || true
+
+  isolation:
+    # Stronger isolation on real runtimes: gVisor (sandbox) and Kata Containers (microVM,
+    # which needs KVM; GitHub's Linux runners have it).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e './backend[dev]'
+      - name: Install gVisor and Kata Containers with CyberLab's script
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: sudo -E ./scripts/install-isolation.sh
+      - name: CyberLab machines in a sandbox and in a microVM
+        working-directory: backend
+        env:
+          CYBERLAB_DOCKER_TESTS: "1"
+          CYBERLAB_TEST_IMAGE_MIRROR: mirror.gcr.io
+          CYBERLAB_ISOLATION_TESTS: sandbox,microvm
+        run: pytest -v tests/test_docker_integration.py -k "stronger_isolation"
