@@ -1,0 +1,55 @@
+id: incident-response-web
+title: "Incident response: a hacked web server"
+level: intermediate
+minutes: 40
+topic: blue-team
+summary: Read a web server's access log to find the attacker, the tool they used, and the web shell they planted.
+skills: [access logs, awk, sort, uniq, grep, indicators of compromise]
+introduction: |
+  A company's website was hacked. You have its access log: one line per request, in the
+  standard "combined" format: address, time, request, status code, size, referrer and
+  browser (user agent).
+
+  Find what happened, step by step, like an incident responder. Open the Terminal of
+  "analyst"; the log is `access.log`. Fewer hints this time.
+spec:
+  environments:
+    - name: analyst
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: analyst
+    path: access.log
+    generator: access-log
+tasks:
+  - id: scanner-ip
+    title: Who scanned the site?
+    text: |
+      Attackers usually start by probing for pages that don't exist. Which address got a
+      run of 404 (Not Found) answers?
+    answer: scanner-ip
+    answerFormat: an IP address
+    hints:
+      - "The status code is the 9th field: `awk '$9 == 404' access.log`"
+  - id: scanner-tool
+    title: Which tool did they use?
+    text: |
+      Automated tools often announce themselves in the user agent (the last quoted part of
+      each line). Name the tool, without its version.
+    answer: scanner-tool
+    answerFormat: a tool name
+    hints:
+      - "`grep <address> access.log | awk -F'\"' '{print $6}' | sort | uniq -c`"
+  - id: webshell-path
+    title: Find the web shell
+    text: |
+      After a successful upload, the attacker ran commands through a file they planted
+      on the server (a "web shell"). Requests to it carry a `cmd=` parameter. What is its
+      path? This is what you would delete and investigate first.
+    answer: webshell-path
+    answerFormat: a path, like /uploads/name.php
+    hints:
+      - "`grep 'cmd=' access.log`"

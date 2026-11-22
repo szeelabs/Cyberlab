@@ -1,0 +1,52 @@
+id: file-forensics
+title: "Forensics: what's hiding in this file?"
+level: intermediate
+minutes: 40
+topic: forensics
+summary: Find text inside a binary file, locate a compressed file hidden after it, and carve it out.
+skills: [strings, grep -a, binwalk, dd, gunzip, file carving]
+introduction: |
+  An investigator recovered `evidence.png` from a suspect's laptop. It looks like a picture,
+  but files can hide other data inside them. Forensic analysts find and "carve out"
+  hidden data byte by byte.
+
+  Open the Terminal of "investigator". The forensics tools (binwalk, The Sleuth Kit) are
+  installed.
+spec:
+  environments:
+    - name: investigator
+      baseImage: ubuntu-24-04
+      resources: {cpu: 1, memoryMiB: 2048, storageGiB: 6}
+      toolPacks: [forensics]
+      network: {mode: isolated}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: investigator
+    path: evidence.png
+    generator: carving
+tasks:
+  - id: note-flag
+    title: Text inside a binary
+    text: |
+      Binary files can still contain readable text. Search the file for a note.
+    answer: note-flag
+    hints:
+      - "`grep -a` treats a binary file as text: `grep -a -o 'note: CL{[0-9a-f]*}' evidence.png`"
+  - id: gzip-offset
+    title: Find the hidden archive
+    text: |
+      binwalk scans a file for the signatures of other file types. Somewhere inside is
+      gzip-compressed data. At which byte offset (in decimal) does it start?
+    answer: gzip-offset
+    answerFormat: a number
+    hints:
+      - "`binwalk evidence.png`"
+  - id: carved-flag
+    title: Carve it out
+    text: |
+      Cut the file from that offset to the end and decompress it.
+    answer: carved-flag
+    hints:
+      - "`tail -c +<offset+1> evidence.png | gunzip` (tail counts from 1, offsets from 0)."
+      - "Or with dd: `dd if=evidence.png bs=1 skip=<offset> | gunzip`. gunzip may warn about trailing garbage; the text still comes out."

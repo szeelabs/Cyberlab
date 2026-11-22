@@ -1,0 +1,62 @@
+id: web-logins
+title: "Web: weak logins and leaked keys"
+level: intermediate
+minutes: 40
+topic: web
+summary: Find an admin's user name, guess a default password from a wordlist, and abuse an API key left in JavaScript.
+skills: [curl, wordlists, password guessing, JavaScript review, API keys]
+introduction: |
+  Two of the most common real-world weaknesses: default or weak passwords, and secrets
+  shipped to the browser in JavaScript.
+
+  Your machine "attacker" reaches the web app at http://target. A small list of common
+  passwords is in `passwords.txt`. Only guess passwords on systems you are allowed to test.
+spec:
+  environments:
+    - name: attacker
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 3}
+      toolPacks: [net-basics]
+      network: {mode: lab}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+    - name: target
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab}
+      access: {terminal: false}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: target
+    path: .cyberlab-target.json
+    generator: web-login-target
+  - environment: attacker
+    path: passwords.txt
+    generator: wordlist
+tasks:
+  - id: admin-user
+    title: Who is the admin?
+    text: Read the home page. Which user name does the admin use?
+    answer: admin-user
+    answerFormat: a user name
+    hints:
+      - "`curl http://target/`"
+  - id: login-flag
+    title: Guess the password
+    text: |
+      The login takes `/login?user=NAME&password=PASS`. A wrong guess answers 401. Try every
+      password in `passwords.txt` for the admin.
+    answer: login-flag
+    hints:
+      - "A loop: `while read p; do echo \"$p\"; curl -s \"http://target/login?user=<admin>&password=$p\"; done < passwords.txt`"
+      - "Add `| grep -B1 Welcome` to see only the success, and the password before it."
+  - id: key-flag
+    title: Use the leaked API key
+    text: |
+      The page loads JavaScript. Developers sometimes leave secrets in it. Find the API key
+      and call the API the way the script does.
+    answer: key-flag
+    hints:
+      - "`curl http://target/static/app.js`"
+      - "`curl \"http://target/api/fleet?key=<the key>\"`"

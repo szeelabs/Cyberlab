@@ -69,7 +69,7 @@ def _free_name(db: Session, user: User, base: str) -> str:
     return f"{base}-{n}"
 
 
-def _archive(files: dict[str, bytes]) -> bytes:
+def _archive(files: dict[str, bytes], modes: dict[str, int] | None = None) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         dirs: set[str] = set()
@@ -83,15 +83,17 @@ def _archive(files: dict[str, bytes]) -> bytes:
                     info.type, info.mode = tarfile.DIRTYPE, 0o755
                     tar.addfile(info)
             info = tarfile.TarInfo(path)
-            info.size, info.mode = len(files[path]), 0o644
+            info.size, info.mode = len(files[path]), (modes or {}).get(path, 0o644)
             tar.addfile(info, io.BytesIO(files[path]))
     return buf.getvalue()
 
 
-def _place(provider: ProviderAdapter, ref: str, files: dict[str, bytes]) -> None:
+def _place(
+    provider: ProviderAdapter, ref: str, files: dict[str, bytes], modes: dict[str, int]
+) -> None:
     extract = getattr(provider, "extract_files", None)
     if extract is not None:
-        extract(ref, _archive(files))
+        extract(ref, _archive(files, modes))
         return
     for path, data in files.items():  # providers without archive support
         provider.write_file(ref, f"/workspace/{path}", data)
@@ -175,7 +177,7 @@ def start_lab(
             )
             continue
         try:
-            _place(adapter, env.provider_ref, files)
+            _place(adapter, env.provider_ref, files, content.modes.get(name, {}))
         except ProviderError as exc:
             errors.append(f"{name}: lab files could not be placed ({exc})")
     run.setup_error = "; ".join(errors) or None

@@ -1,0 +1,54 @@
+id: recon-chain
+title: "Recon chain: from a port to admin"
+level: advanced
+minutes: 60
+topic: networking
+summary: No step-by-step instructions. Find a hidden web service, follow the clues it leaks, and reach its admin API.
+skills: [nmap -p-, curl, reading source, credential reuse, APIs]
+introduction: |
+  Real assessments are a chain: each finding gives you the next step. This lab gives you
+  only the goal and the checkpoints. Your machine "attacker" can reach "target".
+
+  Goal: get the flag from the target's admin API. Hints exist, but try without them first.
+spec:
+  environments:
+    - name: attacker
+      baseImage: ubuntu-24-04
+      resources: {cpu: 1, memoryMiB: 1024, storageGiB: 4}
+      toolPacks: [network-analysis, net-basics]
+      network: {mode: lab}
+      lifecycle: {idleTimeoutMinutes: 90, ttlHours: 24}
+    - name: target
+      role: target
+      baseImage: lab-target
+      resources: {cpu: 0.25, memoryMiB: 128, storageGiB: 1}
+      network: {mode: lab}
+      access: {terminal: false}
+      lifecycle: {idleTimeoutMinutes: 90, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: target
+    path: .cyberlab-target.json
+    generator: chain-target
+tasks:
+  - id: web-port
+    title: "Checkpoint 1: the web service"
+    text: Which port runs the target's web service?
+    answer: web-port
+    answerFormat: a port number
+    hints:
+      - "Scan every port, not just the common ones."
+  - id: service-user
+    title: "Checkpoint 2: the service account"
+    text: Which account name does the target's backup reveal?
+    answer: service-user
+    answerFormat: an account name
+    hints:
+      - "Developers leave comments in HTML."
+  - id: chain-flag
+    title: "Goal: the admin flag"
+    text: Use what you found to reach the admin API.
+    answer: chain-flag
+    hints:
+      - "APIs often hand out a token in exchange for a user name and password."
+      - "`/api/token?user=...&password=...`, then `/api/admin/flag?token=...`"

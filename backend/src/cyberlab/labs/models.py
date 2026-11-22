@@ -28,6 +28,8 @@ class SetupFile(_Model):
     path: str
     content: str | None = Field(default=None, max_length=200_000)
     generator: str | None = Field(default=None, pattern=SLUG)
+    # Permission bits for a content file, e.g. "0755" (executable) or "0000" (locked).
+    mode: str | None = Field(default=None, pattern=r"^0[0-7]{3}$")
     # For generators that hide a flag: which task's flag.
     flag_task: str | None = Field(default=None, alias="flagTask", pattern=SLUG)
 

@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import random
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -95,6 +95,7 @@ def load_labs(root: Path, reg: Registry, quotas: QuotaSettings) -> dict[str, Lab
 class LabRunContent:
     files: dict[str, dict[str, bytes]]  # machine -> {path under /workspace: content}
     answers: dict[str, str]  # task id -> expected answer (plain; hash before storing)
+    modes: dict[str, dict[str, int]] = field(default_factory=dict)  # machine -> {path: bits}
 
 
 def new_flag() -> str:
@@ -107,17 +108,21 @@ def new_run(lab: Lab) -> LabRunContent:
     flags = {t.id: new_flag() for t in lab.tasks if t.answer == "flag"}
     produced: dict[str, str] = {}
     files: dict[str, dict[str, bytes]] = {}
+    modes: dict[str, dict[str, int]] = {}
     for f in lab.setup:
         target = files.setdefault(f.environment, {})
         if f.generator is not None:
             out = GENERATORS[f.generator].run(rng, f.path, flags.get(f.flag_task or ""))
             target.update(out.files)
             produced.update(out.answers)
+            modes.setdefault(f.environment, {}).update(out.modes)
         else:
             text = PLACEHOLDER.sub(lambda m: flags[m.group(2)], f.content or "")
             target[f.path] = text.encode()
+            if f.mode:
+                modes.setdefault(f.environment, {})[f.path] = int(f.mode, 8)
     answers = {t.id: flags[t.id] if t.answer == "flag" else produced[t.answer] for t in lab.tasks}
-    return LabRunContent(files, answers)
+    return LabRunContent(files, answers, modes)
 
 
 def _normalize(answer: str) -> str:

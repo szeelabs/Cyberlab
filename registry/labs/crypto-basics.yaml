@@ -1,0 +1,58 @@
+id: crypto-basics
+title: "Encodings and hashes"
+level: beginner
+minutes: 25
+topic: crypto
+summary: Decode base64, hex and ROT13, and identify a leaked file by its SHA-256 fingerprint.
+skills: [base64, hex, ROT13, sha256sum, encoding vs encryption]
+introduction: |
+  Encoding is not encryption: anyone can reverse base64 or hex without a key. Attackers
+  and defenders meet encoded data every day, in logs, cookies, malware and CTFs.
+  Hashes are different again: a SHA-256 hash is a one-way fingerprint of a file.
+
+  Open the Terminal of "student". Everything is in the folder `puzzles`.
+spec:
+  environments:
+    - name: student
+      baseImage: ubuntu-24-04
+      resources: {cpu: 0.5, memoryMiB: 512, storageGiB: 2}
+      network: {mode: isolated}
+      lifecycle: {idleTimeoutMinutes: 60, ttlHours: 24}
+  workspace: {storageGiB: 1}
+setup:
+  - environment: student
+    path: puzzles
+    generator: crypto-basics
+tasks:
+  - id: base64-flag
+    title: Decode base64
+    text: Read `puzzles/message.b64`. It is base64. Decode it.
+    answer: base64-flag
+    hints:
+      - "`base64 -d puzzles/message.b64`"
+  - id: hex-flag
+    title: Decode hex
+    text: |
+      `puzzles/message.hex` is text written as hexadecimal: two characters per byte.
+    answer: hex-flag
+    hints:
+      - "`basenc --base16 -d puzzles/message.hex` (basenc comes with Linux's core tools)."
+      - "Another way: `xxd -r -p puzzles/message.hex`, if xxd is installed."
+  - id: rot13-flag
+    title: Undo ROT13
+    text: |
+      ROT13 shifts every letter 13 places (A becomes N). Doing it twice gives back the
+      original. Decode `puzzles/message.rot13`. Careful: the flag's letters are shifted too.
+    answer: rot13-flag
+    hints:
+      - "`tr` swaps characters: `tr 'A-Za-z' 'N-ZA-Mn-za-m' < puzzles/message.rot13`"
+  - id: leaked-file
+    title: Which report leaked?
+    text: |
+      `puzzles/WANTED.txt` gives the SHA-256 fingerprint of a leaked file. Which file in
+      `puzzles/reports` has exactly that fingerprint?
+    answer: leaked-file
+    answerFormat: a file name, like alpha-07.txt
+    hints:
+      - "`sha256sum puzzles/reports/*` prints every file's fingerprint."
+      - "Let grep find it: `sha256sum puzzles/reports/* | grep <fingerprint>`"
