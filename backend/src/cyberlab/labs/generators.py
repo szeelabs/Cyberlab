@@ -141,16 +141,19 @@ def _config(path: str, services: list[dict]) -> bytes:
 
 
 def _scan_target(rng: random.Random, path: str, flag: str | None) -> Generated:
-    """Practice services for a port-scanning lab: three common services, and one on a
-    high port that a default nmap scan (top 1000 ports) misses."""
+    """Practice services for a port-scanning lab: FTP and SSH, a web server on one of the
+    usual alternative web ports, and a service on a high port (above 10000) for an
+    every-port scan. (A random high port can be in nmap's top 1000, so no answer depends
+    on whether a quick scan sees it.)"""
     ssh_version = rng.choice(("8.9p1", "9.2p1", "9.6p1", "9.7p1"))
+    web = rng.choice((3000, 5000, 8000, 8080, 8888))
     hidden = rng.randint(20000, 40000)
     secret = _flag()
     services = [
         {"port": 21, "kind": "banner", "banner": "220 (vsFTPd 3.0.5)"},
         {"port": 22, "kind": "banner", "banner": f"SSH-2.0-OpenSSH_{ssh_version} Ubuntu-3ubuntu13"},
         {
-            "port": 80,
+            "port": web,
             "kind": "http",
             "server": "nginx/1.24.0",
             "routes": {"/": {"body": "<html><body><h1>Coming soon</h1></body></html>\n"}},
@@ -164,7 +167,7 @@ def _scan_target(rng: random.Random, path: str, flag: str | None) -> Generated:
     return Generated(
         {path: _config(path, services)},
         {
-            "open-ports": "3",
+            "web-port": str(web),
             "ssh-version": ssh_version,
             "hidden-port": str(hidden),
             "banner-flag": secret,
@@ -498,7 +501,7 @@ GENERATORS: dict[str, Generator] = {
     "app-log": Generator(_app_log, needs_flag=True),
     "scan-target": Generator(
         _scan_target,
-        produces=frozenset({"open-ports", "ssh-version", "hidden-port", "banner-flag"}),
+        produces=frozenset({"web-port", "ssh-version", "hidden-port", "banner-flag"}),
     ),
     "web-target": Generator(
         _web_target, produces=frozenset({"source-flag", "robots-flag", "idor-flag"})

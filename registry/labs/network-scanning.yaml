@@ -3,7 +3,7 @@ title: Scan a network with nmap
 level: beginner
 minutes: 30
 topic: networking
-summary: Discover what a computer is running, which versions, and the service hiding on a port a normal scan misses.
+summary: Discover what a computer is running, which versions, and a service hiding on a high port.
 skills: [nmap, port scanning, service versions, banners, netcat]
 introduction: |
   Before testing any system, a security professional maps it: which ports are open, and
@@ -35,14 +35,15 @@ setup:
     path: .cyberlab-target.json
     generator: scan-target
 tasks:
-  - id: open-ports
-    title: Find the open ports
+  - id: web-port
+    title: Find the web server
     text: |
-      Scan the target with `nmap target`. How many open ports does a normal scan find?
-    answer: open-ports
-    answerFormat: a number
+      Scan the target with `nmap target`. It lists every open port it finds and guesses the
+      service from the port number. Which port runs the web server (http)?
+    answer: web-port
+    answerFormat: a port number
     hints:
-      - "Run `nmap target` and count the lines that say \"open\"."
+      - "Run `nmap target` and look for a line with \"http\" in it."
   - id: ssh-version
     title: Which SSH version is it running?
     text: |
@@ -57,7 +58,7 @@ tasks:
     title: Find the hidden service
     text: |
       By default nmap checks only the 1000 most common ports, but there are 65535.
-      Something is listening on a high port. Scan them all. Which port is it?
+      Something is also listening on a port above 10000. Scan them all. Which port is it?
     answer: hidden-port
     answerFormat: a port number
     hints:

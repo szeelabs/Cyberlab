@@ -688,18 +688,18 @@ def test_target_labs_end_to_end(client, lab):
         attacker = next(e for e in envs if e["name"] == "attacker")["resources"]["container"]
         wait = (
             "for i in $(seq 1 60); do "
-            "(exec 3<>/dev/tcp/target/80) 2>/dev/null && break; sleep 0.5; done"
+            "(exec 3<>/dev/tcp/target/22) 2>/dev/null && break; sleep 0.5; done"
         )
         sh(attacker, wait, interpreter="bash")
         answers = {}
         if lab == "network-scanning":
             _, scan = sh(attacker, "nmap -Pn target")
-            answers["open-ports"] = str(len(re.findall(r"^\d+/tcp\s+open", scan, re.M)))
+            answers["web-port"] = re.search(r"^(\d+)/tcp\s+open\s+\S*http", scan, re.M).group(1)
             _, ver = sh(attacker, "nmap -Pn -sV -p 22 target")
             answers["ssh-version"] = re.search(r"OpenSSH[ _]([0-9.]+p\d)", ver).group(1)
             _, full = sh(attacker, "nmap -Pn -p- --min-rate 2000 target")
             ports = re.findall(r"^(\d+)/tcp\s+open", full, re.M)
-            hidden = next(p for p in ports if p not in ("21", "22", "80"))
+            hidden = next(p for p in ports if int(p) > 10000)
             answers["hidden-port"] = hidden
             _, banner = sh(attacker, f"timeout 5 nc target {hidden} </dev/null")
             answers["banner-flag"] = re.search(r"CL\{[0-9a-f]{16}\}", banner).group()
@@ -898,9 +898,10 @@ spec:
         assert runtime.strip() in ("runsc", "kata"), runtime
         code, who = sh(name, "id -u")
         assert who == "1000"
-        code, out = sh(name, "touch /etc/x 2>&1; echo hi > /workspace/f && cat /workspace/f")
-        assert "Read-only" in out or "read-only" in out.lower(), out
-        assert out.endswith("hi")
+        ro = docker("inspect", "--format", "{{.HostConfig.ReadonlyRootfs}}", name).stdout
+        assert ro.strip() == "true"
+        code, out = sh(name, "echo hi > /workspace/f && cat /workspace/f")
+        assert out == "hi", out
         r = client.get(
             f"/v1/workspaces/{ws}/environments/{env['id']}/files?path=.", headers=auth()
         ).json()

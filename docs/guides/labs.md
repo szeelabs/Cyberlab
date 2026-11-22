@@ -84,7 +84,7 @@ content for every run:
 | `maze` | a folder of folders with one `treasure.txt` (needs `flagTask`) | the flag |
 | `app-log` | a 3000-line application log with one flag line (needs `flagTask`) | the flag |
 | `auth-log` | an SSH log with one brute-force attacker | `attacker-ip`, `attacker-user`, `failed-count` |
-| `scan-target` | a target config: FTP, SSH and web on 21/22/80, plus a banner on a random high port | `open-ports`, `ssh-version`, `hidden-port`, `banner-flag` |
+| `scan-target` | a target config: FTP and SSH on 21/22, a web server on a common alternative port, and a banner on a random high port | `web-port`, `ssh-version`, `hidden-port`, `banner-flag` |
 | `web-target` | a target config: a small web app with a comment, a `robots.txt` path and an IDOR | `source-flag`, `robots-flag`, `idor-flag` |
 | `crypto-basics` | a folder with base64, hex and ROT13 messages, and 40 reports, one named by its SHA-256 | `base64-flag`, `hex-flag`, `rot13-flag`, `leaked-file` |
 | `permissions` | a non-executable script, a locked file (mode 000) and one world-writable config | `run-flag`, `locked-flag`, `risky-file` |

@@ -63,6 +63,7 @@ print(next(a["browser_download_url"] for a in assets if re.match(pat, a["name"])
     tar -C / -xf "$TMP/kata.tar"
     rm -rf "$TMP"
     ln -sf /opt/kata/bin/containerd-shim-kata-v2 /usr/local/bin/containerd-shim-kata-v2
+    ln -sf /opt/kata/bin/containerd-shim-kata-v2 /usr/bin/containerd-shim-kata-v2
     # Let the Kata shim open /dev/kvm.
     echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' > /etc/udev/rules.d/99-kvm4all.rules
     udevadm control --reload-rules && udevadm trigger --name-match=kvm || true
@@ -78,7 +79,8 @@ runtimes = conf.setdefault("runtimes", {})
 if os.environ["SANDBOX"] == "1":
     runtimes["runsc"] = {"path": "/usr/bin/runsc"}
 if os.environ["MICROVM"] == "1":
-    runtimes["kata"] = {"runtimeType": "io.containerd.kata.v2"}
+    # The shim's full path, so Docker finds it whatever its search path is.
+    runtimes["kata"] = {"runtimeType": "/opt/kata/bin/containerd-shim-kata-v2"}
 os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w") as f:
     json.dump(conf, f, indent=2)
@@ -87,10 +89,18 @@ systemctl restart docker
 for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
 
 say "Checking (host kernel: $(uname -r))"
-if [[ $WANT_SANDBOX == 1 ]]; then
-  echo "    sandbox (gVisor) kernel: $(docker run --rm --runtime runsc mirror.gcr.io/library/busybox uname -r)"
-fi
-if [[ $WANT_MICROVM == 1 ]]; then
-  echo "    microVM (Kata) kernel:   $(docker run --rm --runtime kata mirror.gcr.io/library/busybox uname -r)"
-fi
+FAILED=0
+check() { # level runtime
+  local kernel
+  if kernel="$(docker run --rm --runtime "$2" mirror.gcr.io/library/busybox uname -r 2>&1)" \
+     && [[ -n "$kernel" && "$kernel" != "$(uname -r)" ]]; then
+    echo "    $1 works: its kernel is $kernel"
+  else
+    echo "    $1 does NOT work yet: $kernel" >&2
+    FAILED=1
+  fi
+}
+[[ $WANT_SANDBOX == 1 ]] && check "sandbox (gVisor)" runsc
+[[ $WANT_MICROVM == 1 ]] && check "microVM (Kata)" kata
+[[ $FAILED == 0 ]] || die "an isolation level failed its check (see above); CyberLab won't offer it until it works"
 say "Done. CyberLab offers these isolation levels in Setup now. If CyberLab runs in Docker, restart it: sudo docker restart cyberlab"

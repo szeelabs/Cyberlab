@@ -133,13 +133,13 @@ def test_scan_target_hides_one_service_above_the_default_scan():
     out = GENERATORS["scan-target"].run(random.Random(3), ".cyberlab-target.json", None)  # noqa: S311
     services = json.loads(out.files[".cyberlab-target.json"])["services"]
     ports = sorted(s["port"] for s in services)
-    assert ports[:3] == [21, 22, 80] and ports[3] == int(out.answers["hidden-port"])
-    assert ports[3] > 10000  # outside nmap's default top-1000 ports
+    assert ports[:2] == [21, 22] and ports[3] == int(out.answers["hidden-port"]) > 10000
+    web = next(s for s in services if s["kind"] == "http")
+    assert web["port"] == int(out.answers["web-port"]) in (3000, 5000, 8000, 8080, 8888)
     hidden = next(s for s in services if s["port"] == ports[3])
     assert out.answers["banner-flag"] in hidden["banner"]
     ssh = next(s for s in services if s["port"] == 22)
     assert f"OpenSSH_{out.answers['ssh-version']} " in ssh["banner"]
-    assert out.answers["open-ports"] == "3"
 
 
 def test_web_target_leaks_exactly_three_planted_secrets():
